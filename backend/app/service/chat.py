@@ -28,7 +28,7 @@ class ChatService:
 
     def _build_agent_system_prompt(self) -> str:
         """Build unified system prompt for travel agent."""
-        # Get tool descriptions
+        # Get tool descriptions from MCP servers (loaded dynamically)
         tools = self.mcp_registry.list_tools()
         tool_descriptions = "\n".join([
             f"- {tool.name}: {tool.description}" for tool in tools
@@ -127,7 +127,7 @@ Answer user questions about travel planning, destinations, visas, accommodations
                 return
 
             # Get function definitions for tool calling
-            functions = self.mcp_registry.get_tool_function_definitions()
+            functions = self.mcp_registry.get_tool_function_definitions_sync()
             
             # Tool calling loop (max 5 iterations)
             iteration = 0

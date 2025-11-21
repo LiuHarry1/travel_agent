@@ -14,7 +14,7 @@ class Config:
 
     def __init__(self, config_path: Optional[str] = None):
         if config_path is None:
-            config_path = os.getenv("MRT_REVIEW_CONFIG", str(Path(__file__).parent / "config.yaml"))
+            config_path = os.getenv("TRAVEL_AGENT_CONFIG", str(Path(__file__).parent / "config.yaml"))
         self._config = self._load_config(config_path)
         self._default_checklist: Optional[List[ChecklistItem]] = None
 
@@ -48,31 +48,12 @@ class Config:
         """Get LLM request timeout in seconds."""
         return float(self._config.get("llm", {}).get("timeout", 30.0))
 
-    @property
-    def default_checklist(self) -> List[ChecklistItem]:
-        """Get default checklist items."""
-        if self._default_checklist is None:
-            items = self._config.get("default_checklist", [])
-            self._default_checklist = [
-                ChecklistItem(id=str(item["id"]), description=str(item["description"]))
-                for item in items
-                if isinstance(item, dict) and "id" in item and "description" in item
-            ]
-        return self._default_checklist
-
-
-    @staticmethod
-    def resolve_checklist(items: Optional[List[ChecklistItem]]) -> List[ChecklistItem]:
-        """Resolve checklist items, using default if none provided."""
-        if not items:
-            return get_config().default_checklist
-        return items
 
 
     @property
     def config_path(self) -> str:
         """Get the path to the configuration file."""
-        return os.getenv("MRT_REVIEW_CONFIG", str(Path(__file__).parent / "config.yaml"))
+        return os.getenv("TRAVEL_AGENT_CONFIG", str(Path(__file__).parent / "config.yaml"))
 
     def save_config(self, system_prompt_template: str, checklist: List[ChecklistItem]) -> None:
         """Save system prompt template and checklist to configuration file."""

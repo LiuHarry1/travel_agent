@@ -20,14 +20,11 @@ from app.api import (
     admin_router,
     chat_router,
     common_router,
-    review_router,
     setup_chat_routes,
-    setup_review_routes,
 )
 from app.logger import setup_logging
 from app.llm import LLMClient
 from app.service.chat import ChatService
-from app.service.review import ReviewService
 
 # Configure logging to output to both console and file
 # Use DEBUG level in development if LOG_LEVEL env var is set to DEBUG
@@ -68,17 +65,14 @@ app.add_middleware(
 
 # Initialize services
 llm_client = LLMClient()
-review_service = ReviewService(llm_client=llm_client)
 chat_service = ChatService(llm_client=llm_client)
 
 # Setup routes with service dependencies
 setup_chat_routes(chat_service=chat_service)
-setup_review_routes(review_service=review_service)
 
 # Register routers
 app.include_router(common_router)
 app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
-app.include_router(review_router)
 app.include_router(chat_router)
 
 

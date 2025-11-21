@@ -3,17 +3,17 @@
 from typing import Optional
 
 
-class MRTReviewError(Exception):
-    """Base exception for MRT Review application."""
+class TravelAgentError(Exception):
+    """Base exception for Travel Agent application."""
     pass
 
 
-class FileProcessingError(MRTReviewError):
+class FileProcessingError(TravelAgentError):
     """Exception raised when file processing fails."""
     pass
 
 
-class ConfigurationError(MRTReviewError):
+class ConfigurationError(TravelAgentError):
     """Exception raised when configuration is invalid."""
     pass
 

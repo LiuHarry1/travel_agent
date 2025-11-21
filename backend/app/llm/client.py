@@ -6,7 +6,6 @@ import logging
 import time
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
-from ..models import ReviewResponse
 from .factory import LLMClientFactory
 from .provider import LLMError
 
@@ -36,66 +35,6 @@ class LLMClient:
     def model(self) -> str:
         """Get model name."""
         return self._get_client().model
-
-    def review(self, mrt_content: str, software_requirement: Optional[str] = None) -> ReviewResponse:
-        """Review MRT content against checklist and software requirement."""
-        from ..config import get_config
-        
-        if not self.has_api_key:
-            logger.warning("No API key available, using heuristic review")
-            return ReviewResponse(
-                suggestions=[],
-                summary=None,
-                raw_content="API key is not available. Please configure your API key to use the review feature."
-            )
-
-        config = get_config()
-        client = self._get_client()
-        model_name = client.model
-        mrt_length = len(mrt_content)
-        checklist_count = len(config.default_checklist)
-        has_requirement = software_requirement is not None and software_requirement.strip() != ""
-        
-        logger.info(f"LLM review - Provider: {type(client).__name__}, Model: {model_name}, MRT: {mrt_length} chars, Checklist: {checklist_count}, Has requirement: {has_requirement}")
-        start_time = time.time()
-
-        # Import here to avoid circular dependency
-        from ..service.prompt import build_system_prompt, build_user_message
-        system_prompt = build_system_prompt(software_requirement)
-        user_message = build_user_message(mrt_content, software_requirement)
-
-        try:
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ]
-
-            logger.info("-------------  messages begin-------------------")
-            logger.info(f"System prompt length: {len(system_prompt)} chars")
-            logger.info(f"System prompt preview: {system_prompt[:300]}...")
-            logger.info(f"User message length: {len(user_message)} chars")
-            logger.info(f"User message preview: {user_message[:300]}...")
-            logger.info("-------------  messages end-------------------")  
-
-            payload = client._normalize_payload(messages, model=model_name)
-            payload["max_tokens"] = 2000
-
-            data = client._make_request("chat/completions", payload)
-            raw_content = client._extract_response(data)
-            
-            elapsed_time = time.time() - start_time
-            logger.info(f"LLM review completed - Time: {elapsed_time:.2f}s, Response: {len(raw_content)} chars")
-            
-            return ReviewResponse(suggestions=[], summary=None, raw_content=raw_content)
-            
-        except LLMError as exc:
-            elapsed_time = time.time() - start_time
-            logger.error(f"LLM review failed after {elapsed_time:.2f}s - {exc}")
-            raise
-        except Exception as exc:
-            elapsed_time = time.time() - start_time
-            logger.error(f"LLM review failed after {elapsed_time:.2f}s - Unexpected error: {exc}", exc_info=True)
-            raise LLMError(str(exc)) from exc
 
     def chat_stream(self, messages: List[Dict[str, str]], system_prompt: Optional[str] = None):
         """Send chat messages to LLM and get streaming response."""

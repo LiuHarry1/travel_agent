@@ -1,4 +1,4 @@
-# MRT Review Agent - Frontend
+# Travel Agent - Frontend
 
 React + TypeScript + Vite 前端应用
 
@@ -10,17 +10,17 @@ React + TypeScript + Vite 前端应用
 
 ```bash
 # 构建镜像，配置后端 URL
-docker build --build-arg VITE_API_BASE_URL=http://10.150.117.242:32513 -t mrt-review-frontend .
+docker build --build-arg VITE_API_BASE_URL=http://10.150.117.242:32513 -t travel-agent-frontend .
 
 # 或者使用默认的 localhost:8000
-docker build -t mrt-review-frontend .
+docker build -t travel-agent-frontend .
 ```
 
 ### 运行容器
 
 ```bash
 # 运行前端容器（映射到 3000 端口）
-docker run -d -p 3000:80 --name mrt-review-frontend mrt-review-frontend
+docker run -d -p 3000:80 --name travel-agent-frontend travel-agent-frontend
 ```
 
 访问 `http://localhost:3000` 即可使用前端应用。

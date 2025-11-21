@@ -1,4 +1,4 @@
-"""Mock Retriever tool for vectorized knowledge database search."""
+"""Retriever tool for vectorized knowledge database search."""
 from __future__ import annotations
 
 import asyncio
@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class RetrieverTool:
-    """Mock retriever tool that simulates searching a vectorized knowledge database."""
+    """Retriever tool that simulates searching a vectorized knowledge database."""
     
     # Mock knowledge database (simulating vectorized documents)
     KNOWLEDGE_BASE = [

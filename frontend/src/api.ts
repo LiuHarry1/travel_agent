@@ -1,4 +1,4 @@
-import type { ChatPayload, ChecklistItem, ReviewPayload, ReviewResponse, StreamEvent } from './types'
+import type { ChatPayload, ChecklistItem, StreamEvent } from './types'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8000'
 
@@ -8,17 +8,6 @@ async function handleResponse<T>(response: Response): Promise<T> {
     throw new Error(detail || `Request failed with status ${response.status}`)
   }
   return response.json() as Promise<T>
-}
-
-export async function reviewMrt(payload: ReviewPayload): Promise<ReviewResponse> {
-  const response = await fetch(`${API_BASE_URL}/review`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  })
-  return handleResponse<ReviewResponse>(response)
 }
 
 export async function sendChatMessageStream(

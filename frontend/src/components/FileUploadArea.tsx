@@ -43,7 +43,7 @@ export function FileUploadArea({
         <div className="drag-overlay">
           <div className="drag-overlay-inner">
             <p className="drag-text">Release to upload file</p>
-            <p className="drag-hint">Processed as MRT file by default</p>
+            <p className="drag-hint">Drop file to upload</p>
           </div>
         </div>
       )}

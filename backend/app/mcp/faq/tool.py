@@ -1,4 +1,4 @@
-"""Mock FAQ tool for travel-related questions."""
+"""FAQ tool for travel-related questions."""
 from __future__ import annotations
 
 import asyncio
@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class FAQTool:
-    """Mock FAQ tool that simulates searching a travel FAQ knowledge base."""
+    """FAQ tool that simulates searching a travel FAQ knowledge base."""
     
     # Mock FAQ database
     FAQ_DATABASE = {

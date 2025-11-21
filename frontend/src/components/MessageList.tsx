@@ -50,13 +50,6 @@ export function MessageList({ history, loading, messagesEndRef }: MessageListPro
     <div className="chat-messages">
       {history.map((turn, index) => {
         const isLastMessage = index === history.length - 1
-        const isAssistantLoading = isLastMessage && turn.role === 'assistant' && loading && !turn.content && !turn.toolCalls?.length
-        
-        // Skip rendering if it's an empty assistant message without tool calls (will show typing indicator separately)
-        if (isAssistantLoading) {
-          return null
-        }
-        
         const isLastAssistantMessage = isLastAssistant && index === lastAssistantIndex
         const copied = copiedStates[index] || false
         const feedback = feedbackStates[index] || null
@@ -177,9 +170,10 @@ export function MessageList({ history, loading, messagesEndRef }: MessageListPro
         )
       })}
       {(() => {
+        // Only show separate typing indicator if there's no assistant message in history yet
+        // Once assistant message exists in history, typing indicator will be shown there
         const lastTurn = history[history.length - 1]
-        const hasCallingTool = lastTurn?.role === 'assistant' && lastTurn?.toolCalls && lastTurn.toolCalls.some(tc => tc.status === 'calling')
-        return loading && (!history.length || lastTurn?.role !== 'assistant' || lastTurn?.content === '') && !hasCallingTool
+        return loading && (!history.length || lastTurn?.role !== 'assistant')
       })() && (
         <div className="message-wrapper assistant">
           <div className="message-content">

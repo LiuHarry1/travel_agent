@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { ChatResponse, Suggestion } from '../types'
 
-const CHAT_SESSIONS_STORAGE_KEY = 'mrt-chat-sessions-v2'
-const LEGACY_CHAT_STORAGE_KEY = 'mrt-review-chat-session'
+const CHAT_SESSIONS_STORAGE_KEY = 'travel-agent-chat-sessions-v2'
+const LEGACY_CHAT_STORAGE_KEY = 'travel-agent-chat-session'
 
 export interface StoredChatSession {
   id: string

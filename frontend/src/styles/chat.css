@@ -413,9 +413,9 @@
   align-items: center;
   gap: 0.4rem;
   padding: 1rem 1.25rem;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   min-width: 60px;
   flex-wrap: nowrap;
 }
