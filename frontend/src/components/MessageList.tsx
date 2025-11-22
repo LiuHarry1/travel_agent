@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { ChatTurn } from '../types'
+import type { ChatTurn, ToolCall } from '../types'
+import { ToolCallSidebar } from './ToolCallSidebar'
 
 interface MessageListProps {
   history: ChatTurn[]
@@ -13,6 +14,8 @@ export function MessageList({ history, loading, messagesEndRef }: MessageListPro
   // Track copied and feedback state for each message by index
   const [copiedStates, setCopiedStates] = useState<Record<number, boolean>>({})
   const [feedbackStates, setFeedbackStates] = useState<Record<number, 'up' | 'down' | null>>({})
+  // Track which tool call is selected for sidebar display
+  const [selectedToolCall, setSelectedToolCall] = useState<{ messageIndex: number; toolCall: ToolCall } | null>(null)
 
   const handleCopy = async (content: string, index: number) => {
     try {
@@ -44,12 +47,12 @@ export function MessageList({ history, loading, messagesEndRef }: MessageListPro
   // Find the last assistant message
   const lastTurn = history[history.length - 1]
   const lastAssistantIndex = history.length - 1
-  const isLastAssistant = lastTurn?.role === 'assistant' && (lastTurn?.content || lastTurn?.toolCalls?.length) && !loading
+  // isLastAssistant is true if the last message is from assistant (even if still loading)
+  const isLastAssistant = lastTurn?.role === 'assistant'
 
   return (
     <div className="chat-messages">
       {history.map((turn, index) => {
-        const isLastMessage = index === history.length - 1
         const isLastAssistantMessage = isLastAssistant && index === lastAssistantIndex
         const copied = copiedStates[index] || false
         const feedback = feedbackStates[index] || null
@@ -66,6 +69,60 @@ export function MessageList({ history, loading, messagesEndRef }: MessageListPro
                     {turn.content ? (
                       <>
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{turn.content}</ReactMarkdown>
+                        
+                        {/* Tool Calls Icons - show ALL tools (calling, completed, error) AFTER content, BEFORE actions */}
+                        {/* Show all tools when message is complete (not loading), or show calling tools even while loading */}
+                        {turn.toolCalls && turn.toolCalls.length > 0 && (() => {
+                          // Show all tools: calling, completed, and error
+                          // If still loading, show calling tools; if done, show all
+                          const toolsToShow = (!isLastAssistantMessage || !loading) 
+                            ? turn.toolCalls  // Show all when done
+                            : turn.toolCalls.filter(tc => tc.status === 'calling')  // Show only calling while loading
+                          
+                          if (toolsToShow.length === 0) return null
+                          
+                          return (
+                            <div className="tool-calls-icons">
+                              {toolsToShow.map((toolCall, tcIndex) => {
+                                // Get status-specific styling
+                                const statusClass = toolCall.status === 'calling' ? 'calling' 
+                                                  : toolCall.status === 'error' ? 'error' 
+                                                  : 'completed'
+                                
+                                return (
+                                  <button
+                                    key={toolCall.id || `tool-icon-${index}-${tcIndex}`}
+                                    className={`tool-call-icon-btn ${statusClass} ${selectedToolCall?.messageIndex === index && selectedToolCall?.toolCall.id === toolCall.id ? 'active' : ''}`}
+                                    onClick={() => setSelectedToolCall({ messageIndex: index, toolCall })}
+                                    title={`${toolCall.name} (${toolCall.status || 'unknown'})`}
+                                    type="button"
+                                    disabled={toolCall.status === 'calling'}  // Disable click while calling
+                                  >
+                                    {toolCall.status === 'calling' ? (
+                                      <div className="tool-call-spinner-small">
+                                        <span></span>
+                                        <span></span>
+                                        <span></span>
+                                      </div>
+                                    ) : toolCall.status === 'error' ? (
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <circle cx="12" cy="12" r="10" />
+                                        <line x1="12" y1="8" x2="12" y2="12" />
+                                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                                      </svg>
+                                    ) : (
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 1 .3.7v6.8a1 1 0 0 1-.3.7l-1.6 1.6a1 1 0 0 0 0 1.4 1 1 0 0 0 1.4 0l3-3a1 1 0 0 0 .3-.7V8a1 1 0 0 0-.3-.7l-3-3a1 1 0 0 0-1.4 1.4z" />
+                                        <path d="M9.3 17.7a1 1 0 0 0 0-1.4l-1.6-1.6a1 1 0 0 1-.3-.7V8a1 1 0 0 1 .3-.7l1.6-1.6a1 1 0 0 0 0-1.4 1 1 0 0 0-1.4 0l-3 3A1 1 0 0 0 4 8v6.8a1 1 0 0 0 .3.7l3 3a1 1 0 0 0 1.4-1.4z" />
+                                      </svg>
+                                    )}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          )
+                        })()}
+                        
                         <div className={`message-actions ${isLastAssistantMessage ? 'visible' : 'hidden-on-hover'}`}>
                         <button
                           className="message-action-btn copy-btn"
@@ -145,21 +202,22 @@ export function MessageList({ history, loading, messagesEndRef }: MessageListPro
                       </div>
                       </>
                     ) : (
-                      // No content yet - show typing indicator with tool call info if any
+                      // No content yet - show typing indicator with tool call info if calling
                       <div className="typing-indicator">
                         <span></span>
                         <span></span>
                         <span></span>
-                        {turn.toolCalls && turn.toolCalls.length > 0 && turn.toolCalls.some(tc => tc.status === 'calling' || !tc.status) && (
+                        {turn.toolCalls && turn.toolCalls.length > 0 && turn.toolCalls.some(tc => tc.status === 'calling' || (!tc.status && !tc.result)) && (
                           <span className="typing-tool-call-text">
                             {turn.toolCalls
-                              .filter(toolCall => toolCall.status === 'calling' || !toolCall.status)
+                              .filter(toolCall => toolCall.status === 'calling' || (!toolCall.status && !toolCall.result))
                               .map(toolCall => `正在调用工具: ${toolCall.name}`)
                               .join(', ')}
                           </span>
                         )}
                       </div>
                     )}
+                    
                   </>
                 ) : (
                   <div style={{ whiteSpace: 'pre-wrap' }}>{turn.content}</div>
@@ -187,6 +245,14 @@ export function MessageList({ history, loading, messagesEndRef }: MessageListPro
       )}
       {/* Scroll anchor at bottom for newest messages */}
       <div ref={messagesEndRef} className="chat-scroll-anchor" />
+      
+      {/* Tool Call Sidebar */}
+      {selectedToolCall && (
+        <ToolCallSidebar
+          toolCall={selectedToolCall.toolCall}
+          onClose={() => setSelectedToolCall(null)}
+        />
+      )}
     </div>
   )
 }

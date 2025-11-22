@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import type { ChatResponse, Suggestion, Alert, ToolCall, StreamEvent } from '../types'
+import type { ChatResponse, Alert, ToolCall, StreamEvent } from '../types'
+
+// Temporary type for suggestions (legacy feature, may be removed)
+type Suggestion = any
 import { sendChatMessageStream } from '../api'
 import { useChatSessions } from './useChatSessions'
 
@@ -125,14 +128,25 @@ export function useChat() {
     const assistantIndexRef = { current: assistantMessageIndex }
 
     try {
+      // Filter out tool messages and tool_calls from history before sending to backend
+      // Frontend keeps full history (including tool calls) for display, but backend only needs user/assistant messages
+      const filteredHistory = currentHistory.map((turn) => {
+        // Only include user and assistant messages, exclude tool messages
+        if (turn.role === 'user' || turn.role === 'assistant') {
+          return {
+            role: turn.role as string,
+            content: turn.content || '', // Ensure content is always a string
+            // Explicitly exclude tool_calls from being sent to backend
+          }
+        }
+        return null
+      }).filter((msg): msg is { role: string; content: string } => msg !== null)
+
       const payload = {
         session_id: sessionId,
         message: messageText || undefined,
         files,
-        messages: currentHistory.map((turn) => ({
-          role: turn.role as string,
-          content: turn.content,
-        })),
+        messages: filteredHistory,
       }
 
       let accumulatedContent = ''
@@ -202,7 +216,7 @@ export function useChat() {
             }
             currentToolCalls.set(toolCallId, toolCall)
             
-            // Update history with tool call - only show currently calling tools
+            // Update history with tool call - save all tool calls (including completed ones)
             setHistory((prev) => {
               const updated: ChatResponse['history'] = [...prev]
               let targetIndex = assistantIndexRef.current
@@ -211,16 +225,16 @@ export function useChat() {
                 updated.push({ 
                   role: 'assistant' as const, 
                   content: '',
-                  toolCalls: Array.from(currentToolCalls.values()).filter(tc => tc.status === 'calling')
+                  toolCalls: Array.from(currentToolCalls.values())
                 })
                 targetIndex = updated.length - 1
                 assistantIndexRef.current = targetIndex
               } else {
-                // Update existing assistant message - only show calling tools
+                // Update existing assistant message - save all tool calls
                 const existingTurn = updated[targetIndex]
                 updated[targetIndex] = {
                   ...existingTurn,
-                  toolCalls: Array.from(currentToolCalls.values()).filter(tc => tc.status === 'calling'),
+                  toolCalls: Array.from(currentToolCalls.values()),
                 }
               }
               // Update session asynchronously to avoid triggering re-renders
@@ -237,7 +251,7 @@ export function useChat() {
               toolCall.result = event.result
               currentToolCalls.set(toolCallId, toolCall)
               
-              // Update history - only show currently calling tools
+              // Update history - save all tool calls (including completed ones)
               setHistory((prev) => {
                 const updated: ChatResponse['history'] = [...prev]
                 let targetIndex = assistantIndexRef.current
@@ -245,7 +259,7 @@ export function useChat() {
                   const existingTurn = updated[targetIndex]
                   updated[targetIndex] = {
                     ...existingTurn,
-                    toolCalls: Array.from(currentToolCalls.values()).filter(tc => tc.status === 'calling'),
+                    toolCalls: Array.from(currentToolCalls.values()),
                   }
                 }
                 // Update session asynchronously to avoid triggering re-renders during render
@@ -263,7 +277,7 @@ export function useChat() {
               toolCall.error = event.error
               currentToolCalls.set(toolCallId, toolCall)
               
-              // Update history - only show currently calling tools
+              // Update history - save all tool calls (including error ones)
               setHistory((prev) => {
                 const updated: ChatResponse['history'] = [...prev]
                 let targetIndex = assistantIndexRef.current
@@ -271,7 +285,7 @@ export function useChat() {
                   const existingTurn = updated[targetIndex]
                   updated[targetIndex] = {
                     ...existingTurn,
-                    toolCalls: Array.from(currentToolCalls.values()).filter(tc => tc.status === 'calling'),
+                    toolCalls: Array.from(currentToolCalls.values()),
                   }
                 }
                 // Update session asynchronously to avoid triggering re-renders during render
@@ -285,12 +299,26 @@ export function useChat() {
         }
       )
 
-      if (accumulatedContent && assistantMessageIndex >= 0) {
-        const finalHistory: ChatResponse['history'] = [...currentHistory, { role: 'assistant' as const, content: accumulatedContent }]
-        updateActiveSession({
-          history: finalHistory,
-          suggestions: undefined,
-          summary: undefined,
+      // Final update: ensure tool calls are preserved in the final history
+      // The history should already be updated via the chunk handler, but we ensure tool calls are included
+      if (accumulatedContent) {
+        setHistory((prev) => {
+          const updated: ChatResponse['history'] = [...prev]
+          let targetIndex = assistantIndexRef.current
+          if (targetIndex >= 0 && targetIndex < updated.length) {
+            const existingTurn = updated[targetIndex]
+            const toolCalls = existingTurn?.toolCalls || Array.from(currentToolCalls.values())
+            updated[targetIndex] = {
+              role: 'assistant' as const,
+              content: accumulatedContent,
+              toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+            }
+          }
+          // Update session with final state including tool calls
+          setTimeout(() => {
+            updateActiveSession({ history: updated })
+          }, 0)
+          return updated
         })
       }
     } catch (error) {

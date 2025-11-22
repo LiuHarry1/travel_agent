@@ -84,7 +84,7 @@ export async function sendChatMessageStream(
 
 export interface ConfigResponse {
   system_prompt_template: string
-  checklist: ChecklistItem[]
+  checklist?: ChecklistItem[]
 }
 
 export async function getDefaultConfig(): Promise<ConfigResponse> {
@@ -99,7 +99,7 @@ export async function getDefaultConfig(): Promise<ConfigResponse> {
 
 export interface SaveConfigPayload {
   system_prompt_template: string
-  checklist: ChecklistItem[]
+  checklist?: ChecklistItem[]
 }
 
 export interface SaveConfigResponse {
@@ -262,5 +262,49 @@ export async function updateLLMConfig(
     body: JSON.stringify(payload),
   })
   return handleResponse<UpdateLLMConfigResponse>(response)
+}
+
+// MCP Config API
+export interface MCPConfigResponse {
+  config: {
+    mcpServers: Record<string, any>
+  }
+  server_count: number
+  tool_count: number
+}
+
+export interface MCPConfigUpdateRequest {
+  config: {
+    mcpServers: Record<string, any>
+  }
+}
+
+export interface MCPConfigUpdateResponse {
+  status: string
+  message: string
+  server_count: number
+}
+
+export async function getMCPConfig(): Promise<MCPConfigResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/mcp-config`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+  return handleResponse<MCPConfigResponse>(response)
+}
+
+export async function updateMCPConfig(
+  payload: MCPConfigUpdateRequest
+): Promise<MCPConfigUpdateResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/mcp-config`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+  return handleResponse<MCPConfigUpdateResponse>(response)
 }
 

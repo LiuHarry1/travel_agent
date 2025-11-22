@@ -2,21 +2,20 @@
 from __future__ import annotations
 
 import asyncio
-import logging
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-logger = logging.getLogger(__name__)
+from ..core.base_tool import BaseMCPTool, ToolExecutionResult
 
 
-class RetrieverTool:
-    """Retriever tool that simulates searching a vectorized knowledge database."""
+class RetrieverTool(BaseMCPTool):
+    """Retriever tool that searches a vectorized knowledge database."""
     
     # Mock knowledge database (simulating vectorized documents)
     KNOWLEDGE_BASE = [
         {
             "id": "doc1",
             "title": "日本旅游指南",
-            "content": "日本是一个充满文化和历史的美丽国家。最佳旅行时间是春季（3-5月）和秋季（9-11月）。主要城市包括东京、大阪、京都。",
+            "content": "日本是一个充满文化和历史的美丽国家。最佳旅行时间是春季（3-5月）和秋季（9-11月）。主要城市包括东京、大阪、京都。日本签证申请需要准备护照、照片、申请表、行程单等材料，通常需要5-7个工作日。",
             "category": "destination_guide"
         },
         {
@@ -45,7 +44,34 @@ class RetrieverTool:
         },
     ]
     
-    async def execute(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+    def __init__(self):
+        """Initialize Retriever tool."""
+        super().__init__(
+            name="retriever",
+            description="Retrieve relevant information from vectorized knowledge database containing travel documents, guides, and resources"
+        )
+    
+    def get_input_schema(self) -> Dict[str, Any]:
+        """Get input schema for Retriever tool."""
+        return {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The search query to retrieve relevant travel information from vectorized knowledge database. Use this tool when FAQ tool doesn't find an answer. If this tool also doesn't find useful information, suggest the user contact Harry."
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Maximum number of results to return",
+                    "default": 5,
+                    "minimum": 1,
+                    "maximum": 20
+                }
+            },
+            "required": ["query"]
+        }
+    
+    async def execute(self, arguments: Dict[str, Any]) -> ToolExecutionResult:
         """
         Execute knowledge base retrieval.
         
@@ -53,7 +79,7 @@ class RetrieverTool:
             arguments: Dictionary containing 'query' and optionally 'max_results'
             
         Returns:
-            Dictionary with retrieved documents
+            ToolExecutionResult with retrieved documents
         """
         query = arguments.get("query", "").lower()
         max_results = arguments.get("max_results", 5)
@@ -79,12 +105,16 @@ class RetrieverTool:
         scored_docs.sort(key=lambda x: x[0], reverse=True)
         results = [doc for _, doc in scored_docs[:max_results]]
         
-        logger.info(f"Retriever tool found {len(results)} results for query '{query}'")
+        self.logger.info(f"Found {len(results)} results for query '{query}'")
         
-        return {
-            "query": query,
-            "results": results,
-            "total_found": len(results),
-            "source": "vectorized_knowledge_database"
-        }
+        return ToolExecutionResult(
+            success=True,
+            data={
+                "query": query,
+                "results": results,
+                "total_found": len(results),
+                "source": "vectorized_knowledge_database"
+            },
+            metadata={"total_found": len(results)}
+        )
 

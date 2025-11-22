@@ -244,24 +244,41 @@ class MCPClient:
         from mcp.client.stdio import stdio_client
         from mcp import ClientSession
         
-        async with stdio_client(self._server_params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                
-                # Call the tool
-                result = await session.call_tool(name, arguments)
-                
-                # Extract text content from result
-                if result.content and len(result.content) > 0:
-                    # Get text from first content item
-                    text = result.content[0].text if hasattr(result.content[0], 'text') else str(result.content[0])
-                    # Try to parse as JSON, otherwise return as text
-                    try:
-                        return json.loads(text)
-                    except json.JSONDecodeError:
-                        return {"text": text}
-        
-        return {}
+        try:
+            async with stdio_client(self._server_params) as (read, write):
+                try:
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        
+                        # Call the tool
+                        result = await session.call_tool(name, arguments)
+                        
+                        # Extract text content from result
+                        if result.content and len(result.content) > 0:
+                            # Get text from first content item
+                            text = result.content[0].text if hasattr(result.content[0], 'text') else str(result.content[0])
+                            # Try to parse as JSON, otherwise return as plain text string
+                            # This allows chat.py to handle it correctly
+                            try:
+                                parsed = json.loads(text)
+                                # If parsed successfully and it's a dict, return it
+                                # Otherwise, return the text as-is
+                                if isinstance(parsed, dict):
+                                    return parsed
+                                else:
+                                    return text
+                            except json.JSONDecodeError:
+                                # Not JSON, return as plain text string
+                                return text
+                finally:
+                    # Ensure session is properly closed before stdio_client context exits
+                    # This helps prevent resource warnings on Windows
+                    pass
+            
+            return ""
+        except Exception as e:
+            logger.error(f"[MCPClient] Error in call_tool: {e}", exc_info=True)
+            raise
     
     def close(self) -> None:
         """Close the connection to MCP server."""

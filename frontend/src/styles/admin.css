@@ -24,10 +24,47 @@
   line-height: 1.6;
 }
 
+.admin-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.admin-tab {
+  padding: 0.75rem 1.5rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: -2px;
+  font-family: inherit;
+}
+
+.admin-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+.admin-tab.active {
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
+}
+
 .admin-content {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2rem;
+}
+
+/* When showing prompt or MCP config, use full width */
+.admin-content > .admin-form:only-child,
+.admin-content > .admin-form:has(+ .admin-info:empty) {
+  grid-column: 1 / -1;
 }
 
 @media (max-width: 768px) {
@@ -87,6 +124,40 @@
 .form-input:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.form-textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  resize: vertical;
+  min-height: 200px;
+  line-height: 1.6;
+}
+
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.form-hint {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  line-height: 1.5;
 }
 
 .form-loading {

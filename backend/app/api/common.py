@@ -18,19 +18,38 @@ def health_check() -> dict:
 
 @router.get("/config")
 def get_default_config() -> dict:
-    """Get default configuration including system prompt template and checklist."""
+    """Get default configuration including system prompt template."""
     config = get_config()
-    return {
+    result = {
         "system_prompt_template": config.system_prompt_template,
-        "checklist": [{"id": item.id, "description": item.description} for item in config.default_checklist],
     }
+    # Include checklist for backward compatibility if it exists in config
+    try:
+        checklist_data = config._config.get("default_checklist", [])
+        if checklist_data:
+            result["checklist"] = [
+                {"id": item.get("id", ""), "description": item.get("description", "")}
+                for item in checklist_data
+            ]
+    except (AttributeError, ValueError, KeyError):
+        # Checklist not available or not configured
+        pass
+    return result
 
 
 @router.post("/config")
 def save_config(request: ConfigUpdateRequest) -> dict:
-    """Save system prompt template and checklist configuration."""
+    """Save system prompt template configuration."""
     try:
-        get_config().save_config(request.system_prompt_template, request.checklist)
+        config = get_config()
+        
+        # If checklist is provided, use the old method for backward compatibility
+        if request.checklist is not None:
+            config.save_config(request.system_prompt_template, request.checklist)
+        else:
+            # Use the new method that only saves system_prompt_template
+            config.save_system_prompt_template(request.system_prompt_template)
+        
         reload_config()
         return {"status": "success", "message": "Configuration saved successfully"}
     except Exception as exc:

@@ -19,6 +19,15 @@ if sys.platform == "win32":
     # Set the policy before any event loop is created
     if hasattr(asyncio, "WindowsProactorEventLoopPolicy"):
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    
+    # Suppress asyncio resource warnings on Windows
+    # These warnings occur when subprocess transports are cleaned up after event loop closes
+    # They are harmless and don't affect functionality
+    import warnings
+    warnings.filterwarnings("ignore", category=ResourceWarning, message=".*unclosed.*")
+    warnings.filterwarnings("ignore", message=".*Event loop is closed.*")
+    warnings.filterwarnings("ignore", message=".*I/O operation on closed pipe.*")
+    warnings.filterwarnings("ignore", message=".*Exception ignored.*")
 
 # Ensure backend directory is in sys.path for imports
 _backend_dir = Path(__file__).parent.parent
@@ -76,6 +85,43 @@ app.add_middleware(
 # Initialize services
 llm_client = LLMClient()
 chat_service = ChatService(llm_client=llm_client)
+
+# Pre-warm MCP clients by loading tool definitions at startup
+# This initializes all MCP servers and caches them for faster subsequent requests
+@app.on_event("startup")
+async def pre_warm_mcp_clients():
+    """Pre-warm MCP clients at application startup to improve first request performance."""
+    import logging
+    import sys
+    import asyncio
+    logger = logging.getLogger(__name__)
+    
+    # On Windows, check if we can use subprocess with current event loop
+    # If not, skip pre-warming and let it initialize on first use
+    if sys.platform == "win32":
+        try:
+            loop = asyncio.get_running_loop()
+            # Check if current loop supports subprocess (ProactorEventLoop does)
+            # If not, we'll skip pre-warming to avoid NotImplementedError
+            if not isinstance(loop, asyncio.ProactorEventLoop):
+                logger.info("Current event loop is not ProactorEventLoop. Skipping pre-warm (will initialize on first use).")
+                return
+        except RuntimeError:
+            # No running loop, skip pre-warming
+            logger.info("No running event loop. Skipping pre-warm (will initialize on first use).")
+            return
+    
+    try:
+        logger.info("Pre-warming MCP clients...")
+        # Load tool definitions asynchronously (since we're in an async context)
+        # This initializes all MCP servers and caches them
+        functions = await chat_service.mcp_registry.get_tool_function_definitions()
+        logger.info(f"MCP clients pre-warmed successfully. Loaded {len(functions)} tools.")
+    except NotImplementedError as e:
+        # Windows subprocess issue - skip pre-warming
+        logger.info(f"Skipping pre-warm due to Windows subprocess limitation: {e}. MCP clients will initialize on first use.")
+    except Exception as e:
+        logger.warning(f"Failed to pre-warm MCP clients: {e}. They will be initialized on first use.", exc_info=True)
 
 # Setup routes with service dependencies
 setup_chat_routes(chat_service=chat_service)

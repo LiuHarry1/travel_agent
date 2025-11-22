@@ -1,7 +1,9 @@
 """Admin API routes for managing LLM configuration."""
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -10,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from ..config import get_config, reload_config
 from ..llm.provider import LLMProvider
+from ..mcp.config import load_mcp_config
 from ..utils.exceptions import format_error_message
 
 router = APIRouter()
@@ -237,5 +240,97 @@ def get_available_models(provider: Optional[str] = None, ollama_url: Optional[st
         raise
     except Exception as exc:
         error_msg = format_error_message(exc, "Failed to get available models")
+        raise HTTPException(status_code=500, detail=error_msg) from exc
+
+
+class MCPConfigResponse(BaseModel):
+    """Response model for MCP configuration."""
+    config: Dict[str, Any] = Field(..., description="MCP configuration (mcpServers)")
+    server_count: int = Field(..., description="Number of configured MCP servers")
+    tool_count: int = Field(..., description="Total number of tools from all servers")
+
+
+class MCPConfigUpdateRequest(BaseModel):
+    """Request model for updating MCP configuration."""
+    config: Dict[str, Any] = Field(..., description="MCP configuration (mcpServers)")
+
+
+@router.get("/mcp-config", response_model=MCPConfigResponse)
+def get_mcp_config() -> MCPConfigResponse:
+    """Get current MCP configuration."""
+    try:
+        config = load_mcp_config()
+        mcp_servers = config.get("mcpServers", {})
+        
+        # Count tools (we need to load them from registry)
+        # For now, just return server count
+        # Tool count will be approximate since tools are loaded lazily
+        from ..api.chat import get_chat_service
+        try:
+            chat_service = get_chat_service()
+            tool_count = len(chat_service.mcp_registry.tools)
+        except Exception:
+            # If registry not available, return 0
+            tool_count = 0
+        
+        return MCPConfigResponse(
+            config={"mcpServers": mcp_servers},
+            server_count=len(mcp_servers),
+            tool_count=tool_count
+        )
+    except Exception as exc:
+        error_msg = format_error_message(exc, "Failed to get MCP configuration")
+        raise HTTPException(status_code=500, detail=error_msg) from exc
+
+
+@router.post("/mcp-config", response_model=Dict[str, Any])
+def update_mcp_config(request: MCPConfigUpdateRequest) -> Dict[str, Any]:
+    """Update MCP configuration."""
+    try:
+        # Validate JSON structure
+        if "mcpServers" not in request.config:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid MCP configuration: 'mcpServers' key is required"
+            )
+        
+        # Get config file path
+        from pathlib import Path
+        backend_dir = Path(__file__).parent.parent.parent
+        config_path = backend_dir / "mcp.json"
+        
+        # Validate JSON by trying to serialize it
+        try:
+            json.dumps(request.config)
+        except (TypeError, ValueError) as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid JSON configuration: {str(e)}"
+            )
+        
+        # Write to file
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(request.config, f, indent=2, ensure_ascii=False)
+        
+        # Reload MCP registry
+        from ..api.chat import get_chat_service
+        try:
+            chat_service = get_chat_service()
+            chat_service.mcp_registry.reload_config(str(config_path))
+        except Exception as e:
+            # Log error but don't fail the request
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to reload MCP registry: {e}")
+        
+        return {
+            "status": "success",
+            "message": "MCP configuration updated successfully",
+            "server_count": len(request.config.get("mcpServers", {}))
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        error_msg = format_error_message(exc, "Failed to update MCP configuration")
         raise HTTPException(status_code=500, detail=error_msg) from exc
 

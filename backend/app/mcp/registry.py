@@ -29,24 +29,36 @@ class ToolResult:
 
 
 class MCPToolRegistry:
-    """Registry for MCP tools that loads tool definitions from MCP servers."""
+    """
+    Registry for MCP tools that loads tool definitions from MCP servers.
+    
+    This registry manages connections to multiple MCP servers (both internal and external)
+    and provides a unified interface for tool discovery and execution.
+    """
     
     def __init__(self, config_path: Optional[str] = None):
-        """Initialize registry with tools from MCP servers."""
+        """
+        Initialize registry with tools from MCP servers.
+        
+        Args:
+            config_path: Optional path to mcp.json config file
+        """
         self.tools: Dict[str, Dict[str, Any]] = {}
         self._tool_to_server: Dict[str, str] = {}  # Map tool name to server name
         self._mcp_clients: Dict[str, MCPClient] = {}  # Map server name to MCP client
         self._load_tools_from_servers(config_path)
     
     def _load_tools_from_servers(self, config_path: Optional[str] = None) -> None:
-        """Load tool definitions from MCP servers using standard MCP SDK."""
+        """
+        Load tool definitions from MCP servers using standard MCP SDK.
+        
+        Args:
+            config_path: Optional path to mcp.json config file
+        """
         config = load_mcp_config(config_path)
         servers = config.get("mcpServers", {})
         
         logger.info(f"[MCPToolRegistry] Loading tools from {len(servers)} MCP servers")
-        
-        # All servers (internal and external) are connected via MCP client
-        self._mcp_clients: Dict[str, MCPClient] = {}
         
         # Get backend directory for setting working directory
         from pathlib import Path
@@ -80,7 +92,12 @@ class MCPToolRegistry:
         logger.info(f"[MCPToolRegistry] Created {len(self._mcp_clients)} MCP clients (tools will be loaded on first use)")
     
     def list_tools(self) -> List[MCPToolConfig]:
-        """List all registered tools (returns MCPToolConfig for backward compatibility)."""
+        """
+        List all registered tools (returns MCPToolConfig for backward compatibility).
+        
+        Returns:
+            List of MCPToolConfig objects
+        """
         result = []
         for tool in self.tools.values():
             result.append(MCPToolConfig(
@@ -92,11 +109,20 @@ class MCPToolRegistry:
         return result
     
     def list_tools_dict(self) -> List[Dict[str, Any]]:
-        """List all registered tools as dictionaries."""
+        """
+        List all registered tools as dictionaries.
+        
+        Returns:
+            List of tool dictionaries
+        """
         return list(self.tools.values())
     
     async def _ensure_tools_loaded(self) -> None:
-        """Lazily load tools from all MCP servers (both internal and external)."""
+        """
+        Lazily load tools from all MCP servers (both internal and external).
+        
+        This method ensures tools are loaded from all configured servers before use.
+        """
         # Check MCP SDK availability at runtime (not just at module import time)
         import sys
         try:
@@ -223,7 +249,12 @@ class MCPToolRegistry:
         return functions
     
     def get_tool_function_definitions_sync(self) -> list[Dict[str, Any]]:
-        """Synchronous wrapper for get_tool_function_definitions."""
+        """
+        Synchronous wrapper for get_tool_function_definitions.
+        
+        Returns:
+            List of function definitions in OpenAI format
+        """
         import asyncio
         import sys
         # Fix for Windows: Ensure ProactorEventLoop is used for subprocess support
@@ -238,4 +269,32 @@ class MCPToolRegistry:
             asyncio.set_event_loop(loop)
         
         return loop.run_until_complete(self.get_tool_function_definitions())
-
+    
+    def reload_config(self, config_path: Optional[str] = None) -> None:
+        """
+        Reload MCP configuration from file and reinitialize all MCP clients.
+        
+        This method clears existing tools and clients, then reloads from the config file.
+        
+        Args:
+            config_path: Optional path to mcp.json config file. If None, uses default path.
+        """
+        logger.info("[MCPToolRegistry] Reloading MCP configuration...")
+        
+        # Close existing clients (clean up connections)
+        for server_name, client in self._mcp_clients.items():
+            try:
+                if hasattr(client, 'close'):
+                    client.close()
+            except Exception as e:
+                logger.warning(f"[MCPToolRegistry] Error closing client for {server_name}: {e}")
+        
+        # Clear existing state
+        self.tools.clear()
+        self._tool_to_server.clear()
+        self._mcp_clients.clear()
+        
+        # Reload from config file
+        self._load_tools_from_servers(config_path)
+        
+        logger.info(f"[MCPToolRegistry] Configuration reloaded. {len(self._mcp_clients)} servers configured.")

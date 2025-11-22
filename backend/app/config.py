@@ -80,6 +80,25 @@ class Config:
         self._config = existing_config
         self._default_checklist = None  # Reset cache
 
+    def save_system_prompt_template(self, system_prompt_template: str) -> None:
+        """Save system prompt template to configuration file."""
+        config_file = Path(self.config_path)
+        
+        # Load existing config to preserve other settings
+        existing_config = self._config.copy()
+        
+        # Update system prompt template
+        if "llm" not in existing_config:
+            existing_config["llm"] = {}
+        existing_config["llm"]["system_prompt_template"] = system_prompt_template
+        
+        # Write back to file
+        with open(config_file, "w", encoding="utf-8") as f:
+            yaml.dump(existing_config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+        
+        # Reload config
+        self._config = existing_config
+
     def save_llm_config(self, provider: str, model: str) -> None:
         """Save LLM provider and model to configuration file."""
         config_file = Path(self.config_path)
