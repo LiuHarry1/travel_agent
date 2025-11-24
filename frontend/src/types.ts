@@ -58,3 +58,8 @@ export interface StreamEvent {
   result?: any
   error?: string
 }
+
+export interface Suggestion {
+  text: string
+  action?: string
+}

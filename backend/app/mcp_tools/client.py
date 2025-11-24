@@ -18,6 +18,14 @@ except ImportError:
     logger = logging.getLogger(__name__)
     logger.warning("MCP SDK not available, using fallback implementation")
 
+# Try to import anyio exceptions for better error handling
+try:
+    from anyio import ClosedResourceError
+    ANYIO_AVAILABLE = True
+except ImportError:
+    ClosedResourceError = None
+    ANYIO_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -350,29 +358,52 @@ class MCPClient:
                 error_msg = f"Tool call '{name}' timed out after {tool_timeout} seconds"
                 logger.error(f"[MCPClient] {error_msg}")
                 raise RuntimeError(error_msg)
-            except (ConnectionError, BrokenPipeError, RuntimeError, OSError) as e:
-                error_msg = str(e)
-                logger.warning(f"[MCPClient] Connection error during tool call (attempt {attempt + 1}/{max_retries}): {error_msg}")
-                
-                # 标记连接断开
-                self._is_connected = False
-                
-                # 如果是最后一次尝试，抛出异常
-                if attempt == max_retries - 1:
-                    raise
-                
-                # 尝试重连
-                try:
-                    await self._reconnect()
-                except Exception as reconnect_error:
-                    logger.error(f"[MCPClient] Reconnection failed: {reconnect_error}")
-                    if attempt == max_retries - 1:
-                        raise
-                    continue
-            
             except Exception as e:
-                logger.error(f"[MCPClient] Error in call_tool: {e}", exc_info=True)
-                raise
+                # 检查是否是连接相关的错误（包括 anyio.ClosedResourceError）
+                error_type = type(e).__name__
+                error_msg = str(e)
+                
+                # 检查是否是 anyio.ClosedResourceError 或其他连接关闭错误
+                is_connection_error = (
+                    # 检查是否是 anyio.ClosedResourceError
+                    (ANYIO_AVAILABLE and isinstance(e, ClosedResourceError)) or
+                    error_type == "ClosedResourceError" or
+                    "ClosedResourceError" in error_msg or
+                    # 检查是否是其他连接相关错误
+                    isinstance(e, (ConnectionError, BrokenPipeError, OSError)) or
+                    # 检查错误消息中是否包含连接关闭的关键词
+                    ("closed" in error_msg.lower() and ("resource" in error_msg.lower() or "connection" in error_msg.lower() or "stream" in error_msg.lower()))
+                )
+                
+                if is_connection_error:
+                    logger.warning(
+                        f"[MCPClient] Connection error during tool call (attempt {attempt + 1}/{max_retries}): "
+                        f"{error_type}: {error_msg}"
+                    )
+                    
+                    # 标记连接断开
+                    self._is_connected = False
+                    
+                    # 如果是最后一次尝试，抛出异常
+                    if attempt == max_retries - 1:
+                        logger.error(f"[MCPClient] Failed to call tool after {max_retries} attempts")
+                        raise RuntimeError(f"Tool call '{name}' failed: connection closed ({error_msg})")
+                    
+                    # 尝试重连
+                    try:
+                        logger.info(f"[MCPClient] Attempting to reconnect before retry...")
+                        await self._reconnect()
+                        logger.info(f"[MCPClient] Reconnection successful, retrying tool call...")
+                        continue  # 重试工具调用
+                    except Exception as reconnect_error:
+                        logger.error(f"[MCPClient] Reconnection failed: {reconnect_error}")
+                        if attempt == max_retries - 1:
+                            raise RuntimeError(f"Tool call '{name}' failed: reconnection failed ({reconnect_error})")
+                        continue
+                else:
+                    # 非连接错误，直接抛出
+                    logger.error(f"[MCPClient] Error in call_tool: {e}", exc_info=True)
+                    raise
     
     async def close(self) -> None:
         """Close the persistent connection to MCP server."""

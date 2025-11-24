@@ -3,9 +3,9 @@ import { useChatSessions } from '../hooks/useChatSessions'
 
 interface LayoutProps {
   sidebarVisible: boolean
-  activeTab: 'review' | 'chat' | 'admin'
+  activeTab: 'chat' | 'admin'
   onSidebarToggle: () => void
-  onTabChange: (tab: 'review' | 'chat' | 'admin') => void
+  onTabChange: (tab: 'chat' | 'admin') => void
   children: React.ReactNode
 }
 
