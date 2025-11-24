@@ -34,13 +34,15 @@ class LLMConfigResponse(BaseModel):
     provider: str = Field(..., description="Current LLM provider")
     model: str = Field(..., description="Current model name")
     ollama_url: Optional[str] = Field(None, description="Ollama base URL (if provider is ollama)")
+    openai_base_url: Optional[str] = Field(None, description="OpenAI base URL (if provider is openai)")
 
 
 class LLMConfigUpdateRequest(BaseModel):
     """Request model for updating LLM configuration."""
-    provider: str = Field(..., description="LLM provider (qwen, azure_openai, ollama)")
+    provider: str = Field(..., description="LLM provider (qwen, azure_openai, ollama, openai)")
     model: str = Field(..., description="Model name")
     ollama_url: Optional[str] = Field(None, description="Ollama base URL (optional, for fetching models)")
+    openai_base_url: Optional[str] = Field(None, description="OpenAI base URL (optional, for OpenAI provider)")
 
 
 class OllamaModelInfo(BaseModel):
@@ -64,6 +66,7 @@ def get_providers() -> ProvidersResponse:
         ProviderInfo(value="qwen", label="Qwen (Alibaba DashScope)"),
         ProviderInfo(value="azure_openai", label="Azure OpenAI"),
         ProviderInfo(value="ollama", label="Ollama"),
+        ProviderInfo(value="openai", label="OpenAI API"),
     ]
     return ProvidersResponse(providers=providers)
 
@@ -80,15 +83,25 @@ def get_llm_config() -> LLMConfigResponse:
             model = config.llm_ollama_model
         elif provider == "azure_openai":
             model = config.llm_azure_model
+        elif provider == "openai":
+            model = config._config.get("llm", {}).get("openai_model", "gpt-4")
         else:
             model = config.llm_model
         
-        # Get Ollama URL from environment or use default
+        # Get provider-specific URLs
         ollama_url = None
+        openai_base_url = None
         if provider == "ollama":
             ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        elif provider == "openai":
+            openai_base_url = os.getenv("OPENAI_BASE_URL") or config._config.get("llm", {}).get("openai_base_url")
         
-        return LLMConfigResponse(provider=provider, model=model, ollama_url=ollama_url)
+        return LLMConfigResponse(
+            provider=provider, 
+            model=model, 
+            ollama_url=ollama_url,
+            openai_base_url=openai_base_url
+        )
     except Exception as exc:
         error_msg = format_error_message(exc, "Failed to get LLM configuration")
         raise HTTPException(status_code=500, detail=error_msg) from exc
@@ -107,9 +120,19 @@ def update_llm_config(request: LLMConfigUpdateRequest) -> Dict[str, Any]:
                 detail=f"Unsupported provider: {request.provider}. Supported providers: {[p.value for p in LLMProvider]}"
             )
         
-        # Update Ollama URL if provided
+        # Update provider-specific URLs
         if request.provider.lower() == "ollama" and request.ollama_url:
             os.environ["OLLAMA_BASE_URL"] = request.ollama_url.rstrip("/")
+        
+        if request.provider.lower() == "openai" and request.openai_base_url:
+            # Update environment variable
+            os.environ["OPENAI_BASE_URL"] = request.openai_base_url.rstrip("/")
+            # Also update config file
+            config = get_config()
+            llm_config = config._config.get("llm", {})
+            llm_config["openai_base_url"] = request.openai_base_url.rstrip("/")
+            config._config["llm"] = llm_config
+            config._save_config()
         
         # Save configuration
         config = get_config()
@@ -227,6 +250,17 @@ def get_available_models(provider: Optional[str] = None, ollama_url: Optional[st
                 "gpt-4-32k",
                 "gpt-3.5-turbo",
                 "gpt-35-turbo",
+            ]
+            return ModelsResponse(provider=provider_lower, models=models)
+        
+        elif provider_lower == "openai":
+            # OpenAI models (common models)
+            models = [
+                "gpt-4",
+                "gpt-4-turbo",
+                "gpt-4-32k",
+                "gpt-3.5-turbo",
+                "gpt-3.5-turbo-16k",
             ]
             return ModelsResponse(provider=provider_lower, models=models)
         

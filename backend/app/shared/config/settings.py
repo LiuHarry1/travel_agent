@@ -20,6 +20,7 @@ class LLMSettings(BaseModel):
     )
     azure_model: Optional[str] = Field(default=None, description="Azure OpenAI model")
     ollama_model: Optional[str] = Field(default=None, description="Ollama model")
+    openai_model: Optional[str] = Field(default=None, description="OpenAI model")
     
     @field_validator("system_prompt_template")
     @classmethod
@@ -76,7 +77,8 @@ class Settings(BaseModel):
             timeout=float(llm_data.get("timeout", 30.0)),
             system_prompt_template=llm_data.get("system_prompt_template", ""),
             azure_model=llm_data.get("azure_model"),
-            ollama_model=llm_data.get("ollama_model")
+            ollama_model=llm_data.get("ollama_model"),
+            openai_model=llm_data.get("openai_model")
         )
         
         checklist_data = config_data.get("default_checklist", [])
@@ -141,6 +143,9 @@ class Settings(BaseModel):
             self.llm.ollama_model = model
         elif provider == "azure_openai":
             self.llm.azure_model = model
+        elif provider == "openai":
+            # Update openai_model in config
+            self._config.setdefault("llm", {})["openai_model"] = model
         else:
             self.llm.model = model
         self.save_to_yaml()

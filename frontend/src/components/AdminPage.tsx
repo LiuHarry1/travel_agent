@@ -22,6 +22,7 @@ export function AdminPage() {
   const [provider, setProvider] = useState<string>('')
   const [model, setModel] = useState<string>('')
   const [ollamaUrl, setOllamaUrl] = useState<string>('http://localhost:11434')
+  const [openaiBaseUrl, setOpenaiBaseUrl] = useState<string>('')
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [loadingProviders, setLoadingProviders] = useState(false)
@@ -78,9 +79,11 @@ export function AdminPage() {
       setProvider(config.provider)
       setModel(config.model)
       
-      // Set Ollama URL from config or use default
+      // Set provider-specific URLs from config or use defaults
       if (config.provider === 'ollama') {
         setOllamaUrl(config.ollama_url || 'http://localhost:11434')
+      } else if (config.provider === 'openai') {
+        setOpenaiBaseUrl(config.openai_base_url || '')
       }
     } catch (error) {
       setAlert({
@@ -134,6 +137,7 @@ export function AdminPage() {
         provider,
         model,
         ollama_url: provider === 'ollama' ? ollamaUrl : undefined,
+        openai_base_url: provider === 'openai' ? openaiBaseUrl : undefined,
       })
       setAlert({
         type: 'success',
@@ -156,6 +160,10 @@ export function AdminPage() {
 
   const handleOllamaUrlChange = (newUrl: string) => {
     setOllamaUrl(newUrl)
+  }
+
+  const handleOpenaiBaseUrlChange = (newUrl: string) => {
+    setOpenaiBaseUrl(newUrl)
   }
 
   const loadSystemPrompt = async () => {
@@ -346,6 +354,26 @@ export function AdminPage() {
                 </div>
               )}
 
+              {provider === 'openai' && (
+                <div className="form-group">
+                  <label htmlFor="openai-base-url">OpenAI Base URL</label>
+                  <input
+                    id="openai-base-url"
+                    type="text"
+                    value={openaiBaseUrl}
+                    onChange={(e) => handleOpenaiBaseUrlChange(e.target.value)}
+                    placeholder="https://api.openai.com/v1 or http://10.150.117.242:33148/v1"
+                    disabled={loading}
+                    className="form-input"
+                  />
+                  <small className="form-hint">
+                    Enter the base URL for OpenAI API or OpenAI-compatible proxy server. 
+                    Defaults to https://api.openai.com/v1 if not specified. 
+                    For proxy servers, include /v1 at the end (e.g., http://10.150.117.242:33148/v1).
+                  </small>
+                </div>
+              )}
+
               {provider === 'ollama' && (
                 <div className="form-group">
                   <button
@@ -413,6 +441,12 @@ export function AdminPage() {
                   <div className="info-row">
                     <span className="info-label">Ollama URL:</span>
                     <span className="info-value">{ollamaUrl || 'Not set'}</span>
+                  </div>
+                )}
+                {provider === 'openai' && (
+                  <div className="info-row">
+                    <span className="info-label">OpenAI Base URL:</span>
+                    <span className="info-value">{openaiBaseUrl || 'https://api.openai.com/v1 (default)'}</span>
                   </div>
                 )}
               </div>

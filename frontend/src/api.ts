@@ -186,6 +186,7 @@ export interface LLMConfigResponse {
   provider: string
   model: string
   ollama_url?: string
+  openai_base_url?: string
 }
 
 export interface OllamaModelInfo {
@@ -204,6 +205,7 @@ export interface UpdateLLMConfigRequest {
   provider: string
   model: string
   ollama_url?: string
+  openai_base_url?: string
 }
 
 export interface UpdateLLMConfigResponse {

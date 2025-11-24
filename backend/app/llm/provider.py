@@ -14,6 +14,7 @@ from .base import LLMProvider, LLMError, BaseLLMClient
 from .qwen import QwenClient
 from .azure_openai import AzureOpenAIClient
 from .ollama import OllamaClient
+from .openai import OpenAIClient
 
 # For backward compatibility - all classes are available from this module
 __all__ = [
@@ -23,4 +24,5 @@ __all__ = [
     "QwenClient",
     "AzureOpenAIClient",
     "OllamaClient",
+    "OpenAIClient",
 ]

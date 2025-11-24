@@ -18,6 +18,7 @@ class LLMProvider(str, Enum):
     QWEN = "qwen"  # Alibaba DashScope
     AZURE_OPENAI = "azure_openai"  # Azure OpenAI
     OLLAMA = "ollama"  # Ollama (supports any model)
+    OPENAI = "openai"  # OpenAI API or OpenAI-compatible API
 
 
 class LLMError(RuntimeError):

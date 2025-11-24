@@ -3,5 +3,7 @@ llm:
   model: qwen-plus
   azure_model: gpt-4
   ollama_model: qwen3:8b
+  openai_model: gpt-4
+  openai_base_url: ""  # Optional: defaults to https://api.openai.com/v1, or set via OPENAI_BASE_URL env var
   timeout: 60.0
   system_prompt_template: "You are a helpful travel agent assistant. Your goal is to help users with travel-related questions and planning."
