@@ -27,7 +27,8 @@ class ToolDetectionService:
             List of normalized tool call dictionaries
         """
         # DashScope/Qwen uses "function_call" (singular) instead of "tool_calls" (plural)
-        # OpenAI format uses "tool_calls" (plural)
+        # OpenAI format uses "tool_calls" (plural) with structure:
+        # [{"id": "...", "type": "function", "function": {"name": "...", "arguments": "..."}}]
         function_call = assistant_message.get("function_call")
         tool_calls = assistant_message.get("tool_calls", [])
         
@@ -44,7 +45,32 @@ class ToolDetectionService:
             }]
             logger.info(f"Converted function_call to tool_calls format: {function_call.get('name', 'unknown')}")
         
-        return tool_calls or []
+        # Normalize OpenAI tool_calls format (ensure all have proper structure)
+        normalized_tool_calls = []
+        for tc in tool_calls:
+            if isinstance(tc, dict):
+                # OpenAI format: tool_calls already has the right structure
+                # Ensure it has the required fields
+                if "function" in tc:
+                    normalized_tc = {
+                        "id": tc.get("id", f"call_{int(time.time() * 1000)}"),
+                        "type": tc.get("type", "function"),
+                        "function": tc["function"]
+                    }
+                    normalized_tool_calls.append(normalized_tc)
+                elif "name" in tc:
+                    # Legacy format: convert to new format
+                    normalized_tc = {
+                        "id": tc.get("id", f"call_{int(time.time() * 1000)}"),
+                        "type": "function",
+                        "function": {
+                            "name": tc.get("name", ""),
+                            "arguments": tc.get("arguments", "{}")
+                        }
+                    }
+                    normalized_tool_calls.append(normalized_tc)
+        
+        return normalized_tool_calls
 
     def extract_tool_name(self, tool_call: Any) -> str:
         """Extract tool name from tool call data structure."""

@@ -49,10 +49,42 @@ class OpenAIClient(BaseLLMClient):
 
     def _normalize_payload(self, messages: List[Dict[str, str]], model: Optional[str] = None) -> Dict[str, Any]:
         """Normalize payload for OpenAI API format."""
-        return {
+        payload = {
             "model": model or self._get_model_name(),
             "messages": messages,
         }
+        return payload
+    
+    def _convert_functions_to_tools(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Convert 'functions' parameter to 'tools' format for OpenAI API.
+        OpenAI API uses 'tools' instead of 'functions', and the format is slightly different.
+        """
+        if "functions" in payload:
+            functions = payload.pop("functions")
+            # Convert functions to tools format
+            tools = []
+            for func in functions:
+                tools.append({
+                    "type": "function",
+                    "function": func
+                })
+            payload["tools"] = tools
+            
+            # Convert function_call to tool_choice
+            if "function_call" in payload:
+                function_call = payload.pop("function_call")
+                if function_call == "auto":
+                    payload["tool_choice"] = "auto"
+                elif function_call == "none":
+                    payload["tool_choice"] = "none"
+                elif isinstance(function_call, dict) and "name" in function_call:
+                    payload["tool_choice"] = {
+                        "type": "function",
+                        "function": {"name": function_call["name"]}
+                    }
+        
+        return payload
 
     def _extract_response(self, data: Dict[str, Any]) -> str:
         """Extract response from OpenAI format."""
@@ -69,8 +101,13 @@ class OpenAIClient(BaseLLMClient):
             "Content-Type": "application/json"
         }
 
+        # Convert functions to tools format for OpenAI API
+        payload = self._convert_functions_to_tools(payload.copy())
+        
         messages_count = len(payload.get("messages", []))
         logger.info(f"OpenAI API request (async) - URL: {url}, Model: {model}, Messages: {messages_count}")
+        if "tools" in payload:
+            logger.debug(f"Using {len(payload['tools'])} tools (converted from functions)")
 
         request_start = time.time()
         try:
@@ -136,11 +173,13 @@ class OpenAIClient(BaseLLMClient):
             "Content-Type": "application/json"
         }
 
-        # Add stream parameter
-        request_payload = payload.copy()
+        # Convert functions to tools format for OpenAI API
+        request_payload = self._convert_functions_to_tools(payload.copy())
         request_payload["stream"] = True
 
         logger.info(f"OpenAI streaming request (async) - URL: {url}, Model: {model}")
+        if "tools" in request_payload:
+            logger.debug(f"Using {len(request_payload['tools'])} tools (converted from functions)")
 
         try:
             client = self._get_async_client()
