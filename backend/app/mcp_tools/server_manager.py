@@ -96,21 +96,41 @@ class MCPServerManager:
             args = server_config.get("args", [])
             
             try:
-                # Test if npx is available
-                result = await asyncio.create_subprocess_exec(
+                # Test if npx is available by checking version
+                # Use shell=True on Windows, but prefer direct execution on Linux
+                import sys
+                import shutil
+                
+                # First, check if command exists in PATH
+                npx_path = shutil.which(command)
+                if not npx_path:
+                    logger.warning(f"[ServerManager] '{command}' not found in PATH for server '{server_name}'")
+                    return False
+                
+                # Test if npx is available and working
+                process = await asyncio.create_subprocess_exec(
                     command, "--version",
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=None  # Use current working directory
                 )
-                await result.wait()
-                if result.returncode == 0:
-                    logger.info(f"[ServerManager] npx is available for server '{server_name}'")
+                
+                stdout, stderr = await process.communicate()
+                returncode = await process.wait()
+                
+                if returncode == 0:
+                    version = stdout.decode('utf-8', errors='ignore').strip()
+                    logger.info(f"[ServerManager] npx is available for server '{server_name}' (version: {version})")
                     return True
                 else:
-                    logger.warning(f"[ServerManager] npx not available for server '{server_name}'")
+                    error_msg = stderr.decode('utf-8', errors='ignore').strip() if stderr else "Unknown error"
+                    logger.warning(f"[ServerManager] npx check failed for server '{server_name}': {error_msg}")
                     return False
+            except FileNotFoundError:
+                logger.warning(f"[ServerManager] '{command}' command not found for server '{server_name}'. Please install Node.js and npm.")
+                return False
             except Exception as e:
-                logger.error(f"[ServerManager] Failed to check npx for server '{server_name}': {e}")
+                logger.error(f"[ServerManager] Failed to check npx for server '{server_name}': {e}", exc_info=True)
                 return False
         
         elif server_type == ServerType.EXTERNAL_PYTHON:

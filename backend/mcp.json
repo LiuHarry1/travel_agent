@@ -14,16 +14,7 @@
         "app.mcp_tools.travel_doc_retriever.server"
       ]
     },
-    "simple-calculator": {
-      "command": "python",
-      "args": [
-        "-m",
-        "simple_calculator.server"
-      ],
-      "env": {
-        "PYTHONPATH": "/Users/harry"
-      }
-    },
+
     "tavily-mcp": {
       "command": "npx",
       "args": [
