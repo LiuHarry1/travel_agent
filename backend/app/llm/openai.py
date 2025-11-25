@@ -97,9 +97,11 @@ class OpenAIClient(BaseLLMClient):
         url = f"{base_url}/chat/completions"
         
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
+        # Add Authorization header only if API key is available
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
 
         # Convert functions to tools format for OpenAI API
         payload = self._convert_functions_to_tools(payload.copy())
@@ -169,9 +171,11 @@ class OpenAIClient(BaseLLMClient):
         url = f"{base_url}/chat/completions"
         
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
+        # Add Authorization header only if API key is available
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
 
         # Convert functions to tools format for OpenAI API
         request_payload = self._convert_functions_to_tools(payload.copy())

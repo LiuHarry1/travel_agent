@@ -1,21 +1,18 @@
 {
-  "mcpServers": {
-    "faq": {
-      "command": "python",
-      "args": [
-        "-m",
-        "app.mcp_tools.faq.server"
-      ]
+  "servers": [
+    {
+      "id": "faq",
+      "type": "local",
+      "module": "app.mcp_tools.tools.faq_tool"
     },
-    "travel-doc-retriever": {
-      "command": "python",
-      "args": [
-        "-m",
-        "app.mcp_tools.travel_doc_retriever.server"
-      ]
+    {
+      "id": "travel-doc-retriever",
+      "type": "local",
+      "module": "app.mcp_tools.tools.retriever_tool"
     },
-
-    "tavily-mcp": {
+    {
+      "id": "tavily-mcp",
+      "transport": "stdio",
       "command": "npx",
       "args": [
         "-y",
@@ -26,5 +23,5 @@
         "TAVILY_MAX_RESULTS": "5"
       }
     }
-  }
+  ]
 }

@@ -31,7 +31,7 @@ class ChatRequest(BaseModel):
 
 
 class ConfigUpdateRequest(BaseModel):
-    system_prompt_template: str = Field(..., description="System prompt template to save")
+    system_prompt_template: str = Field(..., description="System prompt template. Use {tools} placeholder for available tools list.")
     checklist: Optional[List[ChecklistItem]] = Field(default=None, description="Checklist items to save (optional, for backward compatibility)")
 
 

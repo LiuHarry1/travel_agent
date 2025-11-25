@@ -39,7 +39,7 @@ class LLMConfigResponse(BaseModel):
 
 class LLMConfigUpdateRequest(BaseModel):
     """Request model for updating LLM configuration."""
-    provider: str = Field(..., description="LLM provider (qwen, azure_openai, ollama, openai)")
+    provider: str = Field(..., description="LLM provider (qwen, ollama, openai)")
     model: str = Field(..., description="Model name")
     ollama_url: Optional[str] = Field(None, description="Ollama base URL (optional, for fetching models)")
     openai_base_url: Optional[str] = Field(None, description="OpenAI base URL (optional, for OpenAI provider)")
@@ -64,7 +64,6 @@ def get_providers() -> ProvidersResponse:
     """Get list of available LLM providers."""
     providers = [
         ProviderInfo(value="qwen", label="Qwen (Alibaba DashScope)"),
-        ProviderInfo(value="azure_openai", label="Azure OpenAI"),
         ProviderInfo(value="ollama", label="Ollama"),
         ProviderInfo(value="openai", label="OpenAI API"),
     ]
@@ -81,8 +80,6 @@ def get_llm_config() -> LLMConfigResponse:
         # Get model based on provider
         if provider == "ollama":
             model = config.llm_ollama_model
-        elif provider == "azure_openai":
-            model = config.llm_azure_model
         elif provider == "openai":
             model = config._config.get("llm", {}).get("openai_model", "gpt-4")
         else:
@@ -241,18 +238,6 @@ def get_available_models(provider: Optional[str] = None, ollama_url: Optional[st
             ]
             return ModelsResponse(provider=provider_lower, models=models)
         
-        elif provider_lower == "azure_openai":
-            # Azure OpenAI models (common models)
-            # Note: The actual deployment name in Azure may differ from these model names
-            models = [
-                "gpt-4",
-                "gpt-4-turbo",
-                "gpt-4-32k",
-                "gpt-3.5-turbo",
-                "gpt-35-turbo",
-            ]
-            return ModelsResponse(provider=provider_lower, models=models)
-        
         elif provider_lower == "openai":
             # OpenAI models (common models)
             models = [
@@ -294,18 +279,26 @@ def get_mcp_config() -> MCPConfigResponse:
     """Get current MCP configuration."""
     try:
         config = load_mcp_config()
-        mcp_servers = config.get("mcpServers", {})
         
-        # Count tools (we need to load them from registry)
-        # For now, just return server count
-        # Tool count will be approximate since tools are loaded lazily
+        # Support both old format (mcpServers) and new format (servers)
+        mcp_servers = {}
+        if "mcpServers" in config:
+            # Old format: {"mcpServers": {"server_id": {...}}}
+            mcp_servers = config.get("mcpServers", {})
+        elif "servers" in config:
+            # New format: {"servers": [{"id": "...", ...}]}
+            # Convert to old format for API compatibility
+            servers = config.get("servers", [])
+            mcp_servers = {server.get("id"): server for server in servers if server.get("id")}
+        
+        # Count tools from MCP manager
         from ..core.container import get_container
         try:
             container = get_container()
             chat_service = container.chat_service
-            tool_count = len(chat_service.mcp_registry.tools)
+            tool_count = len(chat_service.mcp_registry.list_tools())
         except Exception:
-            # If registry not available, return 0
+            # If manager not available, return 0
             tool_count = 0
         
         return MCPConfigResponse(
@@ -322,11 +315,11 @@ def get_mcp_config() -> MCPConfigResponse:
 def update_mcp_config(request: MCPConfigUpdateRequest) -> Dict[str, Any]:
     """Update MCP configuration."""
     try:
-        # Validate JSON structure
-        if "mcpServers" not in request.config:
+        # Validate JSON structure - support both old format (mcpServers) and new format (servers)
+        if "mcpServers" not in request.config and "servers" not in request.config:
             raise HTTPException(
                 status_code=400,
-                detail="Invalid MCP configuration: 'mcpServers' key is required"
+                detail="Invalid MCP configuration: 'mcpServers' or 'servers' key is required"
             )
         
         # Get config file path
@@ -343,32 +336,68 @@ def update_mcp_config(request: MCPConfigUpdateRequest) -> Dict[str, Any]:
                 detail=f"Invalid JSON configuration: {str(e)}"
             )
         
+        # Convert old format (mcpServers) to new format (servers) before saving
+        mcp_servers = request.config.get("mcpServers", {})
+        if mcp_servers:
+            # Convert to new format
+            servers = []
+            for server_id, server_conf in mcp_servers.items():
+                server_conf_with_id = dict(server_conf)
+                server_conf_with_id["id"] = server_id
+                servers.append(server_conf_with_id)
+            config_to_save = {"servers": servers}
+            server_count = len(mcp_servers)
+        elif "servers" in request.config:
+            # Already in new format
+            config_to_save = request.config
+            server_count = len(request.config.get("servers", []))
+        else:
+            # Empty config
+            config_to_save = {"servers": []}
+            server_count = 0
+        
         # Write to file
         with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(request.config, f, indent=2, ensure_ascii=False)
+            json.dump(config_to_save, f, indent=2, ensure_ascii=False)
         
-        # Reload MCP registry (gracefully closes old connections, reinitializes everything)
+        # Reload MCP manager (gracefully closes old connections, reinitializes everything)
         from ..core.container import get_container
         import asyncio
         try:
             container = get_container()
             chat_service = container.chat_service
-            # reload_config is now async, need to run it
+            mcp_manager = chat_service.mcp_registry
+            
+            # Close existing connections and reload
             try:
                 loop = asyncio.get_event_loop()
             except RuntimeError:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-            loop.run_until_complete(chat_service.mcp_registry.reload_config(str(config_path)))
+            
+            # Close old connections and reload
+            loop.run_until_complete(mcp_manager.close())
+            
+            # Update config path and reload
+            mcp_manager.config_path = str(config_path)
+            loop.run_until_complete(mcp_manager.load())
             
             # Get updated server info
-            server_info = chat_service.mcp_registry.server_manager.list_servers()
+            server_info = [
+                {
+                    "name": server_id,
+                    "type": mcp_manager.server_types.get(server_id, "unknown"),
+                    "transport": mcp_manager.server_transports.get(server_id, "unknown"),
+                    "tools": [tool for tool, sid in mcp_manager.tool_index.items() if sid == server_id]
+                }
+                for server_id in set(mcp_manager.server_types.keys()) | set(mcp_manager.server_transports.keys())
+            ]
             
             return {
                 "status": "success",
                 "message": "MCP configuration updated and reloaded successfully",
-                "server_count": len(request.config.get("mcpServers", {})),
-                "tool_count": len(chat_service.mcp_registry.tools),
+                "server_count": server_count,
+                "tool_count": len(mcp_manager.list_tools()),
                 "servers": server_info
             }
         except Exception as e:

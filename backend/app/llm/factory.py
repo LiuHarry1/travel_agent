@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .provider import LLMProvider, BaseLLMClient, QwenClient, AzureOpenAIClient, OllamaClient, OpenAIClient, LLMError
+from .provider import LLMProvider, BaseLLMClient, QwenClient, OllamaClient, OpenAIClient, LLMError
 
 
 class LLMClientFactory:
@@ -17,7 +17,7 @@ class LLMClientFactory:
         Create LLM client instance based on provider.
 
         Args:
-            provider: LLM provider (qwen, azure_openai). If None, reads from config.
+            provider: LLM provider (qwen, ollama, openai). If None, reads from config.
             api_key: Optional API key override
 
         Returns:
@@ -44,8 +44,6 @@ class LLMClientFactory:
         # Create client based on provider
         if provider == LLMProvider.QWEN:
             return QwenClient(api_key=api_key, config=config)
-        elif provider == LLMProvider.AZURE_OPENAI:
-            return AzureOpenAIClient(api_key=api_key, config=config)
         elif provider == LLMProvider.OLLAMA:
             return OllamaClient(api_key=api_key, config=config)
         elif provider == LLMProvider.OPENAI:

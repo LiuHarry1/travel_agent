@@ -48,7 +48,7 @@ class RetrieverTool(BaseTool):
         """Initialize Retriever tool."""
         super().__init__(
             name="retriever",
-            description="Retrieve relevant information from vectorized knowledge database containing travel documents, guides, and resources"
+            description="Semantic Search Document Tool: A semantic search engine that indexes and retrieves relevant sections from travel documents (e.g., travel policy manuals, destination guides, form instructions, detailed travel resources). Supports keyword-based and context-aware search across unstructured documents. Use Case: Best for queries requiring specific document excerpts, detailed guidelines, or policy references (e.g., 'Show me travel guides for Japan' 'Find information about destination requirements' 'Where can I find visa application requirements?'). Output Format: Relevant document snippets, section titles, and contextually matched content."
         )
     
     def get_input_schema(self) -> Dict[str, Any]:
@@ -58,7 +58,7 @@ class RetrieverTool(BaseTool):
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "The search query to retrieve relevant travel information from vectorized knowledge database. Use this tool when FAQ tool doesn't find an answer. If this tool also doesn't find useful information, suggest the user contact Harry."
+                    "description": "The search query to retrieve relevant travel information from document database. Use natural language query with specific document-related keywords (e.g., 'visa application requirements for Japan travel', 'travel guide for destination planning'). Use this tool when you need detailed information, document excerpts, or when FAQ tool doesn't find an answer. If no results found, inform the user clearly."
                 },
                 "max_results": {
                     "type": "integer",

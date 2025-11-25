@@ -114,17 +114,11 @@ app.include_router(chat_router)
 logger = logging.getLogger(__name__)
 backend_dir = Path(__file__).parent.parent
 
-# Mount static directory if it exists
+# Mount static directory (includes pic subdirectory)
 static_dir = backend_dir / "static"
 if static_dir.exists() and static_dir.is_dir():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
     logger.info(f"Mounted static files directory: {static_dir} -> /static")
-    
-    # Also mount pic subdirectory for easier access
-    pic_dir = static_dir / "pic"
-    if pic_dir.exists() and pic_dir.is_dir():
-        app.mount("/static/pic", StaticFiles(directory=str(pic_dir)), name="pic")
-        logger.info(f"Mounted pic directory: {pic_dir} -> /static/pic")
 
 
 async def run_server():
@@ -161,21 +155,14 @@ async def run_server():
 
 def main():
     """启动 FastAPI 应用"""
-    # Event loop policy is already set by initialize_platform() at module import
-    # But we verify it here to ensure it's correct (especially if uvicorn creates new process)
-    from app.platform_config import setup_event_loop_policy, verify_event_loop_policy
     import asyncio
+    from app.platform_config import setup_event_loop_policy
     
     # Re-set policy in case uvicorn or other code created a new process/thread
     # This is especially important on Windows where ProactorEventLoop is required
     setup_event_loop_policy()
     
-    # Verify the policy is set correctly
-    verification_result = verify_event_loop_policy()
-    # Warnings are already logged by verify_event_loop_policy
-    
     # Use asyncio.run() to ensure proper event loop is used
-    # This is similar to how backend_new test scripts work
     try:
         asyncio.run(run_server())
     except KeyboardInterrupt:

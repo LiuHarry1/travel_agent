@@ -16,9 +16,8 @@ class LLMSettings(BaseModel):
     timeout: float = Field(default=30.0, description="Request timeout in seconds")
     system_prompt_template: str = Field(
         default="",
-        description="System prompt template"
+        description="System prompt template. Use {tools} placeholder for available tools list."
     )
-    azure_model: Optional[str] = Field(default=None, description="Azure OpenAI model")
     ollama_model: Optional[str] = Field(default=None, description="Ollama model")
     openai_model: Optional[str] = Field(default=None, description="OpenAI model")
     
@@ -76,7 +75,6 @@ class Settings(BaseModel):
             model=llm_data.get("model", "qwen-max"),
             timeout=float(llm_data.get("timeout", 30.0)),
             system_prompt_template=llm_data.get("system_prompt_template", ""),
-            azure_model=llm_data.get("azure_model"),
             ollama_model=llm_data.get("ollama_model"),
             openai_model=llm_data.get("openai_model")
         )
@@ -118,8 +116,6 @@ class Settings(BaseModel):
         existing_config["llm"]["model"] = self.llm.model
         existing_config["llm"]["timeout"] = self.llm.timeout
         existing_config["llm"]["system_prompt_template"] = self.llm.system_prompt_template
-        if self.llm.azure_model:
-            existing_config["llm"]["azure_model"] = self.llm.azure_model
         if self.llm.ollama_model:
             existing_config["llm"]["ollama_model"] = self.llm.ollama_model
         
@@ -141,8 +137,6 @@ class Settings(BaseModel):
         self.llm.provider = provider
         if provider == "ollama":
             self.llm.ollama_model = model
-        elif provider == "azure_openai":
-            self.llm.azure_model = model
         elif provider == "openai":
             # Update openai_model in config
             self._config.setdefault("llm", {})["openai_model"] = model
@@ -154,6 +148,7 @@ class Settings(BaseModel):
         """Save system prompt template."""
         self.llm.system_prompt_template = template
         self.save_to_yaml()
+    
 
 
 # Global settings instance

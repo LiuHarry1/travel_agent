@@ -27,7 +27,7 @@ class FAQTool(BaseTool):
         """
         super().__init__(
             name="faq",
-            description="Search travel FAQ knowledge base for answers to common travel questions. IMPORTANT: Always ask questions in Chinese (中文). The query parameter should be in Chinese."
+            description="Travel FAQ Tool: A curated FAQ database for travel-related questions. Contains pre-approved answers to high-frequency questions, including: travel policy basics (eligibility, booking requirements, insurance coverage), approval workflows (domestic vs. international, required documents, timelines), visa requirements and application processes, expense reimbursement rules (per diem rates, allowable expenses, submission deadlines), and common exceptions and troubleshooting. Use Case: Best for direct, specific questions with predefined answers (e.g., 'What is the visa requirement for Japan?' 'How to apply for a travel visa?'). IMPORTANT: The query parameter must be in Chinese (中文) and must be travel-related."
         )
         
         # Determine CSV file path
@@ -131,7 +131,7 @@ class FAQTool(BaseTool):
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "The travel-related question to search in FAQ knowledge base. IMPORTANT: Must be in Chinese (中文). If no answer is found, you should try the retriever tool next."
+                    "description": "The travel-related question to search in FAQ knowledge base. Must be travel-related (visas, destinations, travel planning, approval workflows, expense reimbursement, etc.). Must be in Chinese (中文). Use for direct, specific questions with predefined answers. Do NOT use for questions about available tools, system capabilities, or non-travel topics."
                 }
             },
             "required": ["query"]

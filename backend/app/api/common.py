@@ -47,7 +47,7 @@ def save_config(request: ConfigUpdateRequest) -> dict:
         if request.checklist is not None:
             config.save_config(request.system_prompt_template, request.checklist)
         else:
-            # Use the new method that only saves system_prompt_template
+            # Use the simple method that only saves system_prompt_template
             config.save_system_prompt_template(request.system_prompt_template)
         
         reload_config()

@@ -68,6 +68,7 @@ class Config:
         """Save system prompt template to configuration file."""
         self._settings.save_system_prompt_template(system_prompt_template)
         self._config = self._load_config(self._settings.config_path)
+    
 
     def save_llm_config(self, provider: str, model: str) -> None:
         """Save LLM provider and model to configuration file."""
@@ -78,11 +79,6 @@ class Config:
     def llm_provider(self) -> str:
         """Get LLM provider name."""
         return self._settings.llm.provider
-
-    @property
-    def llm_azure_model(self) -> str:
-        """Get Azure OpenAI model name."""
-        return self._settings.llm.azure_model or "gpt-4"
 
     @property
     def llm_ollama_model(self) -> str:

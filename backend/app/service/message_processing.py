@@ -26,99 +26,43 @@ class MessageProcessingService:
     def build_agent_system_prompt(self) -> str:
         """
         Build system prompt for travel agent.
-        Reads base prompt from config.yaml (user-configurable) and adds available tools dynamically.
-        Tool descriptions come from MCP tool schemas, which contain detailed usage instructions.
-        No hardcoded tool names or usage guidelines - everything is dynamic and tool-agnostic.
+        Uses configurable template from config.yaml with {tools} placeholder.
+        If {tools} placeholder is present, it will be replaced with available tools list.
+        If not present, tools will be appended at the end automatically.
         """
-        # Get base system prompt template from config (user-configurable via UI)
         try:
             config = self._get_config()
-            base_prompt = config.system_prompt_template
+            template = config.system_prompt_template
         except (ValueError, FileNotFoundError) as e:
             logger.warning(f"Could not load system prompt from config: {e}. Using default prompt.")
-            base_prompt = "You are a helpful travel agent assistant. Your goal is to help users with travel-related questions and planning."
+            template = "You are a helpful travel agent assistant. Your goal is to help users with travel-related questions and planning."
         
-        # Get available tools from MCP servers (loaded dynamically - no hardcoded tool names)
-        if not self._mcp_registry:
-            return base_prompt
+        # Build tool list if tools are available
+        tool_list = ""
+        if self._mcp_registry:
+            tools = self._mcp_registry.list_tools()
+            if tools:
+                tool_descriptions = []
+                for tool in tools:
+                    if isinstance(tool, dict):
+                        tool_name = tool.get("name", "")
+                        tool_desc = tool.get("description", "")
+                    else:
+                        tool_name = getattr(tool, 'name', '')
+                        tool_desc = getattr(tool, 'description', '') or ""
+                    tool_descriptions.append(f"- {tool_name}: {tool_desc}")
+                tool_list = "\n".join(tool_descriptions)
         
-        tools = self._mcp_registry.list_tools()
+        # Replace {tools} placeholder if present, otherwise append tools at the end
+        if "{tools}" in template:
+            prompt = template.replace("{tools}", tool_list if tool_list else "No tools available.")
+        elif tool_list:
+            # If no placeholder but tools exist, append at the end
+            prompt = f"{template}\n\nAvailable Tools:\n{tool_list}"
+        else:
+            prompt = template
         
-        if not tools:
-            # No tools available, return base prompt only
-            return base_prompt
-        
-        # Build tool list with detailed descriptions
-        # Tool descriptions come from MCP tool schemas and contain usage instructions
-        # All tool-specific usage information is in the tool descriptions themselves
-        tool_descriptions = []
-        for tool in tools:
-            # Handle both dict (from MCPManager) and object (from old registry) formats
-            if isinstance(tool, dict):
-                tool_name = tool.get("name", "")
-                tool_desc = tool.get("description", "")
-                input_schema = tool.get("inputSchema", {})
-            else:
-                tool_name = getattr(tool, 'name', '')
-                tool_desc = getattr(tool, 'description', '') or ""
-                input_schema = getattr(tool, 'inputSchema', None) or getattr(tool, 'extra', {}).get('inputSchema', {})
-            
-            # Get parameter descriptions from input schema for additional context
-            # Parameter descriptions often contain important usage hints
-            param_descriptions = []
-            
-            if isinstance(input_schema, dict):
-                properties = input_schema.get("properties", {})
-                for param_name, param_info in properties.items():
-                    if isinstance(param_info, dict) and "description" in param_info:
-                        param_desc = param_info["description"]
-                        # Include parameter descriptions that contain usage hints (longer descriptions)
-                        if param_desc and len(param_desc) > 50:
-                            param_descriptions.append(f"  - {param_name}: {param_desc}")
-            
-            # Build tool entry
-            tool_entry = f"- {tool_name}: {tool_desc}"
-            if param_descriptions:
-                # Include parameter descriptions that contain usage hints
-                tool_entry += "\n" + "\n".join(param_descriptions)
-            
-            tool_descriptions.append(tool_entry)
-        
-        tool_list = "\n".join(tool_descriptions)
-        
-        # Append tools section to base prompt
-        # All tool-specific usage instructions are in the tool descriptions themselves
-        # No hardcoded tool names or usage guidelines - fully dynamic
-        prompt = f"""{base_prompt}
-
-Available Tools:
-{tool_list}
-
-CRITICAL INSTRUCTIONS FOR USING TOOLS:
-1. Use the available tools when you need specific information to answer user questions. Each tool's description and parameters contain detailed usage instructions.
-
-2. WHEN TOOL RESULTS ARE PROVIDED:
-   - You MUST base your answer STRICTLY on the tool output results
-   - DO NOT add information that is not in the tool results
-   - DO NOT make up or invent facts, figures, or details not provided by tools
-   - Present the information from tool results accurately and clearly
-   - If tool results contain specific details, use those exact details in your answer
-
-3. WHEN NO TOOL RESULTS ARE FOUND:
-   - Clearly state that you could not find the information
-   - DO NOT guess or provide unverified information
-   - Suggest trying alternative tools if available
-   - If all tools have been tried without success, politely inform the user that you could not find the information and suggest they contact Harry for more specific assistance.
-
-4. ANSWER GENERATION:
-   - Your answer should be a clear, helpful response based ONLY on tool outputs
-   - If tool results provide a complete answer, use it directly (rephrase naturally if needed)
-   - Do not add speculation, assumptions, or information beyond what tools provide
-   - If you are unsure, it is better to say "I don't have that information" than to guess
-
-Remember: Tool results are your ONLY source of factual information. Always verify what you say against the tool outputs."""
-        
-        logger.info(f"Generated system prompt: {prompt}")
+        logger.info(f"Generated system prompt (length: {len(prompt)} chars)")
         return prompt
 
     def trim_history(self, messages: List[Dict[str, str]], max_turns: int = MAX_CONVERSATION_TURNS) -> List[Dict[str, str]]:

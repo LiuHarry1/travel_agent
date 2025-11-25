@@ -78,8 +78,6 @@ class StreamingService:
                     client_type = type(client).__name__
                     if 'Qwen' in client_type or 'DashScope' in client_type:
                         headers["Authorization"] = f"Bearer {client.api_key}"
-                    elif 'Azure' in client_type:
-                        headers["api-key"] = client.api_key
                     else:
                         # Default to Bearer token
                         headers["Authorization"] = f"Bearer {client.api_key}"

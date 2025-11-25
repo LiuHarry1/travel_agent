@@ -12,7 +12,6 @@ from .base import LLMProvider, LLMError, BaseLLMClient
 
 # Re-export provider implementations
 from .qwen import QwenClient
-from .azure_openai import AzureOpenAIClient
 from .ollama import OllamaClient
 from .openai import OpenAIClient
 
@@ -22,7 +21,6 @@ __all__ = [
     "LLMError",
     "BaseLLMClient",
     "QwenClient",
-    "AzureOpenAIClient",
     "OllamaClient",
     "OpenAIClient",
 ]
