@@ -41,10 +41,27 @@ class ToolExecutionService:
         
         # Parse arguments
         try:
-            tool_args = json.loads(tool_args_str)
-        except json.JSONDecodeError:
-            logger.warning(f"Failed to parse tool arguments: {tool_args_str}")
-            tool_args = {}
+            tool_args = json.loads(tool_args_str) if tool_args_str else {}
+        except json.JSONDecodeError as e:
+            logger.error(
+                f"Failed to parse tool arguments for '{tool_name}' (id: {tool_call_id}): "
+                f"{tool_args_str[:200]}. Error: {e}. This indicates incomplete arguments were sent."
+            )
+            # Don't execute tool with invalid arguments - return error message
+            yield {
+                "type": "tool_call_error",
+                "tool": tool_name,
+                "tool_call_id": tool_call_id,
+                "error": f"工具参数解析失败：参数格式不完整或无效。原始参数: {tool_args_str[:100]}"
+            }
+            # Add error message to conversation
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "name": tool_name,
+                "content": f"错误：工具参数格式无效，无法执行工具。请重试。"
+            })
+            return  # Stop execution
         
         # Yield tool call start event
         logger.info(f"Yielding tool_call_start event for tool: {tool_name}, id: {tool_call_id}")
