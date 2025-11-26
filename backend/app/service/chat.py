@@ -105,8 +105,17 @@ class ChatService:
                     tool_call_data: Optional[Dict[str, Any]] = None
                     accumulated_text = ""
 
-                    # Get LLM client
+                    # Get LLM client early to ensure connection pool is ready
+                    # This helps reduce latency by having the client and connection pool initialized
                     client = self.llm_client._get_client()
+                    
+                    # Pre-initialize OpenAI client and HTTP client if using OpenAI SDK
+                    # This ensures connection pool is ready before making the request
+                    if isinstance(client, OpenAIClient):
+                        # Ensure HTTP client and OpenAI client are initialized
+                        _ = client._get_http_client()  # Initialize connection pool
+                        _ = client._get_openai_client()  # Initialize OpenAI client
+                    
                     system_msg = {"role": "system", "content": system_prompt or ""}
                     all_messages = [system_msg] + messages
 
@@ -135,101 +144,167 @@ class ChatService:
                         f"Starting stream request with {len(functions)} functions available"
                     )
 
-                    # Track tool call state
+                    # Track tool call state - similar to backend_new agent.py
+                    current_tool_call: Optional[Dict[str, Any]] = None
+                    tool_call_id: Optional[str] = None
+                    tool_call_name: Optional[str] = None
+                    tool_call_args_buffer = ""
                     tool_calls_by_id: Dict[str, Dict[str, Any]] = {}
                     chunk_count = 0
                     first_chunk_time = None
 
-                    # Stream and parse in real-time
+                    # Stream and parse in real-time using SDK directly
                     request_start = time.time()
-                    line_count = 0
-                    stream_ended = False
-                    async for line in self._stream_llm_response(client, payload):
-                        line_count += 1
+                    chunk_index = 0
+                    
+                    # Use SDK's streaming method directly (no httpx)
+                    async for chunk in client._make_stream_request("chat/completions", payload):
+                        chunk_index += 1
                         if first_chunk_time is None:
                             first_chunk_time = time.time() - request_start
                             logger.info(
                                 f"[PERF] First chunk received after {first_chunk_time:.3f}s (TTFB)"
                             )
 
-                        # Check for [DONE] signal
-                        if line.strip() == "data: [DONE]":
-                            stream_ended = True
-                            logger.debug("Received [DONE] signal from stream")
-                            break
+                        # Extract content and tool calls from SDK chunk object
+                        # Similar to backend_new agent.py logic
+                        if chunk.choices and len(chunk.choices) > 0:
+                            delta = chunk.choices[0].delta
+                            
+                            # Check for tool_calls (OpenAI format)
+                            if hasattr(delta, 'tool_calls') and delta.tool_calls:
+                                tool_call_detected = True
+                                
+                                for tool_call_delta in delta.tool_calls:
+                                    # Initialize tool call structure
+                                    if current_tool_call is None:
+                                        tool_call_id = getattr(tool_call_delta, 'id', None)
+                                        current_tool_call = {
+                                            "id": tool_call_id or f"call_{iteration}_{chunk_index}",
+                                            "type": "function",
+                                            "function": {"name": "", "arguments": ""}
+                                        }
+                                    
+                                    # Accumulate tool call information
+                                    func_delta = getattr(tool_call_delta, 'function', None)
+                                    if func_delta:
+                                        func_name = getattr(func_delta, 'name', None)
+                                        if func_name:
+                                            tool_call_name = func_name
+                                            current_tool_call["function"]["name"] = tool_call_name
+                                        
+                                        func_args = getattr(func_delta, 'arguments', None)
+                                        if func_args:
+                                            tool_call_args_buffer += func_args
+                                            current_tool_call["function"]["arguments"] += func_args
+                                    
+                                    # Store in tool_calls_by_id for compatibility
+                                    call_id = current_tool_call["id"]
+                                    if call_id not in tool_calls_by_id:
+                                        tool_calls_by_id[call_id] = current_tool_call.copy()
+                                    else:
+                                        # Update existing entry
+                                        existing = tool_calls_by_id[call_id]
+                                        if tool_call_name:
+                                            existing["function"]["name"] = tool_call_name
+                                        if func_args:
+                                            existing["function"]["arguments"] += func_args
+                            
+                            # Check for regular text content
+                            content = getattr(delta, 'content', None)
+                            if content:
+                                if not tool_call_detected:
+                                    # Only yield text if no tool call detected
+                                    accumulated_text += content
+                                    accumulated_content += content
+                                    chunk_count += 1
+                                    yield {"type": "chunk", "content": content}
+                                else:
+                                    # Skip text content when tool call is detected
+                                    logger.debug(
+                                        f"Skipping text content chunk (tool call detected): "
+                                        f"{content[:50]}"
+                                    )
 
-                        # Parse chunk to extract content and tool call info
-                        content_chunk, tool_call_updates = self._parse_stream_chunk(
-                            line, tool_calls_by_id
-                        )
-
-                        # Immediately detect tool call in first relevant chunk
-                        if tool_call_updates and not tool_call_detected:
-                            tool_call_detected = True
-                            logger.info(
-                                f"🔧 Tool call detected in line {line_count}, "
-                                "immediately stopping text streaming"
-                            )
-                            # Log tool call details for debugging
-                            for call_id, call_data in tool_calls_by_id.items():
-                                func_info = call_data.get("function", {})
-                                name = func_info.get("name", "")
-                                args = func_info.get("arguments", "")
+                            # Log tool call detection
+                            if tool_call_detected and current_tool_call and chunk_index == 1:
                                 logger.info(
-                                    f"  Tool call '{call_id}': name='{name}', "
+                                    f"🔧 Tool call detected in first chunk, "
+                                    "stopping text streaming"
+                                )
+                                name = current_tool_call["function"].get("name", "")
+                                args = current_tool_call["function"].get("arguments", "")
+                                logger.info(
+                                    f"  Tool call: name='{name}', "
                                     f"args_length={len(args)}, args_preview='{args[:100]}'"
                                 )
 
-                        # Only yield text content if NO tool call has been detected
-                        if content_chunk and not tool_call_detected:
-                            accumulated_text += content_chunk
-                            accumulated_content += content_chunk
-                            chunk_count += 1
-                            yield {"type": "chunk", "content": content_chunk}
-                        elif content_chunk and tool_call_detected:
-                            # Skip text content when tool call is detected
-                            logger.debug(
-                                f"Skipping text content chunk (tool call detected): "
-                                f"{content_chunk[:50]}"
-                            )
-
-                        # Check if tool calls are complete (must have valid JSON arguments)
-                        # But only break if we've seen the complete JSON and stream is about to end
-                        # We want to collect all arguments before breaking
-                        if tool_call_detected and tool_calls_by_id:
-                            complete_tool_calls = self._get_complete_tool_calls(
-                                tool_calls_by_id
-                            )
-                            if complete_tool_calls:
-                                # Double-check: make sure all tool calls are complete
-                                all_complete = True
-                                for call in complete_tool_calls:
-                                    args = call.get("function", {}).get("arguments", "")
-                                    if args:
-                                        try:
-                                            json.loads(args)
-                                        except json.JSONDecodeError:
-                                            all_complete = False
-                                            break
-                                
-                                if all_complete:
-                                    logger.info(
-                                        f"✅ Detected {len(complete_tool_calls)} complete tool calls "
-                                        "with valid arguments, will stop after current chunk"
-                                    )
-                                    # Don't break immediately - wait for stream to naturally end
-                                    # This ensures we get all chunks with tool call data
-                                    tool_call_data = {
-                                        "tool_calls": complete_tool_calls
-                                    }
-
+                    # After stream ends, process tool calls (similar to backend_new)
                     stream_time = time.time() - request_start
                     logger.info(
                         f"[PERF] Streaming took {stream_time:.3f}s, "
-                        f"received {line_count} lines, {chunk_count} content chunks, "
-                        f"tool_call_detected: {tool_call_detected}, "
-                        f"tool_calls_by_id count: {len(tool_calls_by_id)}"
+                        f"received {chunk_index} chunks, {chunk_count} content chunks, "
+                        f"tool_call_detected: {tool_call_detected}"
                     )
+                    
+                    # Process tool calls after stream ends (similar to backend_new agent.py)
+                    if tool_call_detected and current_tool_call:
+                        # Validate and parse tool call arguments
+                        tool_name = tool_call_name or current_tool_call["function"].get("name", "")
+                        
+                        if not tool_name:
+                            logger.warning("Tool call detected but no name found")
+                            yield {
+                                "type": "tool_call_error",
+                                "tool": "unknown",
+                                "error": "工具调用检测到但名称未完成"
+                            }
+                            continue
+                        
+                        # Validate arguments JSON
+                        if not tool_call_args_buffer:
+                            args = {}
+                            logger.info(f"🔧 Tool call detected: {tool_name} (no arguments)")
+                            tool_call_data = {
+                                "id": current_tool_call["id"],
+                                "name": tool_name,
+                                "args": args,
+                                "raw": current_tool_call
+                            }
+                        else:
+                            try:
+                                args = json.loads(tool_call_args_buffer)
+                                logger.info(f"🔧 Tool call detected: {tool_name} with valid args: {args}")
+                                tool_call_data = {
+                                    "id": current_tool_call["id"],
+                                    "name": tool_name,
+                                    "args": args,
+                                    "raw": current_tool_call
+                                }
+                            except json.JSONDecodeError as e:
+                                logger.error(
+                                    f"❌ Failed to parse tool call arguments for '{tool_name}': "
+                                    f"'{tool_call_args_buffer[:200]}'. Error: {e}"
+                                )
+                                yield {
+                                    "type": "tool_call_error",
+                                    "tool": tool_name,
+                                    "error": f"工具参数解析失败：JSON格式不完整或无效。原始参数: {tool_call_args_buffer[:100]}"
+                                }
+                                tool_call_data = None
+                        
+                        if tool_call_data:
+                            # Convert to format expected by existing code
+                            tool_call_data = {
+                                "tool_calls": [{
+                                    "id": tool_call_data["id"],
+                                    "type": "function",
+                                    "function": {
+                                        "name": tool_call_data["name"],
+                                        "arguments": json.dumps(tool_call_data["args"], ensure_ascii=False)
+                                    }
+                                }]
+                            }
 
                     # If we detected tool calls but didn't complete them, try to get complete ones now
                     if tool_call_detected and tool_calls_by_id and not tool_call_data:
@@ -359,15 +434,16 @@ class ChatService:
                                     del payload_no_tools["functions"]
 
                                 chunk_count = 0
-                                async for line in self._stream_llm_response(
-                                    client, payload_no_tools
-                                ):
-                                    content = self._extract_content_from_line(line)
-                                    if content:
-                                        accumulated_text += content
-                                        accumulated_content += content
-                                        chunk_count += 1
-                                        yield {"type": "chunk", "content": content}
+                                # Use SDK streaming directly for fallback
+                                async for chunk in client._make_stream_request("chat/completions", payload_no_tools):
+                                    if chunk.choices and len(chunk.choices) > 0:
+                                        delta = chunk.choices[0].delta
+                                        content = getattr(delta, 'content', None)
+                                        if content:
+                                            accumulated_text += content
+                                            accumulated_content += content
+                                            chunk_count += 1
+                                            yield {"type": "chunk", "content": content}
 
                                 if chunk_count > 0:
                                     logger.info(
@@ -442,164 +518,6 @@ class ChatService:
                 "content": f"An error occurred while processing your request: {str(exc)}",
             }
 
-    async def _stream_llm_response(
-        self, client, payload: Dict[str, Any]
-    ) -> AsyncGenerator[str, None]:
-        """Stream LLM response lines (SSE format)."""
-        try:
-            async_client = client._get_async_client()
-            base_url = client._get_base_url()
-            url = f"{base_url}/chat/completions"
-
-            headers = {"Content-Type": "application/json"}
-            if client.api_key:
-                headers["Authorization"] = f"Bearer {client.api_key}"
-
-            # Convert functions to tools if using OpenAIClient
-            if isinstance(client, OpenAIClient):
-                request_payload = client._convert_functions_to_tools(payload.copy())
-            else:
-                request_payload = payload.copy()
-
-            request_payload["stream"] = True
-
-            async with async_client.stream("POST", url, json=request_payload, headers=headers) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if line:
-                        yield line
-        except Exception as e:
-            logger.error(f"Error in streaming: {e}", exc_info=True)
-            raise
-
-    def _parse_stream_chunk(
-        self, line: str, tool_calls_by_id: Dict[str, Dict[str, Any]]
-    ) -> Tuple[str, List[Dict[str, Any]]]:
-        """
-        Parse SSE line to extract content and tool call updates.
-        
-        Returns:
-            Tuple of (content_chunk, tool_call_updates)
-        """
-        if not line.startswith("data: "):
-            return ("", [])
-
-        data_str = line[6:].strip()
-        if data_str == "[DONE]":
-            return ("", [])
-
-        if not data_str:
-            return ("", [])
-
-        try:
-            chunk_data = json.loads(data_str)
-        except json.JSONDecodeError:
-            return ("", [])
-
-        if "choices" not in chunk_data or not chunk_data["choices"]:
-            return ("", [])
-
-        delta = chunk_data["choices"][0].get("delta", {})
-        content = delta.get("content") or delta.get("text", "")
-
-        # Extract tool call information from delta
-        tool_call_updates = []
-
-        # Check for function_call (Qwen/DashScope format)
-        if "function_call" in delta:
-            func_call = delta["function_call"]
-            call_id = func_call.get("id") or func_call.get("index", "default")
-
-            if call_id not in tool_calls_by_id:
-                tool_calls_by_id[call_id] = {
-                    "id": call_id,
-                    "type": "function",
-                    "function": {"name": "", "arguments": ""},
-                }
-
-            if "name" in func_call and func_call["name"]:
-                tool_calls_by_id[call_id]["function"]["name"] = func_call["name"]
-            if "arguments" in func_call:
-                args_value = func_call.get("arguments")
-                if args_value is not None:
-                    # Ensure we're working with a string
-                    tool_calls_by_id[call_id]["function"]["arguments"] += str(args_value)
-
-            tool_call_updates.append(tool_calls_by_id[call_id])
-
-        # Check for tool_calls (OpenAI format)
-        # Similar to backend_new: use index as primary key for matching
-        # This is more reliable than call_id because index is always present
-        if "tool_calls" in delta:
-            for tool_call_delta in delta["tool_calls"]:
-                call_id = tool_call_delta.get("id")  # May be None/empty for continuation chunks
-                index = tool_call_delta.get("index", 0)
-
-                # CRITICAL: Use index as primary key for matching (like backend_new uses single variable)
-                # Index is always present and stable across chunks, unlike call_id which may be empty
-                matched_call_id = None
-                
-                # Priority 1: Try to find existing tool call by index (most reliable)
-                for existing_id, existing_call in tool_calls_by_id.items():
-                    if existing_call.get("index") == index:
-                        matched_call_id = existing_id
-                        logger.debug(
-                            f"Matched tool call by index {index}: using call_id '{matched_call_id}'"
-                        )
-                        break
-                
-                # Priority 2: If found by index but call_id is provided and different, update it
-                if matched_call_id and call_id and call_id != matched_call_id:
-                    # Update the stored call_id if we have a new one
-                    tool_calls_by_id[matched_call_id]["id"] = call_id
-                    logger.debug(
-                        f"Updated call_id for index {index}: '{matched_call_id}' -> '{call_id}'"
-                    )
-                    # Optionally rename the key if we want to use the new call_id
-                    # For now, keep using the existing key to avoid complexity
-                
-                # Priority 3: If no match by index, but we have call_id, try to find by call_id
-                if not matched_call_id and call_id:
-                    if call_id in tool_calls_by_id:
-                        matched_call_id = call_id
-                        logger.debug(f"Matched tool call by call_id: '{call_id}'")
-                    else:
-                        # New tool call with call_id
-                        matched_call_id = call_id
-                
-                # Priority 4: If still no match, create new entry (use index-based ID)
-                if not matched_call_id:
-                    # Use call_id if available, otherwise generate index-based ID
-                    matched_call_id = call_id or f"call_index_{index}"
-                    logger.debug(
-                        f"Creating new tool call entry: '{matched_call_id}' (index={index})"
-                    )
-                
-                # Create entry if it doesn't exist
-                if matched_call_id not in tool_calls_by_id:
-                    tool_calls_by_id[matched_call_id] = {
-                        "id": call_id or matched_call_id,  # Store original call_id if available
-                        "type": "function",
-                        "function": {"name": "", "arguments": ""},
-                        "index": index,
-                    }
-                
-                # Update the matched tool call (accumulate like backend_new)
-                if "function" in tool_call_delta:
-                    func_delta = tool_call_delta["function"]
-                    if "name" in func_delta and func_delta["name"]:
-                        tool_calls_by_id[matched_call_id]["function"]["name"] = func_delta[
-                            "name"
-                        ]
-                    if "arguments" in func_delta:
-                        args_value = func_delta.get("arguments")
-                        if args_value is not None:
-                            # Accumulate arguments (like backend_new does)
-                            tool_calls_by_id[matched_call_id]["function"]["arguments"] += str(args_value)
-
-                tool_call_updates.append(tool_calls_by_id[matched_call_id])
-
-        return (content, tool_call_updates)
 
     def _get_complete_tool_calls(
         self, tool_calls_by_id: Dict[str, Dict[str, Any]]
@@ -642,20 +560,3 @@ class ChatService:
 
         return complete_calls if complete_calls else []
 
-    def _extract_content_from_line(self, line: str) -> str:
-        """Extract content from SSE line."""
-        if not line.startswith("data: "):
-            return ""
-
-        data_str = line[6:].strip()
-        if data_str == "[DONE]" or not data_str:
-            return ""
-
-        try:
-            chunk_data = json.loads(data_str)
-            if "choices" not in chunk_data or not chunk_data["choices"]:
-                return ""
-            delta = chunk_data["choices"][0].get("delta", {})
-            return delta.get("content") or delta.get("text", "") or ""
-        except json.JSONDecodeError:
-            return ""

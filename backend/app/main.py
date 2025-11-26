@@ -8,9 +8,13 @@ from pathlib import Path
 
 # Ensure backend directory is in sys.path for imports
 # This must be done before importing app modules
-_backend_dir = Path(__file__).parent.parent
+# Calculate backend root first (before importing app modules)
+_backend_dir = Path(__file__).parent.parent.resolve()
 if str(_backend_dir) not in sys.path:
     sys.path.insert(0, str(_backend_dir))
+
+# Now we can import from app modules
+from app.utils.constants import BACKEND_ROOT
 
 # Initialize platform-specific configuration early
 # This must be done before any other imports that might use asyncio
@@ -24,11 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 # Use absolute imports for consistency
-from app.api import (
-    admin_router,
-    chat_router,
-    common_router,
-)
+from app.api import admin_router, chat_router, common_router
 from app.core.container import get_container
 from app.logger import setup_logging
 
@@ -39,7 +39,7 @@ log_level = logging.DEBUG if log_level_env == "DEBUG" else logging.INFO
 
 setup_logging(
     log_level=log_level,
-    log_dir=str(Path(__file__).parent.parent / "logs"),
+    log_dir=str(BACKEND_ROOT / "logs"),
     log_file="app.log",
     console_output=True,
     file_output=True
@@ -112,7 +112,7 @@ app.include_router(chat_router)
 
 # Mount static files directories
 logger = logging.getLogger(__name__)
-backend_dir = Path(__file__).parent.parent
+backend_dir = BACKEND_ROOT
 
 # Mount static directory (includes pic subdirectory)
 static_dir = backend_dir / "static"

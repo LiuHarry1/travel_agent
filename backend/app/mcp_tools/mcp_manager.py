@@ -20,6 +20,7 @@ except ImportError:
     logger.warning("MCP SDK not available, external servers will not work")
 
 from .core.base_tool import BaseTool
+from app.utils.constants import BACKEND_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +38,7 @@ class MCPManager:
     def __init__(self, config_path: Optional[str] = None):
         # Default to backend/mcp.json if not specified
         if config_path is None:
-            backend_dir = Path(__file__).parent.parent.parent
-            config_path = str(backend_dir / "mcp.json")
+            config_path = str(BACKEND_ROOT / "mcp.json")
         self.config_path = config_path
         self.local_tools: Dict[str, BaseTool] = {}  # 本地工具（直接调用）
         self.external_clients: Dict[str, Any] = {}  # 外部 MCP 客户端
@@ -196,11 +196,10 @@ class MCPManager:
             
             # Set working directory
             if not cwd:
-                backend_dir = Path(__file__).parent.parent.parent
                 if command == "python" and args:
-                    cwd = str(backend_dir)
+                    cwd = str(BACKEND_ROOT)
                 else:
-                    cwd = str(backend_dir)
+                    cwd = str(BACKEND_ROOT)
             
             logger.info(f"Loading stdio server {server_id} with command: {command} {args}")
             logger.info(f"  Working directory: {cwd}")

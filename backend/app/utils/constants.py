@@ -1,4 +1,13 @@
 """Application constants."""
+from pathlib import Path
+
+# Application root paths
+# Backend root directory (backend/)
+BACKEND_ROOT = Path(__file__).parent.parent.parent.resolve()
+# App root directory (backend/app/)
+APP_ROOT = Path(__file__).parent.parent.resolve()
+# MCP tools root directory (backend/app/mcp_tools/)
+MCP_TOOLS_ROOT = APP_ROOT / "mcp_tools"
 
 # File size limits
 MAX_FILE_CONTENT_SIZE = 50000  # Maximum content size per file (characters)

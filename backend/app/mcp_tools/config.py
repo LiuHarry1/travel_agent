@@ -6,6 +6,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from app.utils.constants import BACKEND_ROOT
+
 logger = logging.getLogger(__name__)
 
 
@@ -40,8 +42,7 @@ def load_mcp_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     """
     if config_path is None:
         # Default to backend/mcp.json
-        backend_dir = Path(__file__).parent.parent.parent
-        config_path = str(backend_dir / "mcp.json")
+        config_path = str(BACKEND_ROOT / "mcp.json")
     
     config_file = Path(config_path)
     if not config_file.exists():

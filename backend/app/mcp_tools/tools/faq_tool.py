@@ -13,6 +13,7 @@ except ImportError:
     BM25Okapi = None
 
 from ..core.base_tool import BaseTool, ToolExecutionResult
+from app.utils.constants import MCP_TOOLS_ROOT
 
 
 class FAQTool(BaseTool):
@@ -32,9 +33,8 @@ class FAQTool(BaseTool):
         
         # Determine CSV file path
         if csv_path is None:
-            # Default path relative to this file
-            current_dir = Path(__file__).parent.parent
-            csv_path = current_dir / "data" / "travel-faq.csv"
+            # Default path relative to mcp_tools root
+            csv_path = MCP_TOOLS_ROOT / "data" / "travel-faq.csv"
         
         self.csv_path = Path(csv_path)
         self.faq_database: List[Tuple[str, str]] = []
@@ -74,7 +74,8 @@ class FAQTool(BaseTool):
             List of tokens
         """
         # Remove punctuation and whitespace
-        text = re.sub(r'[，。！？、；：""''（）【】\s]', '', text)
+        # Use regular string with proper escaping for \s
+        text = re.sub('[，。！？、；：""''（）【】\\s]', '', text)
         text = text.lower()
         
         if not text:

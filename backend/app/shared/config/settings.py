@@ -8,6 +8,8 @@ from typing import Any, Dict, List, Optional
 import yaml
 from pydantic import BaseModel, Field, field_validator
 
+from app.utils.constants import BACKEND_ROOT
+
 
 class LLMSettings(BaseModel):
     """LLM configuration settings."""
@@ -41,7 +43,7 @@ class Settings(BaseModel):
     llm: LLMSettings = Field(default_factory=LLMSettings)
     default_checklist: List[ChecklistItem] = Field(default_factory=list)
     config_path: str = Field(
-        default_factory=lambda: str(Path(__file__).parent.parent.parent / "config.yaml")
+        default_factory=lambda: str(BACKEND_ROOT / "app" / "config.yaml")
     )
     
     @classmethod
@@ -58,7 +60,7 @@ class Settings(BaseModel):
         if config_path is None:
             config_path = os.getenv(
                 "TRAVEL_AGENT_CONFIG",
-                str(Path(__file__).parent.parent.parent / "config.yaml")
+                str(BACKEND_ROOT / "app" / "config.yaml")
             )
         
         config_file = Path(config_path)

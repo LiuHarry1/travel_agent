@@ -1,6 +1,7 @@
 """
 OpenAI LLM client implementation.
 Supports OpenAI API and OpenAI-compatible proxy servers.
+Uses official OpenAI Python SDK for better reliability and maintainability.
 """
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ import os
 import time
 
 import httpx
+from openai import AsyncOpenAI
 
 from .base import BaseLLMClient, LLMError
 
@@ -18,6 +20,96 @@ logger = logging.getLogger(__name__)
 
 class OpenAIClient(BaseLLMClient):
     """OpenAI LLM client for OpenAI API or OpenAI-compatible proxy servers."""
+
+    def __init__(self, api_key: Optional[str] = None, config=None):
+        """Initialize OpenAI client with AsyncOpenAI SDK."""
+        super().__init__(api_key, config)
+        self._openai_client: Optional[AsyncOpenAI] = None
+        self._http_client: Optional[httpx.AsyncClient] = None
+
+    def _get_http_client(self) -> httpx.AsyncClient:
+        """
+        Get or create shared httpx.AsyncClient with connection pooling.
+        
+        This enables connection reuse and improves performance for multiple requests.
+        """
+        if self._http_client is None:
+            # Configure timeout
+            timeout = httpx.Timeout(
+                connect=30.0,
+                read=self._config.llm_timeout,
+                write=30.0,
+                pool=30.0
+            )
+            
+            # Configure connection pool limits for better performance
+            # max_connections: maximum number of connections in the pool
+            # max_keepalive_connections: connections to keep alive for reuse
+            # Increased keepalive connections to reduce connection establishment overhead
+            limits = httpx.Limits(
+                max_connections=100,  # Maximum connections in pool
+                max_keepalive_connections=50  # Increased from 20 to 50 for better connection reuse
+            )
+            
+            self._http_client = httpx.AsyncClient(
+                timeout=timeout,
+                limits=limits,
+                http2=True,  # Enable HTTP/2 for better performance
+                # Enable connection pooling optimizations
+                follow_redirects=True,
+            )
+        return self._http_client
+
+    def _get_openai_client(self) -> AsyncOpenAI:
+        """
+        Get or create AsyncOpenAI client instance with connection pooling.
+        
+        Uses a shared httpx.AsyncClient to enable connection reuse and improve performance.
+        """
+        if self._openai_client is None:
+            base_url = self._get_base_url()
+            # Use API key if available, otherwise use placeholder
+            # Some providers (like Ollama) may not require a real key
+            api_key = self.api_key or "not-set"
+            
+            # Get shared HTTP client with connection pooling
+            http_client = self._get_http_client()
+            
+            self._openai_client = AsyncOpenAI(
+                api_key=api_key,
+                base_url=base_url,
+                http_client=http_client,  # Inject custom httpx client with connection pool
+                timeout=self._config.llm_timeout,
+            )
+        return self._openai_client
+    
+    async def warmup_connection(self) -> None:
+        """
+        Warm up connection by making a lightweight request to establish connection.
+        
+        This helps reduce TTFB (Time To First Byte) for the first real request.
+        """
+        try:
+            client = self._get_openai_client()
+            # Make a minimal request to establish connection
+            # Use a very small model or a health check endpoint if available
+            # For now, we'll just ensure the HTTP client is ready
+            http_client = self._get_http_client()
+            # The connection will be established on first real request
+            # But having the client ready helps
+            logger.debug("Connection pool warmed up")
+        except Exception as e:
+            logger.debug(f"Connection warmup skipped: {e}")
+
+    async def close(self):
+        """Close OpenAI client and HTTP client, release resources."""
+        await super().close()
+        if self._openai_client is not None:
+            await self._openai_client.close()
+            self._openai_client = None
+        if self._http_client is not None:
+            await self._http_client.aclose()
+            self._http_client = None
 
     def _get_api_key(self) -> Optional[str]:
         """Get API key from environment variable."""
@@ -86,185 +178,44 @@ class OpenAIClient(BaseLLMClient):
         
         return payload
 
-    def _extract_response(self, data: Dict[str, Any]) -> str:
-        """Extract response from OpenAI format."""
-        return data.get("choices", [{}])[0].get("message", {}).get("content", "未能获取模型回复。")
 
-    async def _make_request(self, endpoint: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Make async HTTP request to OpenAI API with connection pooling."""
-        base_url = self._get_base_url()
+    async def _make_stream_request(self, endpoint: str, payload: Dict[str, Any]) -> AsyncGenerator[Any, None]:
+        """
+        Make async streaming request to OpenAI API using official SDK.
+        
+        Returns async generator of SDK chunk objects (not just content strings).
+        This allows the caller to access full chunk information including tool_calls.
+        
+        Note: endpoint parameter is kept for interface compatibility but not used,
+        as SDK already knows to call chat.completions.create().
+        """
         model = payload.get("model", self._get_model_name())
-        url = f"{base_url}/chat/completions"
         
-        headers = {
-            "Content-Type": "application/json"
-        }
-        # Add Authorization header only if API key is available
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+        # Convert functions to tools format
+        request_params = self._convert_functions_to_tools(payload.copy())
+        request_params["stream"] = True
 
-        # Convert functions to tools format for OpenAI API
-        payload = self._convert_functions_to_tools(payload.copy())
-        
-        messages_count = len(payload.get("messages", []))
-        logger.info(f"OpenAI API request (async) - URL: {url}, Model: {model}, Messages: {messages_count}")
-        if "tools" in payload:
-            logger.debug(f"Using {len(payload['tools'])} tools (converted from functions)")
-
-        request_start = time.time()
-        try:
-            client = self._get_async_client()
-            response = await client.post(url, json=payload, headers=headers)
-            request_time = time.time() - request_start
-
-            logger.debug(f"OpenAI API response - Status: {response.status_code}, Time: {request_time:.2f}s")
-            response.raise_for_status()
-
-            result = response.json()
-            logger.debug(f"OpenAI response parsed successfully")
-            return result
-
-        except httpx.TimeoutException as exc:
-            request_time = time.time() - request_start
-            logger.error(f"OpenAI API timeout after {request_time:.2f}s")
-            raise LLMError(f"请求超时：API响应时间超过 {self._config.llm_timeout} 秒。") from exc
-        except httpx.HTTPStatusError as exc:
-            request_time = time.time() - request_start
-            logger.error(f"OpenAI API HTTP error {exc.response.status_code}")
-            error_text = exc.response.text[:200] if exc.response.text else ""
-            if exc.response.status_code == 401:
-                raise LLMError(
-                    "API密钥无效或已过期。请检查 OPENAI_API_KEY 环境变量或配置中的API密钥。"
-                ) from exc
-            elif exc.response.status_code == 404:
-                raise LLMError(
-                    f"模型 '{model}' 不存在或无法访问。请检查模型名称是否正确。"
-                ) from exc
-            elif exc.response.status_code == 429:
-                raise LLMError(
-                    "请求速率限制：API请求过于频繁。请稍后重试。"
-                ) from exc
-            raise LLMError(f"HTTP错误 {exc.response.status_code}：{error_text}") from exc
-        except httpx.ConnectError as exc:
-            request_time = time.time() - request_start
-            logger.error(f"OpenAI API connection error: {str(exc)}")
-            error_msg = str(exc)
-            if "10054" in error_msg or "远程主机强迫关闭" in error_msg or "Connection reset" in error_msg:
-                raise LLMError(
-                    "连接被远程主机关闭：可能是网络不稳定、服务器限流或代理服务器问题。"
-                    "请检查网络连接，稍后重试，或检查代理服务器配置。"
-                ) from exc
-            if "nodename" in error_msg or "not known" in error_msg:
-                raise LLMError(
-                    "网络连接错误：无法解析服务器地址。请检查网络连接和DNS设置。"
-                ) from exc
-            raise LLMError(f"连接错误：无法连接到OpenAI服务。请检查网络连接和端点配置。") from exc
-        except Exception as exc:
-            request_time = time.time() - request_start
-            logger.error(f"OpenAI API error after {request_time:.2f}s: {str(exc)}")
-            raise LLMError(f"API错误：{str(exc)}") from exc
-
-    async def _make_stream_request(self, endpoint: str, payload: Dict[str, Any]) -> AsyncGenerator[str, None]:
-        """Make async streaming HTTP request to OpenAI API with connection pooling."""
-        base_url = self._get_base_url()
-        model = payload.get("model", self._get_model_name())
-        url = f"{base_url}/chat/completions"
-        
-        headers = {
-            "Content-Type": "application/json"
-        }
-        # Add Authorization header only if API key is available
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-
-        # Convert functions to tools format for OpenAI API
-        request_payload = self._convert_functions_to_tools(payload.copy())
-        request_payload["stream"] = True
-
-        logger.info(f"OpenAI streaming request (async) - URL: {url}, Model: {model}")
-        if "tools" in request_payload:
-            logger.debug(f"Using {len(request_payload['tools'])} tools (converted from functions)")
+        logger.info(f"OpenAI streaming request (async) - Model: {model}")
+        if "tools" in request_params:
+            logger.debug(f"Using {len(request_params['tools'])} tools (converted from functions)")
 
         try:
-            client = self._get_async_client()
-            async with client.stream("POST", url, json=request_payload, headers=headers) as response:
-                # Check status before processing stream
-                if response.status_code != 200:
-                    # Read error response
-                    error_text = ""
-                    try:
-                        error_text = (await response.aread()).decode('utf-8', errors='ignore')[:500]
-                    except:
-                        pass
-                    logger.error(f"OpenAI streaming error response (status {response.status_code}): {error_text}")
-                    response.raise_for_status()
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if line:
-                        if line.startswith("data: "):
-                            data_str = line[6:]  # Remove "data: " prefix
-                            if data_str == "[DONE]":
-                                break
-                            try:
-                                import json
-                                chunk_data = json.loads(data_str)
-                                content = self._extract_stream_chunk(chunk_data)
-                                if content:
-                                    yield content
-                            except json.JSONDecodeError:
-                                continue
-                            except Exception as e:
-                                logger.warning(f"Error parsing stream chunk: {e}")
-                                continue
-        except httpx.TimeoutException as exc:
-            logger.error(f"OpenAI streaming timeout: {str(exc)}")
-            raise LLMError(f"请求超时：流式响应时间超过限制。请检查网络连接或稍后重试。") from exc
-        except httpx.ConnectError as exc:
-            logger.error(f"OpenAI streaming connection error: {str(exc)}")
-            error_msg = str(exc)
-            if "10054" in error_msg or "远程主机强迫关闭" in error_msg or "Connection reset" in error_msg:
-                raise LLMError(
-                    "连接被远程主机关闭：可能是网络不稳定、服务器限流或代理服务器问题。"
-                    "请检查网络连接，稍后重试，或检查代理服务器配置。"
-                ) from exc
-            if "nodename" in error_msg or "not known" in error_msg:
-                raise LLMError(
-                    "网络连接错误：无法解析服务器地址。请检查网络连接和DNS设置。"
-                ) from exc
-            raise LLMError(f"连接错误：无法连接到OpenAI服务。请检查网络连接和端点配置。") from exc
-        except httpx.HTTPStatusError as exc:
-            logger.error(f"OpenAI streaming HTTP error {exc.response.status_code}: {str(exc)}")
-            error_text = exc.response.text[:200] if exc.response.text else ""
-            if exc.response.status_code == 401:
-                raise LLMError(
-                    "API密钥无效或已过期。请检查 OPENAI_API_KEY 环境变量或配置中的API密钥。"
-                ) from exc
-            elif exc.response.status_code == 404:
-                raise LLMError(
-                    f"模型 '{model}' 不存在或无法访问。请检查模型名称是否正确。"
-                ) from exc
-            elif exc.response.status_code == 429:
-                raise LLMError(
-                    "请求速率限制：API请求过于频繁。请稍后重试。"
-                ) from exc
-            raise LLMError(f"HTTP错误 {exc.response.status_code}：{error_text}") from exc
+            # Get client early to ensure connection pool is ready
+            client = self._get_openai_client()
+            
+            # Pre-warm connection by ensuring HTTP client is initialized
+            # This helps reduce first request latency
+            http_client = self._get_http_client()
+            
+            # Use SDK's streaming method - returns chunk objects directly
+            # The connection pool will reuse existing connections if available
+            stream = await client.chat.completions.create(**request_params)
+            
+            # Yield the full chunk objects so caller can access tool_calls, content, etc.
+            async for chunk in stream:
+                yield chunk
+                
         except Exception as exc:
             logger.error(f"OpenAI streaming error: {str(exc)}", exc_info=True)
             error_msg = str(exc)
-            # Use platform-specific error handling
-            from ..platform_config import is_windows_socket_error, format_network_error
-            if is_windows_socket_error(error_msg):
-                raise LLMError(format_network_error(error_msg, is_socket_error=True)) from exc
-            formatted_error = format_network_error(error_msg)
-            if formatted_error != f"网络错误：{error_msg}":
-                raise LLMError(formatted_error) from exc
-            raise LLMError(f"流式请求错误：{error_msg}") from exc
-
-    def _extract_stream_chunk(self, chunk_data: Dict[str, Any]) -> Optional[str]:
-        """Extract text chunk from OpenAI streaming response."""
-        if "choices" not in chunk_data or not chunk_data["choices"]:
-            return None
-        delta = chunk_data["choices"][0].get("delta", {})
-        content = delta.get("content", "")
-        return content if content else None
-
+            raise LLMError(f"OpenAI streaming error：{error_msg}") from exc

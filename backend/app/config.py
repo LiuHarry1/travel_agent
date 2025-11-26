@@ -9,6 +9,7 @@ import yaml
 
 from .models import ChecklistItem
 from .shared.config import Settings, get_settings
+from .utils.constants import APP_ROOT
 
 
 class Config:
@@ -54,7 +55,7 @@ class Config:
     @property
     def config_path(self) -> str:
         """Get the path to the configuration file."""
-        return os.getenv("TRAVEL_AGENT_CONFIG", str(Path(__file__).parent / "config.yaml"))
+        return os.getenv("TRAVEL_AGENT_CONFIG", str(APP_ROOT / "config.yaml"))
 
     def save_config(self, system_prompt_template: str, checklist: List[ChecklistItem]) -> None:
         """Save system prompt template and checklist to configuration file."""

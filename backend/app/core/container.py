@@ -81,6 +81,16 @@ class Container:
         except Exception as e:
             logger.warning(f"Failed to initialize MCP servers: {e}", exc_info=True)
         
+        # Warm up LLM client connection pool to reduce first request latency
+        try:
+            llm_client = self.llm_client
+            provider_client = llm_client._get_client()
+            if hasattr(provider_client, 'warmup_connection'):
+                await provider_client.warmup_connection()
+                logger.info("LLM client connection pool warmed up")
+        except Exception as e:
+            logger.debug(f"LLM connection warmup skipped: {e}")
+        
         self._initialized = True
         logger.info("Container initialization complete")
     

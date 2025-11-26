@@ -323,9 +323,8 @@ def update_mcp_config(request: MCPConfigUpdateRequest) -> Dict[str, Any]:
             )
         
         # Get config file path
-        from pathlib import Path
-        backend_dir = Path(__file__).parent.parent.parent
-        config_path = backend_dir / "mcp.json"
+        from app.utils.constants import BACKEND_ROOT
+        config_path = BACKEND_ROOT / "mcp.json"
         
         # Validate JSON by trying to serialize it
         try:
