@@ -23,13 +23,15 @@ export function ChatPage() {
     setMessage,
     history,
     suggestions,
-    summary,
     loading,
     alert,
     setAlert,
     messagesEndRef,
     sendMessage,
   } = useChat()
+
+  // summary is not currently implemented in useChat, so set it to undefined for now
+  const summary = undefined
 
   const {
     uploadedFiles,
@@ -116,6 +118,7 @@ export function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const messagesWrapperRef = useRef<HTMLDivElement>(null)
   const latestUserMessageRef = useRef<HTMLDivElement>(null)
+  // Track whether we should auto-scroll (disabled after user scrolls manually)
   const [autoScroll, setAutoScroll] = useState(true)
 
   // Auto-resize textarea
@@ -158,8 +161,6 @@ export function ChatPage() {
     const currentUserCount = history.reduce((count, turn) => count + (turn.role === 'user' ? 1 : 0), 0)
     const hasNewUserMessage = hasMountedRef.current && currentUserCount > userMessageCountRef.current
 
-    console.log('[ChatGPT Scroll] User count:', currentUserCount, 'Has new:', hasNewUserMessage)
-
     if (hasNewUserMessage && latestUserMessageRef.current) {
       // Use setTimeout to ensure DOM is fully updated and rendered
       setTimeout(() => {
@@ -173,17 +174,15 @@ export function ChatPage() {
             // Calculate offset from the top of chat-messages container
             const messageOffsetTop = messageElement.offsetTop - (messagesContainer as HTMLElement).offsetTop
             
-            console.log('[ChatGPT Scroll] Scrolling to offset:', messageOffsetTop, 'Current scroll:', containerElement.scrollTop)
-            
             // Scroll to make the new user message appear at the top of the visible area
             containerElement.scrollTo({
               top: messageOffsetTop,
               behavior: 'smooth'
             })
             
-            // Disable auto-scroll after positioning to new user message
-            // This allows the assistant response to naturally grow downward
-            setAutoScroll(false)
+            // Re-enable auto-scroll for this new conversation turn
+            // User manual scrolling will disable it again
+            setAutoScroll(true)
           }
         }
       }, 100) // Increased timeout to 100ms for better DOM sync
@@ -191,7 +190,7 @@ export function ChatPage() {
 
     userMessageCountRef.current = currentUserCount
     hasMountedRef.current = true
-  }, [history, loading])
+  }, [history, loading, autoScroll])
 
   const handleMessagesScroll = () => {
     const container = messagesWrapperRef.current
