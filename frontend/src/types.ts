@@ -13,9 +13,9 @@ export type ConversationState = 'ready'
 export interface ToolCall {
   id?: string
   name: string
-  arguments: Record<string, any>
+  arguments: Record<string, unknown>
   status?: 'calling' | 'completed' | 'error'
-  result?: any
+  result?: unknown
   error?: string
 }
 
@@ -36,9 +36,6 @@ export interface ChatPayload {
   session_id?: string
   message?: string
   messages?: Array<{ role: string; content: string }>
-  mrt_content?: string
-  software_requirement?: string
-  checklist?: ChecklistItem[]
   files?: Array<{ name: string; content: string }>
 }
 
@@ -54,12 +51,13 @@ export interface StreamEvent {
   type: StreamEventType
   content?: string
   tool?: string
-  input?: any
-  result?: any
+  input?: unknown
+  result?: unknown
   error?: string
+  tool_call_id?: string
 }
 
 export interface Suggestion {
-  text: string
-  action?: string
+  checklist_id: string
+  message: string
 }

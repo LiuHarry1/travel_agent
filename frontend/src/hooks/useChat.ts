@@ -1,9 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import type { ChatResponse, Alert, ToolCall, StreamEvent } from '../types'
-
-// Temporary type for suggestions (legacy feature, may be removed)
-type Suggestion = any
-import { sendChatMessageStream } from '../api'
+import type { ChatResponse, Alert, ToolCall, StreamEvent, Suggestion } from '../types'
+import { sendChatMessageStream } from '../api/index'
 import { useChatSessions } from './useChatSessions'
 
 export function useChat() {
@@ -14,7 +11,6 @@ export function useChat() {
   const [message, setMessage] = useState('')
   const [history, setHistory] = useState<ChatResponse['history']>(activeSession?.history ?? [])
   const [suggestions, setSuggestions] = useState<Suggestion[] | undefined>(activeSession?.suggestions)
-  const [summary] = useState<string | undefined>()
   const [loading, setLoading] = useState(false)
   const [alert, setAlert] = useState<Alert | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -201,27 +197,14 @@ export function useChat() {
         },
         (event: StreamEvent) => {
           // Handle tool call events
-          if (event.type === 'tool_call_start' && event.tool) {
-            // Use tool_call_id if available, otherwise use tool name as fallback
-            const toolCallId = (event as any).tool_call_id || event.tool
-            // Check if this tool call already exists
-            if (currentToolCalls.has(toolCallId)) {
-              return
-            }
-            const toolCall: ToolCall = {
-              id: toolCallId,
-              name: event.tool,
-              arguments: event.input || {},
-              status: 'calling',
-            }
-            currentToolCalls.set(toolCallId, toolCall)
-            
-            // Update history with tool call - save all tool calls (including completed ones)
+          const toolCallId = event.tool_call_id || event.tool
+          if (!toolCallId) return
+
+          const updateHistoryWithToolCalls = () => {
             setHistory((prev) => {
               const updated: ChatResponse['history'] = [...prev]
               let targetIndex = assistantIndexRef.current
               if (targetIndex < 0 || targetIndex >= updated.length) {
-                // Create assistant message if it doesn't exist
                 updated.push({ 
                   role: 'assistant' as const, 
                   content: '',
@@ -230,7 +213,6 @@ export function useChat() {
                 targetIndex = updated.length - 1
                 assistantIndexRef.current = targetIndex
               } else {
-                // Update existing assistant message - save all tool calls
                 const existingTurn = updated[targetIndex]
                 updated[targetIndex] = {
                   ...existingTurn,
@@ -243,78 +225,54 @@ export function useChat() {
               }, 0)
               return updated
             })
+          }
+
+          if (event.type === 'tool_call_start' && event.tool) {
+            // Check if this tool call already exists
+            if (currentToolCalls.has(toolCallId)) {
+              return
+            }
+            const toolCall: ToolCall = {
+              id: toolCallId,
+              name: event.tool,
+              arguments: (event.input as Record<string, unknown>) || {},
+              status: 'calling',
+            }
+            currentToolCalls.set(toolCallId, toolCall)
+            updateHistoryWithToolCalls()
           } else if (event.type === 'tool_call_end' && event.tool) {
-            const toolCallId = (event as any).tool_call_id || event.tool
             const toolCall = currentToolCalls.get(toolCallId)
             if (toolCall) {
               toolCall.status = 'completed'
               toolCall.result = event.result
               currentToolCalls.set(toolCallId, toolCall)
-              
-              // Update history - save all tool calls (including completed ones)
-              setHistory((prev) => {
-                const updated: ChatResponse['history'] = [...prev]
-                let targetIndex = assistantIndexRef.current
-                if (targetIndex >= 0 && targetIndex < updated.length) {
-                  const existingTurn = updated[targetIndex]
-                  updated[targetIndex] = {
-                    ...existingTurn,
-                    toolCalls: Array.from(currentToolCalls.values()),
-                  }
-                }
-                // Update session asynchronously to avoid triggering re-renders during render
-                setTimeout(() => {
-                  updateActiveSession({ history: updated })
-                }, 0)
-                return updated
-              })
+              updateHistoryWithToolCalls()
             }
           } else if (event.type === 'tool_call_error' && event.tool) {
-            const toolCallId = (event as any).tool_call_id || event.tool
             const toolCall = currentToolCalls.get(toolCallId)
             if (toolCall) {
               toolCall.status = 'error'
               toolCall.error = event.error
               currentToolCalls.set(toolCallId, toolCall)
-              
-              // Update history - save all tool calls (including error ones)
-              setHistory((prev) => {
-                const updated: ChatResponse['history'] = [...prev]
-                let targetIndex = assistantIndexRef.current
-                if (targetIndex >= 0 && targetIndex < updated.length) {
-                  const existingTurn = updated[targetIndex]
-                  updated[targetIndex] = {
-                    ...existingTurn,
-                    toolCalls: Array.from(currentToolCalls.values()),
-                  }
-                }
-                // Update session asynchronously to avoid triggering re-renders during render
-                setTimeout(() => {
-                  updateActiveSession({ history: updated })
-                }, 0)
-                return updated
-              })
+              updateHistoryWithToolCalls()
             }
           }
         }
       )
 
       // Final update: ensure tool calls are preserved in the final history
-      // The history should already be updated via the chunk handler, but we ensure tool calls are included
-      if (accumulatedContent) {
+      if (accumulatedContent && currentToolCalls.size > 0) {
         setHistory((prev) => {
           const updated: ChatResponse['history'] = [...prev]
           let targetIndex = assistantIndexRef.current
           if (targetIndex >= 0 && targetIndex < updated.length) {
             const existingTurn = updated[targetIndex]
-            const toolCalls = existingTurn?.toolCalls || Array.from(currentToolCalls.values())
             updated[targetIndex] = {
               role: 'assistant' as const,
               content: accumulatedContent,
-              toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+              toolCalls: existingTurn?.toolCalls || Array.from(currentToolCalls.values()),
             }
           }
-          // Update session with final state including tool calls
           setTimeout(() => {
             updateActiveSession({ history: updated })
           }, 0)
@@ -338,7 +296,6 @@ export function useChat() {
     setMessage,
     history,
     suggestions,
-    summary,
     loading,
     alert,
     setAlert,

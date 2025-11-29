@@ -9,7 +9,7 @@ import {
   getMCPConfig,
   updateMCPConfig,
   type ProviderInfo 
-} from '../api'
+} from '../api/index'
 import { Alert } from './Alert'
 
 type TabType = 'llm' | 'prompt' | 'mcp'

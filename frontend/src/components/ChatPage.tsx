@@ -3,19 +3,11 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useChat } from '../hooks/useChat'
 import { useFileUpload } from '../hooks/useFileUpload'
-import { uploadFile } from '../api'
+import { useFileUploadState } from '../hooks/useFileUploadState'
 import { Alert } from './Alert'
 import { FileUploadArea } from './FileUploadArea'
 import { MessageList } from './MessageList'
 import { FileIcon, ErrorIcon, CloseIcon } from './icons'
-
-interface FileWithContent {
-  file: File
-  content?: string
-  loading?: boolean
-  error?: string
-  progress?: number
-}
 
 export function ChatPage() {
   const {
@@ -23,7 +15,6 @@ export function ChatPage() {
     setMessage,
     history,
     suggestions,
-    summary,
     loading,
     alert,
     setAlert,
@@ -40,77 +31,15 @@ export function ChatPage() {
     handleDrop,
     handleFileSelect,
     removeFile,
-    clearFiles,
+    clearFiles: clearUploadedFiles,
     openFileDialog,
     formatErrorMessages,
   } = useFileUpload()
 
-  const [filesWithContent, setFilesWithContent] = useState<FileWithContent[]>([])
-
-  // Upload files to backend immediately when they're added
-  useEffect(() => {
-    const uploadFiles = async () => {
-      const newFiles = uploadedFiles.filter(
-        (file) => !filesWithContent.find((fwc) => fwc.file === file)
-      )
-
-      if (newFiles.length === 0) return
-
-      // Immediately add new files with loading state
-      setFilesWithContent((prev) => {
-        const newFilesWithContent = newFiles.map((file) => ({ 
-          file, 
-          loading: true, 
-          progress: 0 
-        }))
-        return [...prev, ...newFilesWithContent]
-      })
-
-      // Upload each new file immediately
-      for (const file of newFiles) {
-        try {
-          const result = await uploadFile(
-            file,
-            (progress) => {
-              // Update progress in real-time
-              setFilesWithContent((prev) =>
-                prev.map((fwc) =>
-                  fwc.file === file ? { ...fwc, progress } : fwc
-                )
-              )
-            }
-          )
-          setFilesWithContent((prev) =>
-            prev.map((fwc) =>
-              fwc.file === file 
-                ? { file, content: result.content, loading: false, progress: 100 } 
-                : fwc
-            )
-          )
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Upload failed'
-          setFilesWithContent((prev) =>
-            prev.map((fwc) =>
-              fwc.file === file 
-                ? { file, loading: false, error: errorMessage, progress: 0 } 
-                : fwc
-            )
-          )
-          setAlert({ type: 'error', message: `Failed to upload ${file.name}: ${errorMessage}` })
-        }
-      }
-    }
-
-    uploadFiles()
-    // Remove filesWithContent from dependencies to avoid circular updates
-    // We only want to trigger when uploadedFiles changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uploadedFiles, setAlert])
-
-  // Sync with uploadedFiles (remove if removed from uploadedFiles)
-  useEffect(() => {
-    setFilesWithContent((prev) => prev.filter((fwc) => uploadedFiles.includes(fwc.file)))
-  }, [uploadedFiles])
+  const { filesWithContent, clearFiles: clearFilesWithContent } = useFileUploadState(
+    uploadedFiles,
+    setAlert
+  )
 
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -162,7 +91,7 @@ export function ChatPage() {
 
   const renderInputArea = () => (
     <FileUploadArea
-      uploadedFiles={[]}
+      uploadedFiles={uploadedFiles}
       dragOver={dragOver}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -237,7 +166,7 @@ export function ChatPage() {
             onDrop={(e) => {
               // Prevent default navigation and delegate to our validated drop handler
               e.preventDefault()
-              handleDropWithValidation(e as any)
+              handleDropWithValidation(e as unknown as React.DragEvent<HTMLDivElement>)
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -247,7 +176,7 @@ export function ChatPage() {
                   (message.trim() ||
                     filesWithContent.filter((fwc) => fwc.content && !fwc.error).length > 0)
                 ) {
-                  handleSubmit(e as any)
+                  handleSubmit(e as unknown as FormEvent<HTMLFormElement>)
                 }
               }
             }}
@@ -329,8 +258,8 @@ export function ChatPage() {
 
         // Clear input and files immediately before sending
         setMessage('')
-        clearFiles()
-        setFilesWithContent([])
+        clearUploadedFiles()
+        clearFilesWithContent()
 
         // Send message (don't await, let it stream in background)
         sendMessage(message.trim() || undefined, filesData).catch((error) => {
@@ -391,7 +320,7 @@ export function ChatPage() {
           >
             <MessageList history={history} loading={loading} messagesEndRef={messagesEndRef} />
 
-            {(summary || (suggestions && suggestions.length > 0)) && history.length > 0 && (
+            {suggestions && suggestions.length > 0 && history.length > 0 && (
               <div className="chat-results">
                 <div className="result-markdown">
                   <ReactMarkdown 
@@ -413,13 +342,9 @@ export function ChatPage() {
                       )
                     }}
                   >
-                    {`${summary ? `## Review Summary\n\n${summary}\n\n` : ''}${
-                      suggestions && suggestions.length > 0
-                        ? `## Improvement Suggestions (${suggestions.length})\n\n${suggestions
-                            .map((item) => `- **${item.checklist_id}**: ${item.message}`)
-                            .join('\n')}\n`
-                        : ''
-                    }`}
+                    {`## Improvement Suggestions (${suggestions.length})\n\n${suggestions
+                      .map((item) => `- **${item.checklist_id}**: ${item.message}`)
+                      .join('\n')}\n`}
                   </ReactMarkdown>
                 </div>
               </div>

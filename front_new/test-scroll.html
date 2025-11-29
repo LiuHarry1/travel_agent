@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scroll Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .test-container {
+            height: 400px;
+            overflow-y: auto;
+            border: 2px solid #ccc;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .message {
+            padding: 10px;
+            margin: 10px 0;
+            background: white;
+            border-radius: 8px;
+        }
+        .user {
+            background: #667eea;
+            color: white;
+        }
+        button {
+            margin: 10px 5px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Scroll to Top Test</h1>
+    <button onclick="addUserMessage()">Add User Message</button>
+    <button onclick="addAssistantMessage()">Add Assistant Message</button>
+    <button onclick="clearMessages()">Clear</button>
+    
+    <div class="test-container" id="container">
+        <div id="messages"></div>
+    </div>
+
+    <script>
+        let messageCount = 0;
+        const container = document.getElementById('container');
+        const messagesDiv = document.getElementById('messages');
+
+        function addUserMessage() {
+            messageCount++;
+            const message = document.createElement('div');
+            message.className = 'message user';
+            message.id = `user-${messageCount}`;
+            message.textContent = `User message ${messageCount}`;
+            messagesDiv.appendChild(message);
+            
+            // Scroll to top
+            setTimeout(() => {
+                const messageRect = message.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+                const distanceFromContainerTop = messageRect.top - containerRect.top;
+                const targetScrollTop = container.scrollTop + distanceFromContainerTop;
+                container.scrollTop = targetScrollTop;
+                console.log('Scrolled to:', targetScrollTop);
+            }, 0);
+        }
+
+        function addAssistantMessage() {
+            const message = document.createElement('div');
+            message.className = 'message';
+            message.textContent = 'This is a long assistant message that should push the user message up. '.repeat(5);
+            messagesDiv.appendChild(message);
+        }
+
+        function clearMessages() {
+            messagesDiv.innerHTML = '';
+            messageCount = 0;
+        }
+    </script>
+</body>
+</html>
+
+
