@@ -3,11 +3,19 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useChat } from '../hooks/useChat'
 import { useFileUpload } from '../hooks/useFileUpload'
-import { useFileUploadState } from '../hooks/useFileUploadState'
+import { uploadFile } from '../api'
 import { Alert } from './Alert'
 import { FileUploadArea } from './FileUploadArea'
 import { MessageList } from './MessageList'
 import { FileIcon, ErrorIcon, CloseIcon } from './icons'
+
+interface FileWithContent {
+  file: File
+  content?: string
+  loading?: boolean
+  error?: string
+  progress?: number
+}
 
 export function ChatPage() {
   const {
@@ -15,6 +23,7 @@ export function ChatPage() {
     setMessage,
     history,
     suggestions,
+    summary,
     loading,
     alert,
     setAlert,
@@ -31,19 +40,82 @@ export function ChatPage() {
     handleDrop,
     handleFileSelect,
     removeFile,
-    clearFiles: clearUploadedFiles,
+    clearFiles,
     openFileDialog,
     formatErrorMessages,
   } = useFileUpload()
 
-  const { filesWithContent, clearFiles: clearFilesWithContent } = useFileUploadState(
-    uploadedFiles,
-    setAlert
-  )
+  const [filesWithContent, setFilesWithContent] = useState<FileWithContent[]>([])
+
+  // Upload files to backend immediately when they're added
+  useEffect(() => {
+    const uploadFiles = async () => {
+      const newFiles = uploadedFiles.filter(
+        (file) => !filesWithContent.find((fwc) => fwc.file === file)
+      )
+
+      if (newFiles.length === 0) return
+
+      // Immediately add new files with loading state
+      setFilesWithContent((prev) => {
+        const newFilesWithContent = newFiles.map((file) => ({ 
+          file, 
+          loading: true, 
+          progress: 0 
+        }))
+        return [...prev, ...newFilesWithContent]
+      })
+
+      // Upload each new file immediately
+      for (const file of newFiles) {
+        try {
+          const result = await uploadFile(
+            file,
+            (progress) => {
+              // Update progress in real-time
+              setFilesWithContent((prev) =>
+                prev.map((fwc) =>
+                  fwc.file === file ? { ...fwc, progress } : fwc
+                )
+              )
+            }
+          )
+          setFilesWithContent((prev) =>
+            prev.map((fwc) =>
+              fwc.file === file 
+                ? { file, content: result.content, loading: false, progress: 100 } 
+                : fwc
+            )
+          )
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Upload failed'
+          setFilesWithContent((prev) =>
+            prev.map((fwc) =>
+              fwc.file === file 
+                ? { file, loading: false, error: errorMessage, progress: 0 } 
+                : fwc
+            )
+          )
+          setAlert({ type: 'error', message: `Failed to upload ${file.name}: ${errorMessage}` })
+        }
+      }
+    }
+
+    uploadFiles()
+    // Remove filesWithContent from dependencies to avoid circular updates
+    // We only want to trigger when uploadedFiles changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uploadedFiles, setAlert])
+
+  // Sync with uploadedFiles (remove if removed from uploadedFiles)
+  useEffect(() => {
+    setFilesWithContent((prev) => prev.filter((fwc) => uploadedFiles.includes(fwc.file)))
+  }, [uploadedFiles])
 
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const messagesWrapperRef = useRef<HTMLDivElement>(null)
+  const latestUserMessageRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
 
   // Auto-resize textarea
@@ -73,12 +145,34 @@ export function ChatPage() {
     }
   }, [history.length, loading])
 
-  // During streaming or when new messages arrive, keep scroll at bottom
-  // only when user is already near the bottom (autoScroll = true)
+  // Track how many user messages exist to know when a brand new user turn was added
+  const userMessageCountRef = useRef(0)
+  const hasMountedRef = useRef(false)
+
+  // During streaming or when new messages arrive, either align the latest user message
+  // with the top of the viewport or keep following the assistant output at the bottom.
   useEffect(() => {
-    if (autoScroll && messagesWrapperRef.current) {
-      messagesWrapperRef.current.scrollTop = messagesWrapperRef.current.scrollHeight
+    const container = messagesWrapperRef.current
+    if (!container) return
+
+    const currentUserCount = history.reduce((count, turn) => count + (turn.role === 'user' ? 1 : 0), 0)
+    const hasNewUserMessage = hasMountedRef.current && currentUserCount > userMessageCountRef.current
+
+    if (hasNewUserMessage && latestUserMessageRef.current) {
+      const messageElement = latestUserMessageRef.current
+      const containerRect = container.getBoundingClientRect()
+      const messageRect = messageElement.getBoundingClientRect()
+      const offset = messageRect.top - containerRect.top
+      container.scrollTo({
+        top: container.scrollTop + offset,
+        behavior: 'smooth',
+      })
+    } else if (autoScroll) {
+      container.scrollTop = container.scrollHeight
     }
+
+    userMessageCountRef.current = currentUserCount
+    hasMountedRef.current = true
   }, [history, loading, autoScroll])
 
   const handleMessagesScroll = () => {
@@ -91,7 +185,7 @@ export function ChatPage() {
 
   const renderInputArea = () => (
     <FileUploadArea
-      uploadedFiles={uploadedFiles}
+      uploadedFiles={[]}
       dragOver={dragOver}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -166,7 +260,7 @@ export function ChatPage() {
             onDrop={(e) => {
               // Prevent default navigation and delegate to our validated drop handler
               e.preventDefault()
-              handleDropWithValidation(e as unknown as React.DragEvent<HTMLDivElement>)
+              handleDropWithValidation(e as any)
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -176,7 +270,7 @@ export function ChatPage() {
                   (message.trim() ||
                     filesWithContent.filter((fwc) => fwc.content && !fwc.error).length > 0)
                 ) {
-                  handleSubmit(e as unknown as FormEvent<HTMLFormElement>)
+                  handleSubmit(e as any)
                 }
               }
             }}
@@ -258,8 +352,8 @@ export function ChatPage() {
 
         // Clear input and files immediately before sending
         setMessage('')
-        clearUploadedFiles()
-        clearFilesWithContent()
+        clearFiles()
+        setFilesWithContent([])
 
         // Send message (don't await, let it stream in background)
         sendMessage(message.trim() || undefined, filesData).catch((error) => {
@@ -318,9 +412,14 @@ export function ChatPage() {
             ref={messagesWrapperRef}
             onScroll={handleMessagesScroll}
           >
-            <MessageList history={history} loading={loading} messagesEndRef={messagesEndRef} />
+            <MessageList
+              history={history}
+              loading={loading}
+              messagesEndRef={messagesEndRef}
+              latestUserMessageRef={latestUserMessageRef}
+            />
 
-            {suggestions && suggestions.length > 0 && history.length > 0 && (
+            {(summary || (suggestions && suggestions.length > 0)) && history.length > 0 && (
               <div className="chat-results">
                 <div className="result-markdown">
                   <ReactMarkdown 
@@ -342,9 +441,13 @@ export function ChatPage() {
                       )
                     }}
                   >
-                    {`## Improvement Suggestions (${suggestions.length})\n\n${suggestions
-                      .map((item) => `- **${item.checklist_id}**: ${item.message}`)
-                      .join('\n')}\n`}
+                    {`${summary ? `## Review Summary\n\n${summary}\n\n` : ''}${
+                      suggestions && suggestions.length > 0
+                        ? `## Improvement Suggestions (${suggestions.length})\n\n${suggestions
+                            .map((item) => `- **${item.checklist_id}**: ${item.message}`)
+                            .join('\n')}\n`
+                        : ''
+                    }`}
                   </ReactMarkdown>
                 </div>
               </div>
@@ -357,7 +460,12 @@ export function ChatPage() {
       ) : (
         <div className="chat-initial-layout">
           <div className="chat-initial-inner">
-            <MessageList history={history} loading={loading} messagesEndRef={messagesEndRef} />
+            <MessageList
+              history={history}
+              loading={loading}
+              messagesEndRef={messagesEndRef}
+              latestUserMessageRef={latestUserMessageRef}
+            />
             <div className="chat-input-floating">{renderInputArea()}</div>
           </div>
         </div>

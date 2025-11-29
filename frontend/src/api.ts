@@ -1,6 +1,6 @@
 /**
  * @deprecated This file is kept for backward compatibility.
- * Please use imports from './api' instead.
+ * Prefer importing from './api'.
  */
-export * from './api'
+export * from './api/index'
 
