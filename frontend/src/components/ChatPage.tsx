@@ -23,13 +23,15 @@ export function ChatPage() {
     setMessage,
     history,
     suggestions,
-    summary,
     loading,
     alert,
     setAlert,
     messagesEndRef,
     sendMessage,
   } = useChat()
+
+  // summary is not currently implemented in useChat, so set it to undefined for now
+  const summary = undefined
 
   const {
     uploadedFiles,
@@ -116,6 +118,7 @@ export function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const messagesWrapperRef = useRef<HTMLDivElement>(null)
   const latestUserMessageRef = useRef<HTMLDivElement>(null)
+  // Track whether we should auto-scroll (disabled after user scrolls manually)
   const [autoScroll, setAutoScroll] = useState(true)
 
   // Auto-resize textarea
@@ -149,8 +152,8 @@ export function ChatPage() {
   const userMessageCountRef = useRef(0)
   const hasMountedRef = useRef(false)
 
-  // During streaming or when new messages arrive, either align the latest user message
-  // with the top of the viewport or keep following the assistant output at the bottom.
+  // During streaming or when new messages arrive, align the latest user message
+  // with the top of the viewport (ChatGPT-style behavior)
   useEffect(() => {
     const container = messagesWrapperRef.current
     if (!container) return
@@ -159,16 +162,40 @@ export function ChatPage() {
     const hasNewUserMessage = hasMountedRef.current && currentUserCount > userMessageCountRef.current
 
     if (hasNewUserMessage && latestUserMessageRef.current) {
-      const messageElement = latestUserMessageRef.current
-      const containerRect = container.getBoundingClientRect()
-      const messageRect = messageElement.getBoundingClientRect()
-      const offset = messageRect.top - containerRect.top
-      container.scrollTo({
-        top: container.scrollTop + offset,
-        behavior: 'smooth',
-      })
-    } else if (autoScroll) {
-      container.scrollTop = container.scrollHeight
+      // Use setTimeout to ensure DOM is fully updated and rendered
+      setTimeout(() => {
+        const messageElement = latestUserMessageRef.current
+        const containerElement = messagesWrapperRef.current
+        if (messageElement && containerElement) {
+          // Calculate the position of the message relative to the scroll container
+          // Use getBoundingClientRect for accurate positioning
+          const containerRect = containerElement.getBoundingClientRect()
+          const messageRect = messageElement.getBoundingClientRect()
+          
+          // Calculate how much we need to scroll to put the message at the top
+          // messageRect.top - containerRect.top gives us the offset from container top
+          // Add current scrollTop to get absolute scroll position
+          const scrollTarget = containerElement.scrollTop + (messageRect.top - containerRect.top)
+          
+          console.log('[Scroll Debug]', {
+            messageTop: messageRect.top,
+            containerTop: containerRect.top,
+            currentScroll: containerElement.scrollTop,
+            scrollTarget: scrollTarget,
+            offset: messageRect.top - containerRect.top
+          })
+          
+          // Scroll to make the new user message appear at the top of the visible area
+          containerElement.scrollTo({
+            top: scrollTarget,
+            behavior: 'smooth'
+          })
+          
+          // Re-enable auto-scroll for this new conversation turn
+          // User manual scrolling will disable it again
+          setAutoScroll(true)
+        }
+      }, 150) // Increased timeout to ensure DOM is fully rendered
     }
 
     userMessageCountRef.current = currentUserCount
