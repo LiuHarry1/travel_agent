@@ -167,25 +167,35 @@ export function ChatPage() {
         const messageElement = latestUserMessageRef.current
         const containerElement = messagesWrapperRef.current
         if (messageElement && containerElement) {
-          // Get the absolute position of the message within the scrollable container
-          // We'll calculate relative to the chat-messages element
-          const messagesContainer = messageElement.closest('.chat-messages')
-          if (messagesContainer) {
-            // Calculate offset from the top of chat-messages container
-            const messageOffsetTop = messageElement.offsetTop - (messagesContainer as HTMLElement).offsetTop
-            
-            // Scroll to make the new user message appear at the top of the visible area
-            containerElement.scrollTo({
-              top: messageOffsetTop,
-              behavior: 'smooth'
-            })
-            
-            // Re-enable auto-scroll for this new conversation turn
-            // User manual scrolling will disable it again
-            setAutoScroll(true)
-          }
+          // Calculate the position of the message relative to the scroll container
+          // Use getBoundingClientRect for accurate positioning
+          const containerRect = containerElement.getBoundingClientRect()
+          const messageRect = messageElement.getBoundingClientRect()
+          
+          // Calculate how much we need to scroll to put the message at the top
+          // messageRect.top - containerRect.top gives us the offset from container top
+          // Add current scrollTop to get absolute scroll position
+          const scrollTarget = containerElement.scrollTop + (messageRect.top - containerRect.top)
+          
+          console.log('[Scroll Debug]', {
+            messageTop: messageRect.top,
+            containerTop: containerRect.top,
+            currentScroll: containerElement.scrollTop,
+            scrollTarget: scrollTarget,
+            offset: messageRect.top - containerRect.top
+          })
+          
+          // Scroll to make the new user message appear at the top of the visible area
+          containerElement.scrollTo({
+            top: scrollTarget,
+            behavior: 'smooth'
+          })
+          
+          // Re-enable auto-scroll for this new conversation turn
+          // User manual scrolling will disable it again
+          setAutoScroll(true)
         }
-      }, 100) // Increased timeout to 100ms for better DOM sync
+      }, 150) // Increased timeout to ensure DOM is fully rendered
     }
 
     userMessageCountRef.current = currentUserCount
