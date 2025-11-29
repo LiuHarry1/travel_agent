@@ -149,8 +149,8 @@ export function ChatPage() {
   const userMessageCountRef = useRef(0)
   const hasMountedRef = useRef(false)
 
-  // During streaming or when new messages arrive, either align the latest user message
-  // with the top of the viewport or keep following the assistant output at the bottom.
+  // During streaming or when new messages arrive, align the latest user message
+  // with the top of the viewport (ChatGPT-style behavior)
   useEffect(() => {
     const container = messagesWrapperRef.current
     if (!container) return
@@ -159,21 +159,25 @@ export function ChatPage() {
     const hasNewUserMessage = hasMountedRef.current && currentUserCount > userMessageCountRef.current
 
     if (hasNewUserMessage && latestUserMessageRef.current) {
+      // Scroll to make the new user message appear at the top of the visible area
       const messageElement = latestUserMessageRef.current
       const containerRect = container.getBoundingClientRect()
       const messageRect = messageElement.getBoundingClientRect()
       const offset = messageRect.top - containerRect.top
+      
       container.scrollTo({
         top: container.scrollTop + offset,
         behavior: 'smooth',
       })
-    } else if (autoScroll) {
-      container.scrollTop = container.scrollHeight
+      
+      // Disable auto-scroll after positioning to new user message
+      // This allows the assistant response to naturally grow downward
+      setAutoScroll(false)
     }
 
     userMessageCountRef.current = currentUserCount
     hasMountedRef.current = true
-  }, [history, loading, autoScroll])
+  }, [history, loading])
 
   const handleMessagesScroll = () => {
     const container = messagesWrapperRef.current
