@@ -158,21 +158,35 @@ export function ChatPage() {
     const currentUserCount = history.reduce((count, turn) => count + (turn.role === 'user' ? 1 : 0), 0)
     const hasNewUserMessage = hasMountedRef.current && currentUserCount > userMessageCountRef.current
 
+    console.log('[ChatGPT Scroll] User count:', currentUserCount, 'Has new:', hasNewUserMessage)
+
     if (hasNewUserMessage && latestUserMessageRef.current) {
-      // Scroll to make the new user message appear at the top of the visible area
-      const messageElement = latestUserMessageRef.current
-      const containerRect = container.getBoundingClientRect()
-      const messageRect = messageElement.getBoundingClientRect()
-      const offset = messageRect.top - containerRect.top
-      
-      container.scrollTo({
-        top: container.scrollTop + offset,
-        behavior: 'smooth',
-      })
-      
-      // Disable auto-scroll after positioning to new user message
-      // This allows the assistant response to naturally grow downward
-      setAutoScroll(false)
+      // Use setTimeout to ensure DOM is fully updated and rendered
+      setTimeout(() => {
+        const messageElement = latestUserMessageRef.current
+        const containerElement = messagesWrapperRef.current
+        if (messageElement && containerElement) {
+          // Get the absolute position of the message within the scrollable container
+          // We'll calculate relative to the chat-messages element
+          const messagesContainer = messageElement.closest('.chat-messages')
+          if (messagesContainer) {
+            // Calculate offset from the top of chat-messages container
+            const messageOffsetTop = messageElement.offsetTop - (messagesContainer as HTMLElement).offsetTop
+            
+            console.log('[ChatGPT Scroll] Scrolling to offset:', messageOffsetTop, 'Current scroll:', containerElement.scrollTop)
+            
+            // Scroll to make the new user message appear at the top of the visible area
+            containerElement.scrollTo({
+              top: messageOffsetTop,
+              behavior: 'smooth'
+            })
+            
+            // Disable auto-scroll after positioning to new user message
+            // This allows the assistant response to naturally grow downward
+            setAutoScroll(false)
+          }
+        }
+      }, 100) // Increased timeout to 100ms for better DOM sync
     }
 
     userMessageCountRef.current = currentUserCount
