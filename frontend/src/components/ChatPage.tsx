@@ -115,6 +115,7 @@ export function ChatPage() {
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const messagesWrapperRef = useRef<HTMLDivElement>(null)
+  const latestUserMessageRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
 
   // Auto-resize textarea
@@ -144,12 +145,34 @@ export function ChatPage() {
     }
   }, [history.length, loading])
 
-  // During streaming or when new messages arrive, keep scroll at bottom
-  // only when user is already near the bottom (autoScroll = true)
+  // Track how many user messages exist to know when a brand new user turn was added
+  const userMessageCountRef = useRef(0)
+  const hasMountedRef = useRef(false)
+
+  // During streaming or when new messages arrive, either align the latest user message
+  // with the top of the viewport or keep following the assistant output at the bottom.
   useEffect(() => {
-    if (autoScroll && messagesWrapperRef.current) {
-      messagesWrapperRef.current.scrollTop = messagesWrapperRef.current.scrollHeight
+    const container = messagesWrapperRef.current
+    if (!container) return
+
+    const currentUserCount = history.reduce((count, turn) => count + (turn.role === 'user' ? 1 : 0), 0)
+    const hasNewUserMessage = hasMountedRef.current && currentUserCount > userMessageCountRef.current
+
+    if (hasNewUserMessage && latestUserMessageRef.current) {
+      const messageElement = latestUserMessageRef.current
+      const containerRect = container.getBoundingClientRect()
+      const messageRect = messageElement.getBoundingClientRect()
+      const offset = messageRect.top - containerRect.top
+      container.scrollTo({
+        top: container.scrollTop + offset,
+        behavior: 'smooth',
+      })
+    } else if (autoScroll) {
+      container.scrollTop = container.scrollHeight
     }
+
+    userMessageCountRef.current = currentUserCount
+    hasMountedRef.current = true
   }, [history, loading, autoScroll])
 
   const handleMessagesScroll = () => {
@@ -389,7 +412,12 @@ export function ChatPage() {
             ref={messagesWrapperRef}
             onScroll={handleMessagesScroll}
           >
-            <MessageList history={history} loading={loading} messagesEndRef={messagesEndRef} />
+            <MessageList
+              history={history}
+              loading={loading}
+              messagesEndRef={messagesEndRef}
+              latestUserMessageRef={latestUserMessageRef}
+            />
 
             {(summary || (suggestions && suggestions.length > 0)) && history.length > 0 && (
               <div className="chat-results">
@@ -432,7 +460,12 @@ export function ChatPage() {
       ) : (
         <div className="chat-initial-layout">
           <div className="chat-initial-inner">
-            <MessageList history={history} loading={loading} messagesEndRef={messagesEndRef} />
+            <MessageList
+              history={history}
+              loading={loading}
+              messagesEndRef={messagesEndRef}
+              latestUserMessageRef={latestUserMessageRef}
+            />
             <div className="chat-input-floating">{renderInputArea()}</div>
           </div>
         </div>

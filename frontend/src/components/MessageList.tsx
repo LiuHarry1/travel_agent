@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { ChatTurn, ToolCall } from '../types'
@@ -8,6 +8,7 @@ interface MessageListProps {
   history: ChatTurn[]
   loading?: boolean
   messagesEndRef?: React.RefObject<HTMLDivElement | null>
+  latestUserMessageRef?: React.RefObject<HTMLDivElement | null>
 }
 
 /**
@@ -37,12 +38,21 @@ function convertImageUrlsToMarkdown(content: string): string {
   })
 }
 
-export function MessageList({ history, loading, messagesEndRef }: MessageListProps) {
+export function MessageList({ history, loading, messagesEndRef, latestUserMessageRef }: MessageListProps) {
   // Track copied and feedback state for each message by index
   const [copiedStates, setCopiedStates] = useState<Record<number, boolean>>({})
   const [feedbackStates, setFeedbackStates] = useState<Record<number, 'up' | 'down' | null>>({})
   // Track which tool call is selected for sidebar display
   const [selectedToolCall, setSelectedToolCall] = useState<{ messageIndex: number; toolCall: ToolCall } | null>(null)
+
+  const latestUserIndex = useMemo(() => {
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].role === 'user') {
+        return i
+      }
+    }
+    return null
+  }, [history])
 
   const handleCopy = async (content: string, index: number) => {
     try {
@@ -83,11 +93,16 @@ export function MessageList({ history, loading, messagesEndRef }: MessageListPro
         const isLastAssistantMessage = isLastAssistant && index === lastAssistantIndex
         const copied = copiedStates[index] || false
         const feedback = feedbackStates[index] || null
+        const isLatestUserMessage = latestUserIndex !== null && index === latestUserIndex
         
         // Use index as key to ensure stable rendering and prevent duplicates
         // The key should be stable and unique per message position
         return (
-          <div key={`message-${index}`} className={`message-wrapper ${turn.role} ${isLastAssistantMessage ? 'last-assistant' : ''}`}>
+          <div
+            key={`message-${index}`}
+            ref={isLatestUserMessage ? latestUserMessageRef : undefined}
+            className={`message-wrapper ${turn.role} ${isLastAssistantMessage ? 'last-assistant' : ''}`}
+          >
             <div className="message-content">
               <div className="message-bubble">
                 {turn.role === 'assistant' ? (
