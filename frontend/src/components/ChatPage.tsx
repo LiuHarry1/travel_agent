@@ -116,7 +116,11 @@ export function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const messagesWrapperRef = useRef<HTMLDivElement>(null)
   const latestUserMessageRef = useRef<HTMLDivElement>(null)
+  const inputContainerRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
+
+  // Define hasHistory before useEffects
+  const hasHistory = history.length > 0
 
   // Auto-resize textarea
   useEffect(() => {
@@ -149,9 +153,10 @@ export function ChatPage() {
   const userMessageCountRef = useRef(0)
   const hasMountedRef = useRef(false)
 
-  // During streaming or when new messages arrive, either align the latest user message
-  // with the top of the viewport or keep following the assistant output at the bottom.
+  // ChatGPT-style scroll: scroll user message to top when new user message arrives
   useEffect(() => {
+    if (!hasHistory) return
+
     const container = messagesWrapperRef.current
     if (!container) return
 
@@ -159,21 +164,43 @@ export function ChatPage() {
     const hasNewUserMessage = hasMountedRef.current && currentUserCount > userMessageCountRef.current
 
     if (hasNewUserMessage && latestUserMessageRef.current) {
-      const messageElement = latestUserMessageRef.current
-      const containerRect = container.getBoundingClientRect()
-      const messageRect = messageElement.getBoundingClientRect()
-      const offset = messageRect.top - containerRect.top
-      container.scrollTo({
-        top: container.scrollTop + offset,
-        behavior: 'smooth',
-      })
-    } else if (autoScroll) {
+      // Use setTimeout to ensure DOM has rendered
+      setTimeout(() => {
+        const messageElement = latestUserMessageRef.current
+        if (!messageElement || !container) return
+
+        // Use scrollTo with calculated position instead of scrollIntoView
+        // This gives us more control and prevents scrolling too far up
+        const containerPadding = 16 // 1rem padding-top of container
+        const messageTop = messageElement.offsetTop
+        const scrollMargin = 32 // 2rem scroll margin for user messages
+        
+        // Calculate target scroll position
+        const targetScrollTop = Math.max(0, messageTop - containerPadding - scrollMargin)
+        
+        console.log('[Scroll]', {
+          userCount: currentUserCount,
+          messageTop,
+          containerPadding,
+          scrollMargin,
+          targetScrollTop,
+          containerScrollHeight: container.scrollHeight,
+          containerClientHeight: container.clientHeight,
+        })
+
+        container.scrollTo({
+          top: targetScrollTop,
+          behavior: 'smooth',
+        })
+      }, 100)
+    } else if (autoScroll && !hasNewUserMessage) {
+      // Continue auto-scrolling to bottom during streaming
       container.scrollTop = container.scrollHeight
     }
 
     userMessageCountRef.current = currentUserCount
     hasMountedRef.current = true
-  }, [history, loading, autoScroll])
+  }, [history, loading, autoScroll, hasHistory])
 
   const handleMessagesScroll = () => {
     const container = messagesWrapperRef.current
@@ -333,8 +360,6 @@ export function ChatPage() {
       </form>
     </FileUploadArea>
   )
-
-  const hasHistory = history.length > 0
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
