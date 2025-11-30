@@ -10,7 +10,8 @@ export async function sendChatMessageStream(
   onChunk: (chunk: string) => void,
   onDone: () => void,
   onError: (error: string) => void,
-  onEvent?: (event: StreamEvent) => void
+  onEvent?: (event: StreamEvent) => void,
+  abortSignal?: AbortSignal
 ): Promise<void> {
   const response = await fetch(getApiUrl('/agent/message/stream'), {
     method: 'POST',
@@ -18,6 +19,7 @@ export async function sendChatMessageStream(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
+    signal: abortSignal,
   })
 
   if (!response.ok) {

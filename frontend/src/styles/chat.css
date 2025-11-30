@@ -335,28 +335,7 @@
   font-style: italic;
 }
 
-.message-bubble code {
-  background: var(--bg-tertiary);
-  padding: 0.125rem 0.375rem;
-  border-radius: 4px;
-  font-size: 0.875em;
-  font-family: 'Courier New', monospace;
-  color: var(--accent-primary);
-}
-
-.message-bubble pre {
-  background: var(--bg-tertiary);
-  padding: 0.75rem;
-  border-radius: 6px;
-  overflow-x: auto;
-  margin: 0.5rem 0;
-}
-
-.message-bubble pre code {
-  background: transparent;
-  padding: 0;
-  color: var(--text-secondary);
-}
+/* Pre and code styles are handled by code-block-wrapper */
 
 .message-bubble blockquote {
   border-left: 3px solid var(--accent-primary);
@@ -966,6 +945,33 @@ body.sidebar-hidden .chat-input-container-wrapper {
 .send-button:not(:disabled):hover {
   background: #2563eb;
   transform: scale(1.05);
+}
+
+/* Stop Button (replaces send button during generation) */
+.stop-button {
+  width: 36px;
+  height: 36px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.stop-button:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--text-secondary);
+  transform: scale(1.05);
+}
+
+.stop-button:active {
+  transform: scale(0.95);
 }
 
 .loading-spinner {
@@ -1745,5 +1751,130 @@ body.sidebar-hidden .chat-input-container-wrapper {
     width: 40px;
     height: 40px;
   }
+}
+
+/* ===== Code Block with Copy Button ===== */
+.code-block-wrapper {
+  position: relative;
+  margin: 1rem -0.875rem; /* Negative margin to break out of message-bubble padding */
+  border-radius: 8px;
+  overflow: hidden;
+  background: #1e293b;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  box-shadow: none;
+}
+
+/* First and last code block adjustments */
+.message-bubble > div:first-child .code-block-wrapper {
+  margin-top: 0;
+}
+
+.message-bubble > div:last-child .code-block-wrapper {
+  margin-bottom: 0;
+}
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.code-block-language {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+}
+
+.code-copy-button {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+}
+
+.code-copy-button:hover {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-primary);
+}
+
+.code-copy-button svg {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  opacity: 0.8;
+}
+
+.code-copy-text {
+  white-space: nowrap;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+}
+
+/* SyntaxHighlighter overrides */
+.code-block-wrapper pre {
+  margin: 0 !important;
+  padding: 1rem !important;
+  background: #1e293b !important;
+}
+
+.code-block-wrapper pre code {
+  font-family: 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', 'Courier New', monospace !important;
+  font-size: 0.875rem !important;
+  line-height: 1.7 !important;
+  font-weight: 400;
+}
+
+/* Scrollbar for code blocks */
+.code-block-wrapper pre::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.code-block-wrapper pre::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.code-block-wrapper pre::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 4px;
+}
+
+.code-block-wrapper pre::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+/* Override default pre/code styles for SyntaxHighlighter */
+.message-bubble pre.code-block-wrapper {
+  background: #1e293b;
+  padding: 0;
+  border-radius: 8px;
+  margin: 1rem -0.875rem;
+}
+
+/* Inline code (not in code blocks) */
+.message-bubble .inline-code {
+  padding: 0.2rem 0.4rem;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+  font-size: 0.875em;
+  color: var(--accent-primary);
+  font-weight: 500;
 }
 

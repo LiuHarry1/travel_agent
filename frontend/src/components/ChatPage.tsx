@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { useChat } from '../hooks/useChat'
 import { useFileUpload } from '../hooks/useFileUpload'
 import { uploadFile } from '../api'
@@ -22,11 +20,11 @@ export function ChatPage() {
     message,
     setMessage,
     history,
-    suggestions,
     loading,
     alert,
     setAlert,
     sendMessage,
+    stopGeneration,
   } = useChat()
 
   const {
@@ -335,18 +333,27 @@ export function ChatPage() {
               </svg>
             </button>
             <button
-              type="submit"
+              type={loading ? 'button' : 'submit'}
               disabled={
-                loading ||
+                !loading &&
                 (!message.trim() &&
                   filesWithContent.filter((fwc) => fwc.content && !fwc.error).length === 0)
               }
-              className="send-button"
-              data-tooltip="Send (Enter)"
-              aria-label="Send message"
+              className={loading ? 'stop-button' : 'send-button'}
+              data-tooltip={loading ? 'Stop generating' : 'Send (Enter)'}
+              aria-label={loading ? 'Stop generating' : 'Send message'}
+              onClick={loading ? (e) => { e.preventDefault(); stopGeneration(); } : undefined}
             >
               {loading ? (
-                <div className="loading-spinner"></div>
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <rect x="6" y="6" width="12" height="12" rx="1" />
+                </svg>
               ) : (
                 <svg
                   width="18"

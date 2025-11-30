@@ -6,6 +6,7 @@ import { useChatSessions } from './useChatSessions'
 export function useChat() {
   const { activeSession, updateActiveSession, createSession } = useChatSessions()
   const hasInitialized = useRef(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const [sessionId, setSessionId] = useState<string | undefined>(activeSession?.sessionId)
   const [message, setMessage] = useState('')
@@ -111,6 +112,9 @@ export function useChat() {
 
     setLoading(true)
 
+    // Create abort controller for this request
+    abortControllerRef.current = new AbortController()
+
     let assistantMessageIndex = -1
     if (userMessageContent) {
       const updatedHistory: ChatResponse['history'] = [...currentHistory, { role: 'assistant' as const, content: '', toolCalls: [] }]
@@ -181,6 +185,7 @@ export function useChat() {
         },
         () => {
           setLoading(false)
+          abortControllerRef.current = null
           if (currentSessionId) {
             setSessionId(currentSessionId)
             updateActiveSession({ sessionId: currentSessionId })
@@ -188,6 +193,7 @@ export function useChat() {
         },
         (error: string) => {
           setLoading(false)
+          abortControllerRef.current = null
           if (userMessageContent) {
             setHistory(history)
             setMessage(messageText)
@@ -256,7 +262,8 @@ export function useChat() {
               updateHistoryWithToolCalls()
             }
           }
-        }
+        },
+        abortControllerRef.current.signal
       )
 
       // Final update: ensure tool calls are preserved in the final history
@@ -280,12 +287,28 @@ export function useChat() {
       }
     } catch (error) {
       setLoading(false)
+      abortControllerRef.current = null
+      
+      // Check if error is due to abort
+      if (error instanceof Error && error.name === 'AbortError') {
+        // Don't show error for user-initiated stop
+        return
+      }
+      
       if (userMessageContent) {
         setHistory(history)
         setMessage(messageText)
       }
       const errorMessage = error instanceof Error ? error.message : 'Send failed'
       setAlert({ type: 'error', message: errorMessage })
+    }
+  }
+
+  const stopGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+      setLoading(false)
     }
   }
 
@@ -299,6 +322,7 @@ export function useChat() {
     alert,
     setAlert,
     sendMessage,
+    stopGeneration,
   }
 }
 

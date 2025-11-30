@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import type { ChatTurn, ToolCall } from '../types'
 import { ToolCallSidebar } from './ToolCallSidebar'
+import { CodeCopyButton } from './CodeCopyButton'
 
 interface MessageListProps {
   history: ChatTurn[]
@@ -123,6 +126,48 @@ export function MessageList({ history, loading, latestUserMessageRef }: MessageL
                         <ReactMarkdown 
                           remarkPlugins={[remarkGfm]}
                           components={{
+                            code: ({ node, inline, className, children, ...props }: any) => {
+                              const match = /language-(\w+)/.exec(className || '')
+                              const language = match ? match[1] : 'text'
+                              const codeString = String(children).replace(/\n$/, '')
+                              
+                              if (!inline && codeString) {
+                                // Block code with syntax highlighting and copy button
+                                return (
+                                  <div className="code-block-wrapper">
+                                    <div className="code-block-header">
+                                      <span className="code-block-language">{language}</span>
+                                      <CodeCopyButton code={codeString} />
+                                    </div>
+                                    <SyntaxHighlighter
+                                      language={language}
+                                      style={oneDark}
+                                      customStyle={{
+                                        margin: 0,
+                                        borderRadius: '0 0 8px 8px',
+                                        background: '#1e293b',
+                                      }}
+                                      codeTagProps={{
+                                        style: {
+                                          fontFamily: '"Fira Code", "Cascadia Code", "Consolas", "Monaco", monospace',
+                                          fontSize: '0.875rem',
+                                          lineHeight: '1.7',
+                                        }
+                                      }}
+                                    >
+                                      {codeString}
+                                    </SyntaxHighlighter>
+                                  </div>
+                                )
+                              }
+                              
+                              // Inline code
+                              return (
+                                <code className="inline-code" {...props}>
+                                  {children}
+                                </code>
+                              )
+                            },
                             img: ({ node, ...props }) => (
                               <img 
                                 {...props} 
