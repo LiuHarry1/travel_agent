@@ -450,18 +450,6 @@ export function ChatPage() {
               loading={loading}
               latestUserMessageRef={latestUserMessageRef}
             />
-
-            {suggestions && suggestions.length > 0 && (
-              <div className="chat-results">
-                <div className="result-markdown">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {`## Improvement Suggestions (${suggestions.length})\n\n${suggestions
-                      .map((item) => `- **${item.checklist_id}**: ${item.message}`)
-                      .join('\n')}\n`}
-                  </ReactMarkdown>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Chat Input Area */}
