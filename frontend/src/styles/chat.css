@@ -259,6 +259,11 @@
   color: #2563eb;
 }
 
+.message-action-btn.regenerate-btn:hover {
+  background: rgba(139, 92, 246, 0.12);
+  color: var(--accent-secondary);
+}
+
 /* Markdown styles within message bubbles */
 .message-bubble h1,
 .message-bubble h2,

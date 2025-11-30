@@ -25,6 +25,7 @@ export function ChatPage() {
     setAlert,
     sendMessage,
     stopGeneration,
+    regenerateResponse,
   } = useChat()
 
   const {
@@ -456,6 +457,7 @@ export function ChatPage() {
               history={history}
               loading={loading}
               latestUserMessageRef={latestUserMessageRef}
+              onRegenerate={regenerateResponse}
             />
           </div>
 
@@ -469,6 +471,7 @@ export function ChatPage() {
               history={history}
               loading={loading}
               latestUserMessageRef={latestUserMessageRef}
+              onRegenerate={regenerateResponse}
             />
             <div className="chat-input-floating">{renderInputArea()}</div>
           </div>

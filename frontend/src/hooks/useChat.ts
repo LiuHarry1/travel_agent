@@ -312,6 +312,168 @@ export function useChat() {
     }
   }
 
+  const regenerateResponse = async () => {
+    // Find the last user message in history
+    let lastUserMessageIndex = -1
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].role === 'user') {
+        lastUserMessageIndex = i
+        break
+      }
+    }
+
+    if (lastUserMessageIndex === -1) {
+      setAlert({ type: 'error', message: 'No user message found to regenerate from' })
+      return
+    }
+
+    const lastUserMessage = history[lastUserMessageIndex].content
+
+    // Remove all messages after the last user message (including the old assistant response)
+    const newHistory = history.slice(0, lastUserMessageIndex + 1)
+    
+    // Set the truncated history first
+    setHistory(newHistory)
+    updateActiveSession({ history: newHistory })
+
+    setAlert(null)
+    setLoading(true)
+
+    // Create abort controller for this request
+    abortControllerRef.current = new AbortController()
+
+    // Add empty assistant message
+    const updatedHistory: ChatResponse['history'] = [...newHistory, { role: 'assistant' as const, content: '', toolCalls: [] }]
+    const assistantMessageIndex = updatedHistory.length - 1
+    setHistory(updatedHistory)
+    updateActiveSession({ history: updatedHistory })
+
+    // Use a ref to track assistant message index
+    const assistantIndexRef = { current: assistantMessageIndex }
+
+    try {
+      // Filter history for backend
+      const filteredHistory = newHistory.map((turn) => {
+        if (turn.role === 'user' || turn.role === 'assistant') {
+          return {
+            role: turn.role as string,
+            content: turn.content || '',
+          }
+        }
+        return null
+      }).filter((msg): msg is { role: string; content: string } => msg !== null)
+
+      const payload = {
+        session_id: sessionId,
+        message: lastUserMessage,
+        messages: filteredHistory,
+      }
+
+      let accumulatedContent = ''
+      let currentSessionId = sessionId || undefined
+      const currentToolCalls = new Map<string, ToolCall>()
+
+      await sendChatMessageStream(
+        payload,
+        (chunk: string) => {
+          accumulatedContent += chunk
+          setHistory((prev) => {
+            const updated: ChatResponse['history'] = [...prev]
+            let targetIndex = assistantIndexRef.current
+            if (targetIndex >= 0 && targetIndex < updated.length) {
+              const existingTurn = updated[targetIndex]
+              updated[targetIndex] = {
+                role: 'assistant' as const,
+                content: accumulatedContent,
+                toolCalls: existingTurn.toolCalls || Array.from(currentToolCalls.values()),
+              }
+            }
+            setTimeout(() => {
+              updateActiveSession({ history: updated })
+            }, 0)
+            return updated
+          })
+        },
+        () => {
+          setLoading(false)
+          abortControllerRef.current = null
+          if (currentSessionId) {
+            setSessionId(currentSessionId)
+            updateActiveSession({ sessionId: currentSessionId })
+          }
+        },
+        (error: string) => {
+          setLoading(false)
+          abortControllerRef.current = null
+          setAlert({ type: 'error', message: error })
+        },
+        (event: StreamEvent) => {
+          const toolCallId = event.tool_call_id || event.tool
+          if (!toolCallId) return
+
+          const updateHistoryWithToolCalls = () => {
+            setHistory((prev) => {
+              const updated: ChatResponse['history'] = [...prev]
+              let targetIndex = assistantIndexRef.current
+              if (targetIndex >= 0 && targetIndex < updated.length) {
+                const existingTurn = updated[targetIndex]
+                updated[targetIndex] = {
+                  ...existingTurn,
+                  toolCalls: Array.from(currentToolCalls.values()),
+                }
+              }
+              setTimeout(() => {
+                updateActiveSession({ history: updated })
+              }, 0)
+              return updated
+            })
+          }
+
+          if (event.type === 'tool_call_start' && event.tool) {
+            if (currentToolCalls.has(toolCallId)) {
+              return
+            }
+            const toolCall: ToolCall = {
+              id: toolCallId,
+              name: event.tool,
+              arguments: (event.input as Record<string, unknown>) || {},
+              status: 'calling',
+            }
+            currentToolCalls.set(toolCallId, toolCall)
+            updateHistoryWithToolCalls()
+          } else if (event.type === 'tool_call_end' && event.tool) {
+            const toolCall = currentToolCalls.get(toolCallId)
+            if (toolCall) {
+              toolCall.status = 'completed'
+              toolCall.result = event.result
+              currentToolCalls.set(toolCallId, toolCall)
+              updateHistoryWithToolCalls()
+            }
+          } else if (event.type === 'tool_call_error' && event.tool) {
+            const toolCall = currentToolCalls.get(toolCallId)
+            if (toolCall) {
+              toolCall.status = 'error'
+              toolCall.error = event.error
+              currentToolCalls.set(toolCallId, toolCall)
+              updateHistoryWithToolCalls()
+            }
+          }
+        },
+        abortControllerRef.current.signal
+      )
+    } catch (error) {
+      setLoading(false)
+      abortControllerRef.current = null
+      
+      if (error instanceof Error && error.name === 'AbortError') {
+        return
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : 'Regenerate failed'
+      setAlert({ type: 'error', message: errorMessage })
+    }
+  }
+
   return {
     sessionId,
     message,
@@ -323,6 +485,7 @@ export function useChat() {
     setAlert,
     sendMessage,
     stopGeneration,
+    regenerateResponse,
   }
 }
 
