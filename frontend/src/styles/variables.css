@@ -14,6 +14,14 @@
   --success: #10b981;
   --error: #ef4444;
   --sidebar-width: 260px;
+  --header-height: 64px;
+  
+  /* Chat layout variables */
+  --chat-input-height: 96px;
+  --chat-input-padding: 16px;
+  --chat-messages-padding-bottom: 140px;
+  /* Total offset for ChatGPT-style scroll: 280px works best for keeping user message at viewport top */
+  --chat-scroll-offset: 280px;
 }
 
 * {

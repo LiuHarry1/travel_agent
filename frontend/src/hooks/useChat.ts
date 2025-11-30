@@ -13,7 +13,6 @@ export function useChat() {
   const [suggestions, setSuggestions] = useState<Suggestion[] | undefined>(activeSession?.suggestions)
   const [loading, setLoading] = useState(false)
   const [alert, setAlert] = useState<Alert | null>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Sync local state when active session changes
   useEffect(() => {
@@ -299,7 +298,6 @@ export function useChat() {
     loading,
     alert,
     setAlert,
-    messagesEndRef,
     sendMessage,
   }
 }

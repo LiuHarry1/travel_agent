@@ -23,11 +23,9 @@ export function ChatPage() {
     setMessage,
     history,
     suggestions,
-    summary,
     loading,
     alert,
     setAlert,
-    messagesEndRef,
     sendMessage,
   } = useChat()
 
@@ -116,7 +114,6 @@ export function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const messagesWrapperRef = useRef<HTMLDivElement>(null)
   const latestUserMessageRef = useRef<HTMLDivElement>(null)
-  const inputContainerRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
 
   // Define hasHistory before useEffects
@@ -149,11 +146,15 @@ export function ChatPage() {
     }
   }, [history.length, loading])
 
-  // Track how many user messages exist to know when a brand new user turn was added
+  // Track state for scroll behavior
   const userMessageCountRef = useRef(0)
   const hasMountedRef = useRef(false)
+  const wasLoadingRef = useRef(false)
 
-  // ChatGPT-style scroll: scroll user message to top when new user message arrives
+  // ChatGPT-style scroll behavior:
+  // 1. When user sends new message -> scroll to put user message at top (CSS min-height handles the rest)
+  // 2. During streaming -> auto-scroll to bottom when content exceeds viewport
+  // 3. When streaming ends -> scroll to bottom to show action icons
   useEffect(() => {
     if (!hasHistory) return
 
@@ -162,42 +163,49 @@ export function ChatPage() {
 
     const currentUserCount = history.reduce((count, turn) => count + (turn.role === 'user' ? 1 : 0), 0)
     const hasNewUserMessage = hasMountedRef.current && currentUserCount > userMessageCountRef.current
+    const streamingJustEnded = !loading && wasLoadingRef.current
 
-    if (hasNewUserMessage && latestUserMessageRef.current) {
-      // Use setTimeout to ensure DOM has rendered
+    if (hasNewUserMessage) {
+      // User just sent a new message
+      // Enable auto-scroll and scroll to user message position
+      setAutoScroll(true)
+      
+      // Wait for DOM to update, then scroll to user message
       setTimeout(() => {
         const messageElement = latestUserMessageRef.current
         if (!messageElement || !container) return
 
-        // Use scrollTo with calculated position instead of scrollIntoView
-        // This gives us more control and prevents scrolling too far up
-        const containerPadding = 16 // 1rem padding-top of container
-        const messageTop = messageElement.offsetTop
-        const scrollMargin = 32 // 2rem scroll margin for user messages
-        
-        // Calculate target scroll position
-        const targetScrollTop = Math.max(0, messageTop - containerPadding - scrollMargin)
-        
-        console.log('[Scroll]', {
-          userCount: currentUserCount,
-          messageTop,
-          containerPadding,
-          scrollMargin,
-          targetScrollTop,
-          containerScrollHeight: container.scrollHeight,
-          containerClientHeight: container.clientHeight,
-        })
-
+        // Scroll so user message is near the top with some padding
+        const targetScrollTop = Math.max(0, messageElement.offsetTop - 16)
         container.scrollTo({
           top: targetScrollTop,
           behavior: 'smooth',
         })
-      }, 100)
-    } else if (autoScroll && !hasNewUserMessage) {
-      // Continue auto-scrolling to bottom during streaming
-      container.scrollTop = container.scrollHeight
+      }, 50)
+    } else if (loading && autoScroll) {
+      // During streaming: scroll to bottom when content exceeds viewport
+      requestAnimationFrame(() => {
+        if (!container) return
+        const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight
+        // Only scroll if there's significant content below viewport
+        if (distanceToBottom > 100) {
+          container.scrollTop = container.scrollHeight
+        }
+      })
+    } else if (streamingJustEnded && autoScroll) {
+      // Streaming just ended - scroll to bottom to show action icons
+      setTimeout(() => {
+        if (container) {
+          container.scrollTo({
+            top: container.scrollHeight,
+            behavior: 'smooth',
+          })
+        }
+      }, 150)
     }
 
+    // Update refs
+    wasLoadingRef.current = loading
     userMessageCountRef.current = currentUserCount
     hasMountedRef.current = true
   }, [history, loading, autoScroll, hasHistory])
@@ -440,39 +448,16 @@ export function ChatPage() {
             <MessageList
               history={history}
               loading={loading}
-              messagesEndRef={messagesEndRef}
               latestUserMessageRef={latestUserMessageRef}
             />
 
-            {(summary || (suggestions && suggestions.length > 0)) && history.length > 0 && (
+            {suggestions && suggestions.length > 0 && (
               <div className="chat-results">
                 <div className="result-markdown">
-                  <ReactMarkdown 
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      img: ({ node, ...props }) => (
-                        <img 
-                          {...props} 
-                          style={{ 
-                            maxWidth: 'min(100%, 600px)', 
-                            height: 'auto', 
-                            width: 'auto', 
-                            objectFit: 'contain', 
-                            borderRadius: '8px', 
-                            margin: '0.5rem 0', 
-                            display: 'block' 
-                          }} 
-                        />
-                      )
-                    }}
-                  >
-                    {`${summary ? `## Review Summary\n\n${summary}\n\n` : ''}${
-                      suggestions && suggestions.length > 0
-                        ? `## Improvement Suggestions (${suggestions.length})\n\n${suggestions
-                            .map((item) => `- **${item.checklist_id}**: ${item.message}`)
-                            .join('\n')}\n`
-                        : ''
-                    }`}
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {`## Improvement Suggestions (${suggestions.length})\n\n${suggestions
+                      .map((item) => `- **${item.checklist_id}**: ${item.message}`)
+                      .join('\n')}\n`}
                   </ReactMarkdown>
                 </div>
               </div>
@@ -488,7 +473,6 @@ export function ChatPage() {
             <MessageList
               history={history}
               loading={loading}
-              messagesEndRef={messagesEndRef}
               latestUserMessageRef={latestUserMessageRef}
             />
             <div className="chat-input-floating">{renderInputArea()}</div>

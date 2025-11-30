@@ -7,7 +7,6 @@ import { ToolCallSidebar } from './ToolCallSidebar'
 interface MessageListProps {
   history: ChatTurn[]
   loading?: boolean
-  messagesEndRef?: React.RefObject<HTMLDivElement | null>
   latestUserMessageRef?: React.RefObject<HTMLDivElement | null>
 }
 
@@ -38,7 +37,7 @@ function convertImageUrlsToMarkdown(content: string): string {
   })
 }
 
-export function MessageList({ history, loading, messagesEndRef, latestUserMessageRef }: MessageListProps) {
+export function MessageList({ history, loading, latestUserMessageRef }: MessageListProps) {
   // Track copied and feedback state for each message by index
   const [copiedStates, setCopiedStates] = useState<Record<number, boolean>>({})
   const [feedbackStates, setFeedbackStates] = useState<Record<number, 'up' | 'down' | null>>({})
@@ -81,27 +80,38 @@ export function MessageList({ history, loading, messagesEndRef, latestUserMessag
     )
   }
 
-  // Find the last assistant message
-  const lastTurn = history[history.length - 1]
+  // Check if last message is from assistant
   const lastAssistantIndex = history.length - 1
-  // isLastAssistant is true if the last message is from assistant (even if still loading)
-  const isLastAssistant = lastTurn?.role === 'assistant'
+  const isLastAssistant = history[history.length - 1]?.role === 'assistant'
+  
+  // Find the assistant message index that comes right after the latest user message
+  const latestAssistantAfterUserIndex = useMemo(() => {
+    if (latestUserIndex === null) return null
+    // Check if the next message after latest user is an assistant message
+    const nextIndex = latestUserIndex + 1
+    if (nextIndex < history.length && history[nextIndex]?.role === 'assistant') {
+      return nextIndex
+    }
+    return null
+  }, [history, latestUserIndex])
 
   return (
     <div className="chat-messages">
       {history.map((turn, index) => {
-        const isLastAssistantMessage = isLastAssistant && index === lastAssistantIndex
         const copied = copiedStates[index] || false
         const feedback = feedbackStates[index] || null
         const isLatestUserMessage = latestUserIndex !== null && index === latestUserIndex
+        const isLastAssistantMessage = isLastAssistant && index === lastAssistantIndex
+        // Apply latest-assistant class to the assistant message right after the latest user message
+        // This gives it min-height to push the user message to the top of the viewport (ChatGPT style)
+        const isLatestAssistant = latestAssistantAfterUserIndex !== null && 
+                                  index === latestAssistantAfterUserIndex
         
-        // Use index as key to ensure stable rendering and prevent duplicates
-        // The key should be stable and unique per message position
         return (
           <div
             key={`message-${index}`}
             ref={isLatestUserMessage ? latestUserMessageRef : undefined}
-            className={`message-wrapper ${turn.role} ${isLastAssistantMessage ? 'last-assistant' : ''}`}
+            className={`message-wrapper ${turn.role} ${isLatestAssistant ? 'latest-assistant' : ''}`}
           >
             <div className="message-content">
               <div className="message-bubble">
@@ -197,7 +207,8 @@ export function MessageList({ history, loading, messagesEndRef, latestUserMessag
                           )
                         })()}
                         
-                        <div className={`message-actions ${isLastAssistantMessage ? 'visible' : 'hidden-on-hover'}`}>
+                        {/* Only show action buttons when not streaming (loading=false or not the last assistant message) */}
+                        <div className={`message-actions ${isLastAssistantMessage && !loading ? 'visible' : isLastAssistantMessage && loading ? 'hidden' : 'hidden-on-hover'}`}>
                         <button
                           className="message-action-btn copy-btn"
                           onClick={() => handleCopy(turn.content, index)}
@@ -317,8 +328,6 @@ export function MessageList({ history, loading, messagesEndRef, latestUserMessag
           </div>
         </div>
       )}
-      {/* Scroll anchor at bottom for newest messages */}
-      <div ref={messagesEndRef} className="chat-scroll-anchor" />
       
       {/* Tool Call Sidebar */}
       {selectedToolCall && (
