@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import type { ChatResponse, Alert, ToolCall, StreamEvent, Suggestion } from '../types'
-import { sendChatMessageStream } from '../api/index'
+import { sendChatMessageStream, generateTitle } from '../api/index'
 import { useChatSessions } from './useChatSessions'
 
 export function useChat() {
   const { activeSession, updateActiveSession, createSession } = useChatSessions()
   const hasInitialized = useRef(false)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const titleGenerationInProgress = useRef(false)
 
   const [sessionId, setSessionId] = useState<string | undefined>(activeSession?.sessionId)
   const [message, setMessage] = useState('')
@@ -100,14 +101,7 @@ export function useChat() {
 
     if (userMessageContent) {
       setHistory(currentHistory)
-      // Derive chat title from the first user message if not already set
-      if (!activeSession?.title || activeSession.title === 'New chat' || activeSession.title === 'New conversation') {
-        const rawTitle = (messageText || userMessageContent).replace(/\s+/g, ' ').trim()
-        const newTitle = rawTitle.slice(0, 30) || 'New chat'
-        updateActiveSession({ title: newTitle, history: currentHistory })
-      } else {
-        updateActiveSession({ history: currentHistory })
-      }
+      updateActiveSession({ history: currentHistory })
     }
 
     setLoading(true)
@@ -189,6 +183,22 @@ export function useChat() {
           if (currentSessionId) {
             setSessionId(currentSessionId)
             updateActiveSession({ sessionId: currentSessionId })
+          }
+          
+          // Auto-generate title for new conversations (first user+assistant exchange)
+          // Only generate once per session, and only if this is the first exchange
+          // Check: we have 1 user message, and we just got the first assistant response
+          if (currentHistory.length === 1 && 
+              accumulatedContent &&
+              (!activeSession?.title || activeSession.title === 'New chat')) {
+            // Build the complete conversation history (user + assistant)
+            const fullHistory: ChatResponse['history'] = [
+              ...currentHistory,
+              { role: 'assistant' as const, content: accumulatedContent, toolCalls: [] }
+            ]
+            
+            // Generate title asynchronously (function will check and set flag internally)
+            generateTitleAsync(fullHistory, accumulatedContent)
           }
         },
         (error: string) => {
@@ -301,6 +311,73 @@ export function useChat() {
       }
       const errorMessage = error instanceof Error ? error.message : 'Send failed'
       setAlert({ type: 'error', message: errorMessage })
+    }
+  }
+
+  const generateTitleAsync = async (
+    fullHistory: ChatResponse['history'],
+    _assistantContent: string
+  ) => {
+    // Early return if already in progress - prevent duplicate calls
+    if (titleGenerationInProgress.current) {
+      console.log('[Title Gen] Skipping: title generation already in progress')
+      return
+    }
+    
+    try {
+      // Check if this is the first exchange (1 user + 1 assistant message)
+      if (fullHistory.length !== 2) {
+        console.log('[Title Gen] Skipping: not first exchange. Length:', fullHistory.length)
+        return
+      }
+      
+      // Double-check: ensure title hasn't been set already (re-check before API call)
+      const currentTitle = activeSession?.title
+      if (currentTitle && currentTitle !== 'New chat') {
+        console.log('[Title Gen] Skipping: title already set to:', currentTitle)
+        return
+      }
+      
+      console.log('[Title Gen] Starting title generation...')
+      
+      // Set flag immediately to prevent duplicate calls
+      titleGenerationInProgress.current = true
+      
+      // Build messages for title generation
+      const messages = fullHistory.map((turn) => ({
+        role: turn.role,
+        content: turn.content || '',
+      }))
+      
+      console.log('[Title Gen] Messages for API:', messages)
+      
+      // Call API to generate title
+      console.log('[Title Gen] Calling generateTitle API...')
+      const title = await generateTitle(messages)
+      
+      console.log('[Title Gen] ✅ Received title from API:', title)
+      
+      // Final check: ensure title still hasn't been set by another call
+      // This prevents race conditions
+      const updatedSession = activeSession
+      if (updatedSession?.title && updatedSession.title !== 'New chat') {
+        console.log('[Title Gen] Skipping update: title was set to', updatedSession.title, 'by another call')
+        return
+      }
+      
+      // Update session title
+      if (title && title !== 'New chat') {
+        console.log('[Title Gen] ✅ Updating session title to:', title)
+        updateActiveSession({ title })
+      } else {
+        console.log('[Title Gen] ⚠️ Title was "New chat", not updating')
+      }
+    } catch (error) {
+      console.error('[Title Gen] ❌ ERROR:', error)
+      // Don't show error alert - title generation is not critical
+    } finally {
+      // Always reset the flag
+      titleGenerationInProgress.current = false
     }
   }
 

@@ -560,3 +560,76 @@ class ChatService:
 
         return complete_calls if complete_calls else []
 
+    async def generate_conversation_title(
+        self, messages: List[Dict[str, str]]
+    ) -> str:
+        """
+        Generate a concise title for a conversation based on its content.
+        
+        Args:
+            messages: List of conversation messages with 'role' and 'content' keys
+            
+        Returns:
+            A concise title (3-6 words) summarizing the conversation
+        """
+        # Take first few messages (user question + AI response)
+        relevant_messages = messages[:4] if len(messages) > 4 else messages
+        
+        # Build conversation snippet
+        conversation_text = "\n".join([
+            f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')[:200]}"
+            for msg in relevant_messages
+        ])
+        
+        # Create prompt for title generation
+        title_prompt = f"""Based on the following conversation, generate a concise, descriptive title in 3-6 words. The title should capture the main topic or question.
+
+Conversation:
+{conversation_text}
+
+Requirements:
+- 3-6 words maximum
+- Clear and descriptive
+- No quotes or special formatting
+- In the same language as the conversation
+
+Title:"""
+
+        try:
+            # Use LLM to generate title
+            title_messages = [{"role": "user", "content": title_prompt}]
+            
+            # Use chat_stream to get response
+            # chat_stream is actually an async generator because _make_stream_request is async
+            full_response = ""
+            async for chunk in self.llm_client.chat_stream(
+                messages=title_messages,
+                system_prompt=None
+            ):
+                if chunk:
+                    full_response += chunk
+            
+            # Clean up title
+            title = full_response.strip()
+            
+            # Remove quotes if present
+            if title.startswith('"') and title.endswith('"'):
+                title = title[1:-1]
+            if title.startswith("'") and title.endswith("'"):
+                title = title[1:-1]
+            
+            # Limit length
+            if len(title) > 60:
+                title = title[:57] + "..."
+            
+            logger.info(f"Generated title: {title}")
+            return title or "New chat"
+            
+        except Exception as e:
+            logger.error(f"Failed to generate title: {e}")
+            # Fallback to first user message
+            for msg in messages:
+                if msg.get("role") == "user" and msg.get("content"):
+                    return msg["content"][:30].strip() or "New chat"
+            return "New chat"
+

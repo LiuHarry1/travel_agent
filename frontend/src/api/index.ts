@@ -5,6 +5,9 @@
 // Chat API
 export { sendChatMessageStream } from './chat'
 
+// Title API
+export { generateTitle } from './title'
+
 // Config API
 export { getDefaultConfig, saveConfig } from './config'
 export type { ConfigResponse, SaveConfigPayload, SaveConfigResponse } from './config'

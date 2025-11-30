@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from ..llm import LLMError
-from ..models import ChatRequest
+from ..models import ChatRequest, GenerateTitleRequest, GenerateTitleResponse
 from ..utils.exceptions import format_error_message
 from .dependencies import get_chat_service
 
@@ -52,4 +52,25 @@ async def agent_message_stream(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.post("/agent/generate-title")
+async def generate_title(
+    request: GenerateTitleRequest,
+    chat_service = Depends(get_chat_service),
+) -> GenerateTitleResponse:
+    """Generate a concise title for a conversation based on its content."""
+    try:
+        title = await chat_service.generate_conversation_title(request.messages)
+        return GenerateTitleResponse(title=title)
+    except Exception as exc:
+        # If title generation fails, return a fallback
+        error_msg = format_error_message(exc, "Failed to generate title")
+        # Use first user message as fallback
+        fallback_title = "New chat"
+        for msg in request.messages:
+            if msg.get("role") == "user" and msg.get("content"):
+                fallback_title = msg["content"][:30].strip() or "New chat"
+                break
+        return GenerateTitleResponse(title=fallback_title)
 

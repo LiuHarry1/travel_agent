@@ -40,3 +40,16 @@ class ToolCall(BaseModel):
     id: Optional[str] = Field(default=None, description="Tool call ID")
     name: str = Field(..., description="Tool name")
     arguments: Dict[str, Any] = Field(..., description="Tool call arguments")
+
+
+class GenerateTitleRequest(BaseModel):
+    """Request model for generating conversation title."""
+    messages: List[Dict[str, str]] = Field(
+        ...,
+        description="Conversation history to generate title from. Format: [{'role': 'user/assistant', 'content': '...'}, ...]",
+    )
+
+
+class GenerateTitleResponse(BaseModel):
+    """Response model for generated title."""
+    title: str = Field(..., description="Generated conversation title")

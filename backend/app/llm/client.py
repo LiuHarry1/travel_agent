@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 from .factory import LLMClientFactory
 from .provider import LLMError
@@ -36,7 +36,7 @@ class LLMClient:
         """Get model name."""
         return self._get_client().model
 
-    def chat_stream(self, messages: List[Dict[str, str]], system_prompt: Optional[str] = None):
+    async def chat_stream(self, messages: List[Dict[str, str]], system_prompt: Optional[str] = None) -> AsyncGenerator[str, None]:
         """Send chat messages to LLM and get streaming response."""
         if not self.has_api_key:
             # Fallback: yield complete heuristic response
@@ -51,21 +51,26 @@ class LLMClient:
             
             payload = client._normalize_payload(all_messages, model=client.model)
             
-            # Make streaming request
-            for chunk in client._make_stream_request("chat/completions", payload):
-                yield chunk
+            # Make streaming request and extract content from chunks
+            async for chunk in client._make_stream_request("chat/completions", payload):
+                # Extract content from ChatCompletionChunk object
+                if hasattr(chunk, 'choices') and chunk.choices and len(chunk.choices) > 0:
+                    delta = chunk.choices[0].delta
+                    content = getattr(delta, 'content', None)
+                    if content:
+                        yield content
                 
         except LLMError as exc:
             raise
         except Exception as exc:
             raise LLMError(str(exc)) from exc
 
-    def chat_stream_with_tools(
+    async def chat_stream_with_tools(
         self,
         messages: List[Dict[str, Any]],
         system_prompt: Optional[str] = None,
         functions: Optional[List[Dict[str, Any]]] = None,
-    ) -> Generator[Tuple[str, Optional[Dict[str, Any]]], None, None]:
+    ) -> AsyncGenerator[Tuple[str, Optional[Dict[str, Any]]], None]:
         """
         Send chat messages with function calling support and get streaming response.
         
@@ -102,7 +107,7 @@ class LLMClient:
             all_chunks = []
             
             # Make streaming request
-            for chunk in client._make_stream_request("chat/completions", payload):
+            async for chunk in client._make_stream_request("chat/completions", payload):
                 accumulated_content += chunk
                 all_chunks.append(chunk)
                 yield (chunk, None)
