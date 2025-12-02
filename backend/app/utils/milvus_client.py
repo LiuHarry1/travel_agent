@@ -187,16 +187,16 @@ class MilvusClient:
             # Define fields
             fields = []
 
-            # ID field
-            if not auto_id:
-                fields.append(
-                    FieldSchema(
-                        name=id_field_name,
-                        dtype=DataType.INT64,
-                        is_primary=True,
-                        auto_id=False,
-                    )
+            # ID field - Milvus requires a primary key field even when auto_id=True
+            # The primary key field must be defined in the schema
+            fields.append(
+                FieldSchema(
+                    name=id_field_name,
+                    dtype=DataType.INT64,
+                    is_primary=True,
+                    auto_id=auto_id,  # Set auto_id based on parameter
                 )
+            )
 
             # Text field
             fields.append(
