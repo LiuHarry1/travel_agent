@@ -312,25 +312,55 @@ class MilvusClientTest:
             count_before = stats_before["num_entities"] if stats_before else 0
             print(f"   删除前: {count_before} 条数据")
 
-            # Delete one entity (if we have IDs, we can delete by ID)
-            # For this test, we'll delete by text content
-            result = self.client.delete(
+            # First, query to get the ID of the entity we want to delete
+            query_results = self.client.query(
                 collection_name=self.test_collection_name,
                 expr='text == "这是第一条测试文本"',
+                output_fields=["id", "text"],
+                limit=1,
+            )
+
+            if not query_results or len(query_results) == 0:
+                print("⚠️  未找到要删除的数据")
+                return False
+
+            # Get the ID of the first matching entity
+            entity_id = query_results[0].get("id")
+            print(f"   找到要删除的数据: ID={entity_id}, text={query_results[0].get('text')}")
+
+            # Delete by ID (more reliable than text comparison)
+            result = self.client.delete(
+                collection_name=self.test_collection_name,
+                expr=f'id == {entity_id}',
             )
 
             if result:
+                # Wait a moment for stats to update
+                import time
+                time.sleep(0.5)
+
                 # Get count after deletion
                 stats_after = self.client.get_collection_stats(self.test_collection_name)
                 count_after = stats_after["num_entities"] if stats_after else 0
                 print(f"   删除后: {count_after} 条数据")
 
-                if count_after < count_before:
-                    print("✅ 删除成功")
-                    return True
-                else:
-                    print("⚠️  数据数量未减少")
+                # Verify deletion by querying
+                verify_results = self.client.query(
+                    collection_name=self.test_collection_name,
+                    expr=f'id == {entity_id}',
+                    limit=1,
+                )
+
+                if verify_results and len(verify_results) > 0:
+                    print(f"   ⚠️  数据仍然存在（ID={entity_id}）")
                     return False
+                else:
+                    print(f"   ✅ 数据已删除（ID={entity_id}不存在）")
+                    if count_after < count_before:
+                        print("✅ 删除成功，统计信息已更新")
+                    else:
+                        print("⚠️  统计信息可能未及时更新，但数据已确认删除")
+                    return True
             else:
                 print("❌ 删除失败")
                 return False

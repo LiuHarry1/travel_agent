@@ -422,7 +422,7 @@ class MilvusClient:
 
         Args:
             collection_name: Name of the collection
-            expr: Delete expression (e.g., "id in [1, 2, 3]")
+            expr: Delete expression (e.g., "id in [1, 2, 3]" or 'text == "some text"')
 
         Returns:
             True if deletion successful, False otherwise
@@ -432,9 +432,28 @@ class MilvusClient:
             if collection is None:
                 return False
 
+            # Ensure collection is loaded
+            if not collection.has_index():
+                logger.warning(
+                    f"Collection '{collection_name}' has no index. It may need to be loaded."
+                )
+            else:
+                collection.load()
+
+            # Get count before deletion for logging
+            count_before = collection.num_entities
+
+            # Delete entities
             collection.delete(expr)
             collection.flush()
-            logger.info(f"Deleted entities from '{collection_name}' with expression: {expr}")
+
+            # Get count after deletion
+            count_after = collection.num_entities
+            deleted_count = count_before - count_after
+
+            logger.info(
+                f"Deleted {deleted_count} entities from '{collection_name}' with expression: {expr}"
+            )
             return True
         except Exception as e:
             logger.error(
