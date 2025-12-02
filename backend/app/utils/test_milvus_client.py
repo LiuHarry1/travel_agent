@@ -178,8 +178,9 @@ class MilvusClientTest:
                 [random.random() for _ in range(128)] for _ in range(len(test_texts))
             ]
 
-            # Prepare data
-            data = [[text, embedding] for text, embedding in zip(test_texts, test_embeddings)]
+            # Prepare data - when using field_names, data should be organized by field (column-major)
+            # Format: [[field1_values], [field2_values], ...]
+            data = [test_texts, test_embeddings]
             field_names = ["text", "embedding"]
 
             # Insert data
