@@ -55,28 +55,13 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       const newFiles: FileWithPreview[] = Array.from(e.target.files)
         .filter((file) => file && file.name) // Filter out invalid files
         .map((file) => {
-          // Create a FileWithPreview by creating a new object that extends File
-          // We can't modify File properties directly, so we create a wrapper
-          const fileWithPreview = Object.create(file) as FileWithPreview;
-          // Add our custom properties
-          Object.defineProperty(fileWithPreview, 'fileType', {
-            value: detectFileType(file.name),
-            writable: true,
-            enumerable: true,
-            configurable: true,
-          });
-          Object.defineProperty(fileWithPreview, 'status', {
-            value: 'pending' as const,
-            writable: true,
-            enumerable: true,
-            configurable: true,
-          });
-          Object.defineProperty(fileWithPreview, 'progress', {
-            value: 0,
-            writable: true,
-            enumerable: true,
-            configurable: true,
-          });
+          // Create a FileWithPreview by directly assigning properties to the File object
+          // This preserves all File methods and properties with correct 'this' context
+          const fileWithPreview = file as unknown as FileWithPreview;
+          // Add our custom properties directly (they will be on the object, not on the prototype)
+          (fileWithPreview as any).fileType = detectFileType(file.name);
+          (fileWithPreview as any).status = 'pending';
+          (fileWithPreview as any).progress = 0;
           return fileWithPreview;
         });
       setFiles((prev) => [...prev, ...newFiles]);
@@ -96,28 +81,13 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       const newFiles: FileWithPreview[] = Array.from(e.dataTransfer.files)
         .filter((file) => file && file.name) // Filter out invalid files
         .map((file) => {
-          // Create a FileWithPreview by creating a new object that extends File
-          // We can't modify File properties directly, so we create a wrapper
-          const fileWithPreview = Object.create(file) as FileWithPreview;
-          // Add our custom properties
-          Object.defineProperty(fileWithPreview, 'fileType', {
-            value: detectFileType(file.name),
-            writable: true,
-            enumerable: true,
-            configurable: true,
-          });
-          Object.defineProperty(fileWithPreview, 'status', {
-            value: 'pending' as const,
-            writable: true,
-            enumerable: true,
-            configurable: true,
-          });
-          Object.defineProperty(fileWithPreview, 'progress', {
-            value: 0,
-            writable: true,
-            enumerable: true,
-            configurable: true,
-          });
+          // Create a FileWithPreview by wrapping the File object
+          // We use a Proxy or direct assignment to preserve File methods
+          const fileWithPreview = file as unknown as FileWithPreview;
+          // Add our custom properties directly (they will be on the object, not on the prototype)
+          (fileWithPreview as any).fileType = detectFileType(file.name);
+          (fileWithPreview as any).status = 'pending';
+          (fileWithPreview as any).progress = 0;
           return fileWithPreview;
         });
       setFiles((prev) => [...prev, ...newFiles]);
