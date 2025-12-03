@@ -2,7 +2,7 @@ export type FileType = 'markdown' | 'pdf' | 'word' | 'html' | 'text';
 
 export interface FileWithPreview extends File {
   preview?: string;
-  type: FileType;
+  fileType: FileType; // Renamed from 'type' to avoid conflict with File.type (MIME type)
   status: 'pending' | 'processing' | 'success' | 'error';
   progress: number;
   result?: any;

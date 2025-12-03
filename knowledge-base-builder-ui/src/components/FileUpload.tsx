@@ -14,7 +14,10 @@ interface FileUploadProps {
   onUploadError?: (error: string) => void;
 }
 
-const detectFileType = (filename: string): FileType => {
+const detectFileType = (filename: string | undefined | null): FileType => {
+  if (!filename || typeof filename !== 'string') {
+    return 'text';
+  }
   const ext = filename.split('.').pop()?.toLowerCase();
   const typeMap: Record<string, FileType> = {
     'md': 'markdown',
@@ -29,8 +32,8 @@ const detectFileType = (filename: string): FileType => {
   return typeMap[ext || ''] || 'text';
 };
 
-const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes';
+const formatFileSize = (bytes: number | undefined | null): string => {
+  if (!bytes || bytes === 0 || isNaN(bytes)) return '0 Bytes';
   const k = 1024;
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -49,12 +52,33 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newFiles: FileWithPreview[] = Array.from(e.target.files).map((file) => ({
-        ...file,
-        type: detectFileType(file.name),
-        status: 'pending',
-        progress: 0,
-      }));
+      const newFiles: FileWithPreview[] = Array.from(e.target.files)
+        .filter((file) => file && file.name) // Filter out invalid files
+        .map((file) => {
+          // Create a FileWithPreview by creating a new object that extends File
+          // We can't modify File properties directly, so we create a wrapper
+          const fileWithPreview = Object.create(file) as FileWithPreview;
+          // Add our custom properties
+          Object.defineProperty(fileWithPreview, 'fileType', {
+            value: detectFileType(file.name),
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
+          Object.defineProperty(fileWithPreview, 'status', {
+            value: 'pending' as const,
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
+          Object.defineProperty(fileWithPreview, 'progress', {
+            value: 0,
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
+          return fileWithPreview;
+        });
       setFiles((prev) => [...prev, ...newFiles]);
     }
   }, []);
@@ -69,12 +93,33 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     e.stopPropagation();
     
     if (e.dataTransfer.files) {
-      const newFiles: FileWithPreview[] = Array.from(e.dataTransfer.files).map((file) => ({
-        ...file,
-        type: detectFileType(file.name),
-        status: 'pending',
-        progress: 0,
-      }));
+      const newFiles: FileWithPreview[] = Array.from(e.dataTransfer.files)
+        .filter((file) => file && file.name) // Filter out invalid files
+        .map((file) => {
+          // Create a FileWithPreview by creating a new object that extends File
+          // We can't modify File properties directly, so we create a wrapper
+          const fileWithPreview = Object.create(file) as FileWithPreview;
+          // Add our custom properties
+          Object.defineProperty(fileWithPreview, 'fileType', {
+            value: detectFileType(file.name),
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
+          Object.defineProperty(fileWithPreview, 'status', {
+            value: 'pending' as const,
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
+          Object.defineProperty(fileWithPreview, 'progress', {
+            value: 0,
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
+          return fileWithPreview;
+        });
       setFiles((prev) => [...prev, ...newFiles]);
     }
   }, []);
@@ -337,8 +382,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           <h3>Selected Files ({files.length})</h3>
           {files.map((file, index) => (
             <div key={index} className="file-item">
-              <FileTypeIcon type={file.type} />
-              <span className="file-name">{file.name}</span>
+              <FileTypeIcon type={file.fileType} />
+              <span className="file-name">{file.name || 'Unknown file'}</span>
               <span className="file-size">{formatFileSize(file.size)}</span>
               <button
                 className="remove-btn"
@@ -356,11 +401,11 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       {processingFiles.size > 0 && (
         <div className="processing-queue-section">
           <h3>处理中的文件 ({processingFiles.size})</h3>
-          {Array.from(processingFiles.values()).map((fileStatus) => (
-            <div key={fileStatus.id} className="processing-file-item">
+          {Array.from(processingFiles.values()).map((fileStatus, index) => (
+            <div key={fileStatus.id || `file-${index}-${fileStatus.startTime || Date.now()}`} className="processing-file-item">
               <div className="file-header">
-                <FileTypeIcon type={detectFileType(fileStatus.file.name)} />
-                <span className="file-name">{fileStatus.file.name}</span>
+                <FileTypeIcon type={detectFileType(fileStatus.file?.name)} />
+                <span className="file-name">{fileStatus.file?.name || 'Unknown file'}</span>
                 <span className={`status-badge ${fileStatus.stage}`}>
                   {fileStatus.stage === ProcessingStage.ERROR ? '失败' : fileStatus.message}
                 </span>

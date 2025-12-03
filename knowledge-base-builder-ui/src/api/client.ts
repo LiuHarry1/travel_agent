@@ -187,9 +187,16 @@ export class ApiClient {
     onProgress: (progress: any) => void
   ): Promise<void> {
     return new Promise((resolve, reject) => {
+      // Validate file object
+      if (!(file instanceof File)) {
+        reject(new Error('Invalid file object. Expected File instance.'));
+        return;
+      }
+
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', file, file.name);
       
+      // Always append all fields, even if optional, to avoid validation issues
       if (options.collectionName) {
         formData.append('collection_name', options.collectionName);
       }
@@ -199,21 +206,30 @@ export class ApiClient {
       if (options.embeddingModel) {
         formData.append('embedding_model', options.embeddingModel);
       }
-      if (options.chunkSize) {
+      if (options.chunkSize !== undefined && options.chunkSize !== null) {
         formData.append('chunk_size', options.chunkSize.toString());
       }
-      if (options.chunkOverlap) {
+      if (options.chunkOverlap !== undefined && options.chunkOverlap !== null) {
         formData.append('chunk_overlap', options.chunkOverlap.toString());
       }
 
       // Use fetch with ReadableStream for SSE
+      // Note: Don't set Content-Type header - browser will set it automatically with boundary
       fetch(`${this.baseUrl}/api/v1/upload/stream`, {
         method: 'POST',
         body: formData,
+        // Don't set headers - let browser set Content-Type with boundary for multipart/form-data
       })
         .then(response => {
           if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            // Try to get error details from response
+            return response.json().then(errorData => {
+              console.error('Upload error:', errorData);
+              const errorMsg = errorData.detail?.[0]?.msg || `HTTP error! status: ${response.status}`;
+              throw new Error(errorMsg);
+            }).catch(() => {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            });
           }
           
           const reader = response.body?.getReader();
