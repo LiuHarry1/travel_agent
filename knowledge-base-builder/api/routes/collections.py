@@ -27,11 +27,19 @@ async def list_collections(
     vector_store: MilvusVectorStore = Depends(get_vector_store)
 ):
     """List all collections in Milvus."""
+    connection_alias = "default"
     try:
-        # Connect to Milvus (create a temporary connection)
+        # Connect to Milvus using default alias
         from pymilvus import connections
+        
+        # Disconnect if already connected to avoid conflicts
+        try:
+            connections.disconnect(connection_alias)
+        except:
+            pass
+        
         connections.connect(
-            alias="temp",
+            alias=connection_alias,
             host=vector_store.host,
             port=vector_store.port,
             user=vector_store.user if vector_store.user else None,
@@ -41,14 +49,15 @@ async def list_collections(
         # Import here to avoid circular dependency
         from pymilvus import utility
         
-        collections = utility.list_collections()
+        # Use the connection alias explicitly
+        collections = utility.list_collections(using=connection_alias)
         
         # Get stats for each collection
         collection_info = []
         for name in collections:
             try:
                 from pymilvus import Collection
-                collection = Collection(name)
+                collection = Collection(name, using=connection_alias)
                 collection.load()
                 
                 # Get document count (approximate)
@@ -80,7 +89,7 @@ async def list_collections(
     finally:
         try:
             from pymilvus import connections
-            connections.disconnect("temp")
+            connections.disconnect(connection_alias)
         except:
             pass
 
@@ -92,10 +101,18 @@ async def create_collection(
     vector_store: MilvusVectorStore = Depends(get_vector_store)
 ):
     """Create a new collection."""
+    connection_alias = "default"
     try:
         from pymilvus import connections
+        
+        # Disconnect if already connected to avoid conflicts
+        try:
+            connections.disconnect(connection_alias)
+        except:
+            pass
+        
         connections.connect(
-            alias="temp",
+            alias=connection_alias,
             host=vector_store.host,
             port=vector_store.port,
             user=vector_store.user if vector_store.user else None,
@@ -105,7 +122,7 @@ async def create_collection(
         from pymilvus import utility, Collection, CollectionSchema, FieldSchema, DataType
         
         # Check if collection already exists
-        if utility.has_collection(name):
+        if utility.has_collection(name, using=connection_alias):
             raise HTTPException(
                 status_code=400,
                 detail=f"Collection '{name}' already exists"
@@ -136,7 +153,7 @@ async def create_collection(
             description=f"Knowledge base collection: {name}"
         )
         
-        collection = Collection(name=name, schema=schema)
+        collection = Collection(name=name, schema=schema, using=connection_alias)
         
         # Create index
         index_params = {
@@ -162,7 +179,7 @@ async def create_collection(
     finally:
         try:
             from pymilvus import connections
-            connections.disconnect("temp")
+            connections.disconnect(connection_alias)
         except:
             pass
 
@@ -173,10 +190,18 @@ async def delete_collection(
     vector_store: MilvusVectorStore = Depends(get_vector_store)
 ):
     """Delete a collection."""
+    connection_alias = "default"
     try:
         from pymilvus import connections
+        
+        # Disconnect if already connected to avoid conflicts
+        try:
+            connections.disconnect(connection_alias)
+        except:
+            pass
+        
         connections.connect(
-            alias="temp",
+            alias=connection_alias,
             host=vector_store.host,
             port=vector_store.port,
             user=vector_store.user if vector_store.user else None,
@@ -185,13 +210,13 @@ async def delete_collection(
         
         from pymilvus import utility
         
-        if not utility.has_collection(name):
+        if not utility.has_collection(name, using=connection_alias):
             raise HTTPException(
                 status_code=404,
                 detail=f"Collection '{name}' not found"
             )
         
-        utility.drop_collection(name)
+        utility.drop_collection(name, using=connection_alias)
         
         return JSONResponse(
             status_code=200,
@@ -208,7 +233,7 @@ async def delete_collection(
     finally:
         try:
             from pymilvus import connections
-            connections.disconnect("temp")
+            connections.disconnect(connection_alias)
         except:
             pass
 

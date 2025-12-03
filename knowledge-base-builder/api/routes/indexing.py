@@ -172,7 +172,7 @@ async def process_file_with_progress(
 async def upload_and_index_stream(
     file: UploadFile = File(...),
     collection_name: Optional[str] = Form(None),
-    embedding_provider: Optional[str] = Form("qwen"),
+    embedding_provider: Optional[str] = Form(None),
     embedding_model: Optional[str] = Form(None),
     chunk_size: Optional[int] = Form(None),
     chunk_overlap: Optional[int] = Form(None),
@@ -185,6 +185,21 @@ async def upload_and_index_stream(
     temp_path = None
     
     try:
+        # Log received parameters for debugging
+        logger.debug(f"Received upload request: filename={file.filename}, "
+                    f"collection_name={collection_name}, "
+                    f"embedding_provider={embedding_provider}, "
+                    f"chunk_size={chunk_size}, chunk_overlap={chunk_overlap}")
+        
+        # Validate filename
+        if not file.filename:
+            raise HTTPException(status_code=422, detail="Filename is required")
+        
+        # Normalize empty strings to None for optional fields
+        collection_name = collection_name if collection_name and collection_name.strip() else None
+        embedding_provider = embedding_provider if embedding_provider and embedding_provider.strip() else None
+        embedding_model = embedding_model if embedding_model and embedding_model.strip() else None
+        
         # Detect document type
         doc_type = detect_document_type(file.filename)
         
@@ -199,7 +214,7 @@ async def upload_and_index_stream(
         async def generate():
             async for progress in process_file_with_progress(
                 temp_path,
-                file.filename,
+                file.filename or "unknown",
                 doc_type,
                 collection_name or settings.default_collection_name,
                 embedding_provider or settings.default_embedding_provider,

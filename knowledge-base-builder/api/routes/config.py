@@ -32,8 +32,16 @@ async def test_milvus_connection(config: MilvusConfigRequest):
         
         # Try to connect
         from pymilvus import connections
+        connection_alias = "test"
+        
+        # Disconnect if already connected to avoid conflicts
+        try:
+            connections.disconnect(connection_alias)
+        except:
+            pass
+        
         connections.connect(
-            alias="test",
+            alias=connection_alias,
             host=config.host,
             port=config.port,
             user=config.user if config.user else None,
@@ -42,7 +50,7 @@ async def test_milvus_connection(config: MilvusConfigRequest):
         
         # Try to list collections to verify connection
         from pymilvus import utility
-        collections = utility.list_collections()
+        collections = utility.list_collections(using=connection_alias)
         
         result = {
             "success": True,
@@ -62,7 +70,7 @@ async def test_milvus_connection(config: MilvusConfigRequest):
     finally:
         try:
             from pymilvus import connections
-            connections.disconnect("test")
+            connections.disconnect(connection_alias)
         except:
             pass
 
