@@ -1,6 +1,6 @@
 """Base loader interface."""
 from abc import ABC, abstractmethod
-from ...models.document import Document, DocumentType
+from models.document import Document, DocumentType
 
 
 class BaseLoader(ABC):

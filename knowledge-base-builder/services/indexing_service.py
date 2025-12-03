@@ -2,12 +2,12 @@
 import logging
 from typing import List, Optional
 
-from ..models.document import DocumentType
-from ..processors.loaders import LoaderFactory
-from ..processors.chunkers import RecursiveChunker
-from ..processors.embedders import EmbedderFactory
-from ..processors.stores import MilvusVectorStore
-from ..utils.exceptions import IndexingError
+from models.document import DocumentType
+from processors.loaders import LoaderFactory
+from processors.chunkers import RecursiveChunker
+from processors.embedders import EmbedderFactory
+from processors.stores import MilvusVectorStore
+from utils.exceptions import IndexingError
 
 logger = logging.getLogger(__name__)
 

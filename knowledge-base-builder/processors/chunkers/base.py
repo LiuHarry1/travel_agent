@@ -1,8 +1,8 @@
 """Base chunker interface."""
 from abc import ABC, abstractmethod
 from typing import List
-from ...models.document import Document
-from ...models.chunk import Chunk
+from models.document import Document
+from models.chunk import Chunk
 
 
 class BaseChunker(ABC):

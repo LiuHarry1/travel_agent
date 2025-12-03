@@ -86,9 +86,9 @@ optional arguments:
 ### Using as Python Library
 
 ```python
-from kb_builder.models.document import DocumentType
-from kb_builder.services.indexing_service import IndexingService
-from kb_builder.processors.stores import MilvusVectorStore
+from models.document import DocumentType
+from services.indexing_service import IndexingService
+from processors.stores import MilvusVectorStore
 
 # Create vector store
 vector_store = MilvusVectorStore(
@@ -133,8 +133,8 @@ kb_builder/
 #### Add a New Document Loader
 
 ```python
-from kb_builder.processors.loaders.base import BaseLoader
-from kb_builder.models.document import Document, DocumentType
+from processors.loaders.base import BaseLoader
+from models.document import Document, DocumentType
 
 class MyLoader(BaseLoader):
     def load(self, source: str, **kwargs) -> Document:
@@ -145,14 +145,14 @@ class MyLoader(BaseLoader):
         return doc_type == DocumentType.MY_TYPE
 
 # Register it
-from kb_builder.processors.loaders.factory import LoaderFactory
+from processors.loaders.factory import LoaderFactory
 LoaderFactory.register(DocumentType.MY_TYPE, MyLoader)
 ```
 
 #### Add a New Embedding Provider
 
 ```python
-from kb_builder.processors.embedders.base import BaseEmbedder
+from processors.embedders.base import BaseEmbedder
 
 class MyEmbedder(BaseEmbedder):
     def embed(self, texts: List[str]) -> List[List[float]]:

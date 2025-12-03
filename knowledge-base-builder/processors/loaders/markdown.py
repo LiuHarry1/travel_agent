@@ -2,8 +2,8 @@
 from pathlib import Path
 from typing import Dict, Any
 from .base import BaseLoader
-from ...models.document import Document, DocumentType
-from ...utils.exceptions import LoaderError
+from models.document import Document, DocumentType
+from utils.exceptions import LoaderError
 
 
 class MarkdownLoader(BaseLoader):

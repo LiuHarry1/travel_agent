@@ -1,4 +1,4 @@
-"""OpenAI Embedding client."""
+"""Qwen (Alibaba DashScope) Embedding client."""
 from typing import List, Optional
 import os
 import logging
@@ -10,21 +10,27 @@ except ImportError:
     HAS_OPENAI = False
 
 from .base import BaseEmbedder
-from ...utils.exceptions import EmbeddingError
+from utils.exceptions import EmbeddingError
 
 logger = logging.getLogger(__name__)
 
 
-class OpenAIEmbedder(BaseEmbedder):
-    """OpenAI Embedding client."""
+class QwenEmbedder(BaseEmbedder):
+    """
+    Qwen Embedding client using DashScope OpenAI-compatible API.
+    
+    Qwen embedding models:
+    - text-embedding-v1: 1536 dimensions
+    - text-embedding-v2: 1536 dimensions (recommended)
+    """
     
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "text-embedding-3-small",
+        model: str = "text-embedding-v2",
         base_url: Optional[str] = None
     ):
-        """Initialize OpenAI embedder."""
+        """Initialize Qwen embedder."""
         if not HAS_OPENAI:
             raise ImportError(
                 "openai package is required. Install with: pip install openai"
@@ -37,27 +43,29 @@ class OpenAIEmbedder(BaseEmbedder):
     
     def _get_api_key(self) -> Optional[str]:
         """Get API key from environment variable."""
-        return os.getenv("OPENAI_API_KEY")
+        return os.getenv("DASHSCOPE_API_KEY") or os.getenv("QWEN_API_KEY")
     
-    def _get_base_url(self) -> Optional[str]:
-        """Get base URL (None means use OpenAI default)."""
-        return self._base_url or os.getenv("OPENAI_BASE_URL")
+    def _get_base_url(self) -> str:
+        """Get DashScope base URL."""
+        if self._base_url:
+            return self._base_url
+        return "https://dashscope.aliyuncs.com/compatible-mode/v1"
     
     def _get_client(self) -> OpenAI:
         """Get or create OpenAI client."""
         if self._client is None:
             if not self.api_key:
                 raise EmbeddingError(
-                    "OpenAI API key not found. Set OPENAI_API_KEY environment variable."
+                    "Qwen API key not found. Set DASHSCOPE_API_KEY or QWEN_API_KEY environment variable."
                 )
-            client_kwargs = {"api_key": self.api_key}
-            if self._get_base_url():
-                client_kwargs["base_url"] = self._get_base_url()
-            self._client = OpenAI(**client_kwargs)
+            self._client = OpenAI(
+                api_key=self.api_key,
+                base_url=self._get_base_url()
+            )
         return self._client
     
     def embed(self, texts: List[str]) -> List[List[float]]:
-        """Generate embeddings using OpenAI API."""
+        """Generate embeddings using Qwen API."""
         if not texts:
             return []
         
@@ -68,19 +76,14 @@ class OpenAIEmbedder(BaseEmbedder):
                 input=texts
             )
             embeddings = [item.embedding for item in response.data]
-            logger.debug(f"Generated {len(embeddings)} embeddings using OpenAI model: {self.model}")
+            logger.debug(f"Generated {len(embeddings)} embeddings using Qwen model: {self.model}")
             return embeddings
         except Exception as e:
-            logger.error(f"OpenAI embedding error: {str(e)}", exc_info=True)
-            raise EmbeddingError(f"OpenAI embedding failed: {str(e)}") from e
+            logger.error(f"Qwen embedding error: {str(e)}", exc_info=True)
+            raise EmbeddingError(f"Qwen embedding failed: {str(e)}") from e
     
     @property
     def dimension(self) -> int:
-        """Get embedding dimension based on model."""
-        dim_map = {
-            "text-embedding-3-small": 1536,
-            "text-embedding-3-large": 3072,
-            "text-embedding-ada-002": 1536,
-        }
-        return dim_map.get(self.model, 1536)
+        """Get embedding dimension for Qwen models."""
+        return 1536
 

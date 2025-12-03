@@ -2,7 +2,7 @@
 from typing import Dict, Type
 from .base import BaseLoader
 from .markdown import MarkdownLoader
-from ...models.document import DocumentType
+from models.document import DocumentType
 
 
 class LoaderFactory:

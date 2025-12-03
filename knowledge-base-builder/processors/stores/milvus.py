@@ -18,8 +18,8 @@ except ImportError:
     HAS_PYMILVUS = False
 
 from .base import BaseVectorStore
-from ...models.chunk import Chunk
-from ...utils.exceptions import IndexingError
+from models.chunk import Chunk
+from utils.exceptions import IndexingError
 
 logger = logging.getLogger(__name__)
 

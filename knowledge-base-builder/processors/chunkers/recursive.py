@@ -2,8 +2,8 @@
 from typing import List
 import hashlib
 from .base import BaseChunker
-from ...models.document import Document
-from ...models.chunk import Chunk
+from models.document import Document
+from models.chunk import Chunk
 
 
 class RecursiveChunker(BaseChunker):

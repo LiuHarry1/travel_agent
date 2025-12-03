@@ -93,13 +93,9 @@ python index_document.py document.md --collection travel_guide
 ## 在 Python 代码中使用
 
 ```python
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
-
-from kb_builder.models.document import DocumentType
-from kb_builder.services.indexing_service import IndexingService
-from kb_builder.processors.stores import MilvusVectorStore
+from models.document import DocumentType
+from services.indexing_service import IndexingService
+from processors.stores import MilvusVectorStore
 
 # 创建服务
 vector_store = MilvusVectorStore(host="localhost", port=19530)

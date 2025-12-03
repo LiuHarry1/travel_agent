@@ -15,19 +15,14 @@ Examples:
     # Index with custom chunk size
     python index_document.py document.md --chunk-size 2000 --chunk-overlap 400
 """
-import sys
 import argparse
 import logging
-from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
-
-from kb_builder.models.document import DocumentType
-from kb_builder.services.indexing_service import IndexingService
-from kb_builder.processors.stores import MilvusVectorStore
-from kb_builder.config.settings import get_settings
-from kb_builder.utils.exceptions import IndexingError
+from models.document import DocumentType
+from services.indexing_service import IndexingService
+from processors.stores import MilvusVectorStore
+from config.settings import get_settings
+from utils.exceptions import IndexingError
 
 # Setup logging
 logging.basicConfig(

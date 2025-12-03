@@ -15,7 +15,7 @@ except ImportError:
         HAS_TRANSFORMERS = False
 
 from .base import BaseEmbedder
-from ...utils.exceptions import EmbeddingError
+from utils.exceptions import EmbeddingError
 
 logger = logging.getLogger(__name__)
 
