@@ -1,0 +1,22 @@
+# Core dependencies
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.10.0
+pydantic-settings>=2.0.0
+
+# Vector database
+pymilvus>=2.3.0
+
+# Embedding providers
+openai>=1.0.0  # For Qwen and OpenAI embeddings
+sentence-transformers>=2.2.0  # For BGE embeddings (optional, can use transformers instead)
+# transformers>=4.30.0  # Alternative to sentence-transformers for BGE
+# torch>=2.0.0  # Required if using transformers
+
+# Document processing (optional, add as needed)
+# python-docx>=1.1.0  # For DOCX files
+# PyPDF2>=3.0.0  # For PDF files
+# pdfplumber>=0.10.0  # Alternative PDF parser
+# beautifulsoup4>=4.12.0  # For HTML parsing
+# markdownify>=0.11.6  # For HTML to Markdown conversion
+

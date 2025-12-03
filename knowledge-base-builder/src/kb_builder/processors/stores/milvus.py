@@ -1,0 +1,152 @@
+"""Milvus vector store implementation."""
+from typing import List
+import sys
+from pathlib import Path
+import logging
+
+try:
+    from pymilvus import (
+        connections,
+        Collection,
+        CollectionSchema,
+        FieldSchema,
+        DataType,
+        utility,
+    )
+    HAS_PYMILVUS = True
+except ImportError:
+    HAS_PYMILVUS = False
+
+from .base import BaseVectorStore
+from ...models.chunk import Chunk
+from ...utils.exceptions import IndexingError
+
+logger = logging.getLogger(__name__)
+
+
+class MilvusVectorStore(BaseVectorStore):
+    """Milvus implementation of vector store."""
+    
+    def __init__(
+        self,
+        host: str = "localhost",
+        port: int = 19530,
+        user: str = "",
+        password: str = "",
+        alias: str = "default"
+    ):
+        """Initialize Milvus vector store."""
+        if not HAS_PYMILVUS:
+            raise ImportError(
+                "pymilvus is required. Install with: pip install pymilvus"
+            )
+        
+        self.host = host
+        self.port = port
+        self.user = user
+        self.password = password
+        self.alias = alias
+        self._connected = False
+    
+    def _connect(self):
+        """Connect to Milvus."""
+        if not self._connected:
+            try:
+                connections.connect(
+                    alias=self.alias,
+                    host=self.host,
+                    port=self.port,
+                    user=self.user if self.user else None,
+                    password=self.password if self.password else None,
+                )
+                self._connected = True
+                logger.info(f"Connected to Milvus at {self.host}:{self.port}")
+            except Exception as e:
+                raise IndexingError(f"Failed to connect to Milvus: {str(e)}") from e
+    
+    def _collection_exists(self, collection_name: str) -> bool:
+        """Check if collection exists."""
+        try:
+            return utility.has_collection(collection_name)
+        except Exception:
+            return False
+    
+    def _create_collection(self, collection_name: str, embedding_dim: int):
+        """Create collection with schema."""
+        try:
+            fields = [
+                FieldSchema(
+                    name="id",
+                    dtype=DataType.INT64,
+                    is_primary=True,
+                    auto_id=True
+                ),
+                FieldSchema(
+                    name="text",
+                    dtype=DataType.VARCHAR,
+                    max_length=65535
+                ),
+                FieldSchema(
+                    name="embedding",
+                    dtype=DataType.FLOAT_VECTOR,
+                    dim=embedding_dim
+                ),
+            ]
+            
+            schema = CollectionSchema(
+                fields=fields,
+                description="Knowledge base collection"
+            )
+            
+            collection = Collection(
+                name=collection_name,
+                schema=schema,
+                using=self.alias
+            )
+            
+            # Create index
+            index_params = {
+                "metric_type": "L2",
+                "index_type": "IVF_FLAT",
+                "params": {"nlist": 1024}
+            }
+            collection.create_index("embedding", index_params)
+            
+            logger.info(f"Created collection '{collection_name}' with dimension {embedding_dim}")
+        except Exception as e:
+            raise IndexingError(f"Failed to create collection: {str(e)}") from e
+    
+    def index(self, chunks: List[Chunk], collection_name: str) -> int:
+        """Index chunks to Milvus."""
+        if not chunks:
+            return 0
+        
+        try:
+            self._connect()
+            
+            # Get embedding dimension from first chunk
+            if not chunks[0].embedding:
+                raise IndexingError("Chunks must have embeddings before indexing")
+            
+            embedding_dim = len(chunks[0].embedding)
+            
+            # Ensure collection exists
+            if not self._collection_exists(collection_name):
+                self._create_collection(collection_name, embedding_dim)
+            
+            # Prepare data
+            texts = [chunk.text for chunk in chunks]
+            embeddings = [list(chunk.embedding) for chunk in chunks]
+            
+            # Insert data
+            collection = Collection(collection_name, using=self.alias)
+            collection.insert([texts, embeddings])
+            collection.flush()
+            
+            logger.info(f"Indexed {len(chunks)} chunks to collection '{collection_name}'")
+            return len(chunks)
+            
+        except Exception as e:
+            logger.error(f"Failed to index chunks: {str(e)}", exc_info=True)
+            raise IndexingError(f"Indexing failed: {str(e)}") from e
+
