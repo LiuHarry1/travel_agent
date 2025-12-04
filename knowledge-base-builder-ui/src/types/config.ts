@@ -1,11 +1,3 @@
-export interface MilvusConfig {
-  host: string;
-  port: number;
-  user?: string;
-  password?: string;
-  alias?: string;
-}
-
 export interface EmbeddingConfig {
   provider: 'qwen' | 'openai' | 'bge';
   model?: string;
@@ -20,7 +12,6 @@ export interface ChunkingConfig {
 
 export interface AppConfig {
   apiUrl: string;
-  milvus: MilvusConfig;
   embedding: EmbeddingConfig;
   chunking: ChunkingConfig;
   defaultCollection: string;
@@ -33,12 +24,6 @@ export function getDefaultConfig(): AppConfig {
   
   return {
     apiUrl,
-    milvus: {
-      host: 'localhost',
-      port: 19530,
-      user: '',
-      password: '',
-    },
     embedding: {
       provider: 'qwen',
       model: 'text-embedding-v2',

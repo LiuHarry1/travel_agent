@@ -89,6 +89,8 @@ async def process_file_with_progress(
             from processors.loaders import LoaderFactory
             loader = LoaderFactory.create(doc_type)
             document = loader.load(file_path, metadata={"original_filename": filename})
+            # Use filename as document_id for better identification
+            document.source = filename
             char_count = len(document.content)
             logger.info(f"Parsed document: {char_count} characters")
             yield send_progress("parsing", 80, f"解析中，已读取 {char_count} 个字符...", {

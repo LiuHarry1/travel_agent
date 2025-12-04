@@ -31,21 +31,17 @@
   left: 0;
   height: 2px;
   background: var(--gradient-primary);
-  width: 25%;
+  width: 33.333%;
   transition: transform var(--transition-base);
   transform: translateX(0);
 }
 
-.config-tabs[data-active-tab="milvus"]::after {
+.config-tabs[data-active-tab="embedding"]::after {
   transform: translateX(100%);
 }
 
-.config-tabs[data-active-tab="embedding"]::after {
-  transform: translateX(200%);
-}
-
 .config-tabs[data-active-tab="chunking"]::after {
-  transform: translateX(300%);
+  transform: translateX(200%);
 }
 
 .config-tabs button {
@@ -91,7 +87,6 @@
 }
 
 .api-config,
-.milvus-config,
 .embedding-config,
 .chunking-config {
   display: flex;

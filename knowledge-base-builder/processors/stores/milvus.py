@@ -91,6 +91,11 @@ class MilvusVectorStore(BaseVectorStore):
                     dtype=DataType.FLOAT_VECTOR,
                     dim=embedding_dim
                 ),
+                FieldSchema(
+                    name="document_id",
+                    dtype=DataType.VARCHAR,
+                    max_length=1024
+                ),
             ]
             
             schema = CollectionSchema(
@@ -150,9 +155,10 @@ class MilvusVectorStore(BaseVectorStore):
                 self._create_collection(collection_name, embedding_dim)
             
             # Prepare data
-            # Note: id field is auto_id=True, so we only need to provide text and embedding
+            # Note: id field is auto_id=True, so we need to provide text, embedding, and document_id
             texts = [chunk.text for chunk in chunks]
             embeddings = [list(chunk.embedding) for chunk in chunks]
+            document_ids = [chunk.document_id for chunk in chunks]
             
             # Insert data in batches to avoid memory issues
             batch_size = 1000
@@ -161,8 +167,9 @@ class MilvusVectorStore(BaseVectorStore):
             for i in range(0, len(texts), batch_size):
                 batch_texts = texts[i:i + batch_size]
                 batch_embeddings = embeddings[i:i + batch_size]
+                batch_document_ids = document_ids[i:i + batch_size]
                 logger.debug(f"Inserting batch {i // batch_size + 1}/{(len(texts) + batch_size - 1) // batch_size}")
-                collection.insert([batch_texts, batch_embeddings])
+                collection.insert([batch_texts, batch_embeddings, batch_document_ids])
             
             # Flush to ensure data is written
             collection.flush()
@@ -190,4 +197,141 @@ class MilvusVectorStore(BaseVectorStore):
                 ) from e
             else:
                 raise IndexingError(f"Indexing failed: {error_msg}") from e
+    
+    def list_sources(self, collection_name: str) -> List[dict]:
+        """List all unique source files (document_id) in a collection."""
+        try:
+            self._connect()
+            
+            if not self._collection_exists(collection_name):
+                return []
+            
+            collection = Collection(collection_name, using=self.alias)
+            collection.load()
+            
+            # Query to get all document_ids
+            # Milvus doesn't support DISTINCT, so we query all and deduplicate
+            results = collection.query(
+                expr="",
+                output_fields=["document_id"],
+                limit=16384  # Milvus max limit
+            )
+            
+            # Get unique document_ids and count chunks for each
+            source_counts = {}
+            for result in results:
+                doc_id = result.get("document_id", "")
+                if doc_id:
+                    source_counts[doc_id] = source_counts.get(doc_id, 0) + 1
+            
+            # Convert to list of dicts
+            sources = [
+                {
+                    "document_id": doc_id,
+                    "chunk_count": count,
+                    "filename": doc_id.split("/")[-1] if "/" in doc_id else doc_id
+                }
+                for doc_id, count in source_counts.items()
+            ]
+            
+            # Sort by filename
+            sources.sort(key=lambda x: x["filename"])
+            
+            return sources
+        except Exception as e:
+            logger.error(f"Failed to list sources: {str(e)}", exc_info=True)
+            raise IndexingError(f"Failed to list sources: {str(e)}") from e
+    
+    def get_chunks_by_source(
+        self, 
+        collection_name: str, 
+        document_id: str,
+        page: int = 1,
+        page_size: int = 10
+    ) -> dict:
+        """Get chunks for a specific source file with pagination."""
+        try:
+            self._connect()
+            
+            if not self._collection_exists(collection_name):
+                return {"chunks": [], "total": 0, "page": page, "page_size": page_size, "total_pages": 0}
+            
+            collection = Collection(collection_name, using=self.alias)
+            collection.load()
+            
+            # Query chunks by document_id
+            # Escape quotes in document_id for expression
+            escaped_doc_id = document_id.replace('"', '\\"')
+            expr = f'document_id == "{escaped_doc_id}"'
+            
+            # Get all results first (Milvus doesn't support offset in query)
+            all_results = collection.query(
+                expr=expr,
+                output_fields=["id", "text", "document_id"],
+                limit=16384  # Milvus max limit
+            )
+            
+            total = len(all_results)
+            
+            # Manual pagination
+            offset = (page - 1) * page_size
+            paginated_results = all_results[offset:offset + page_size]
+            
+            chunks = [
+                {
+                    "id": result.get("id"),
+                    "text": result.get("text", ""),
+                    "document_id": result.get("document_id", ""),
+                    "index": idx + offset
+                }
+                for idx, result in enumerate(paginated_results)
+            ]
+            
+            return {
+                "chunks": chunks,
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": (total + page_size - 1) // page_size if total > 0 else 0
+            }
+        except Exception as e:
+            logger.error(f"Failed to get chunks: {str(e)}", exc_info=True)
+            raise IndexingError(f"Failed to get chunks: {str(e)}") from e
+    
+    def delete_source(self, collection_name: str, document_id: str) -> int:
+        """Delete all chunks for a specific source file."""
+        try:
+            self._connect()
+            
+            if not self._collection_exists(collection_name):
+                return 0
+            
+            collection = Collection(collection_name, using=self.alias)
+            collection.load()
+            
+            # Escape quotes in document_id for expression
+            escaped_doc_id = document_id.replace('"', '\\"')
+            expr = f'document_id == "{escaped_doc_id}"'
+            
+            # Query to get all IDs for this document_id
+            results = collection.query(
+                expr=expr,
+                output_fields=["id"],
+                limit=16384
+            )
+            
+            if not results:
+                return 0
+            
+            # Delete by expression (more efficient than deleting by IDs)
+            collection.delete(expr=expr)
+            collection.flush()
+            
+            deleted_count = len(results)
+            logger.info(f"Deleted {deleted_count} chunks for document_id: {document_id}")
+            
+            return deleted_count
+        except Exception as e:
+            logger.error(f"Failed to delete source: {str(e)}", exc_info=True)
+            raise IndexingError(f"Failed to delete source: {str(e)}") from e
 

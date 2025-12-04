@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from api.routes import indexing, collections, config
+from api.routes import indexing, collections, config, sources
 from config.settings import get_settings
 from utils.logger import setup_logging, get_logger
 
@@ -75,6 +75,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 app.include_router(indexing.router)
 app.include_router(collections.router)
 app.include_router(config.router)
+app.include_router(sources.router)
 
 @app.get("/")
 async def root():

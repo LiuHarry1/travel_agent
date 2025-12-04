@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import type { AppConfig, MilvusConfig, EmbeddingConfig, ChunkingConfig } from '../types/config';
-import { apiClient } from '../api/client';
+import type { AppConfig, EmbeddingConfig, ChunkingConfig } from '../types/config';
 import './ConfigPanel.css';
 
 interface ConfigPanelProps {
@@ -12,25 +11,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   config,
   onConfigChange,
 }) => {
-  const [activeTab, setActiveTab] = useState<'api' | 'milvus' | 'embedding' | 'chunking'>('api');
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-
-  const handleTestConnection = async () => {
-    setTesting(true);
-    setTestResult(null);
-    try {
-      const result = await apiClient.testMilvusConnection(config.milvus);
-      setTestResult(result);
-    } catch (error) {
-      setTestResult({
-        success: false,
-        message: error instanceof Error ? error.message : 'Connection test failed',
-      });
-    } finally {
-      setTesting(false);
-    }
-  };
+  const [activeTab, setActiveTab] = useState<'api' | 'embedding' | 'chunking'>('api');
 
   return (
     <div className="config-panel">
@@ -40,12 +21,6 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
           onClick={() => setActiveTab('api')}
         >
           API Settings
-        </button>
-        <button
-          className={activeTab === 'milvus' ? 'active' : ''}
-          onClick={() => setActiveTab('milvus')}
-        >
-          Milvus Connection
         </button>
         <button
           className={activeTab === 'embedding' ? 'active' : ''}
@@ -69,16 +44,6 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
           />
         )}
         
-        {activeTab === 'milvus' && (
-          <MilvusConfigForm
-            config={config.milvus}
-            onChange={(milvus) => onConfigChange({ ...config, milvus })}
-            onTest={handleTestConnection}
-            testing={testing}
-            testResult={testResult}
-          />
-        )}
-        
         {activeTab === 'embedding' && (
           <EmbeddingConfigForm
             config={config.embedding}
@@ -97,62 +62,83 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   );
 };
 
-const MilvusConfigForm: React.FC<{
-  config: MilvusConfig;
-  onChange: (config: MilvusConfig) => void;
-  onTest: () => Promise<void>;
-  testing: boolean;
-  testResult: { success: boolean; message: string } | null;
-}> = ({ config, onChange, onTest, testing, testResult }) => {
+const ApiConfigForm: React.FC<{
+  apiUrl: string;
+  onChange: (apiUrl: string) => void;
+}> = ({ apiUrl, onChange }) => {
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [testing, setTesting] = useState(false);
+
+  const handleTestConnection = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const response = await fetch(`${apiUrl}/api/v1/health`);
+      if (response.ok) {
+        const data = await response.json();
+        setTestResult({
+          success: true,
+          message: `Connected successfully! Service: ${data.service || 'unknown'}`,
+        });
+      } else {
+        setTestResult({
+          success: false,
+          message: `Server returned status ${response.status}`,
+        });
+      }
+    } catch (error) {
+      setTestResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'Connection failed',
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   return (
-    <div className="milvus-config">
+    <div className="api-config">
       <div className="form-group">
-        <label>Host:</label>
+        <label>Backend API URL:</label>
         <input
           type="text"
-          value={config.host}
-          onChange={(e) => onChange({ ...config, host: e.target.value })}
-          placeholder="localhost"
+          value={apiUrl}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="http://localhost:8001"
+          className="api-url-input"
         />
+        <p className="form-hint">
+          Enter the base URL of your knowledge-base-builder backend API
+        </p>
       </div>
       
       <div className="form-group">
-        <label>Port:</label>
-        <input
-          type="number"
-          value={config.port}
-          onChange={(e) => onChange({ ...config, port: parseInt(e.target.value) || 19530 })}
-          placeholder="19530"
-        />
+        <button 
+          onClick={handleTestConnection} 
+          disabled={testing || !apiUrl} 
+          className="test-btn"
+        >
+          {testing ? 'Testing...' : 'Test Connection'}
+        </button>
       </div>
-      
-      <div className="form-group">
-        <label>User (optional):</label>
-        <input
-          type="text"
-          value={config.user || ''}
-          onChange={(e) => onChange({ ...config, user: e.target.value || undefined })}
-        />
-      </div>
-      
-      <div className="form-group">
-        <label>Password (optional):</label>
-        <input
-          type="password"
-          value={config.password || ''}
-          onChange={(e) => onChange({ ...config, password: e.target.value || undefined })}
-        />
-      </div>
-      
-      <button onClick={onTest} disabled={testing} className="test-btn">
-        {testing ? 'Testing...' : 'Test Connection'}
-      </button>
       
       {testResult && (
         <div className={`test-result ${testResult.success ? 'success' : 'error'}`}>
-          {testResult.message}
+          {testResult.success ? '✓' : '✗'} {testResult.message}
         </div>
       )}
+      
+      <div className="config-info">
+        <h4>Common API URLs:</h4>
+        <ul>
+          <li>Local development: <code>http://localhost:8001</code></li>
+          <li>Production: <code>https://your-domain.com</code></li>
+          <li>Docker: <code>http://localhost:8001</code> (if port is mapped)</li>
+        </ul>
+        <p className="form-hint">
+          The API URL is saved in your browser's local storage and will persist across sessions.
+        </p>
+      </div>
     </div>
   );
 };
@@ -233,7 +219,7 @@ const ChunkingConfigForm: React.FC<{
   config: ChunkingConfig;
   onChange: (config: ChunkingConfig) => void;
 }> = ({ config, onChange }) => {
-  const estimatedChunks = (size: number) => {
+  const estimatedChunks = (_size: number) => {
     if (config.chunkSize <= config.chunkOverlap) return 0;
     return Math.ceil(10000 / (config.chunkSize - config.chunkOverlap));
   };

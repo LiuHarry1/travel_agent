@@ -28,6 +28,30 @@ export interface Collection {
   last_updated: string;
 }
 
+export interface SourceFile {
+  document_id: string;
+  filename: string;
+  chunk_count: number;
+}
+
+export interface Chunk {
+  id: number;
+  text: string;
+  document_id: string;
+  index: number;
+}
+
+export interface ChunksResponse {
+  success: boolean;
+  collection_name: string;
+  document_id: string;
+  chunks: Chunk[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
 export interface MilvusConfigRequest {
   host: string;
   port: number;
@@ -173,6 +197,49 @@ export class ApiClient {
   async healthCheck(): Promise<{ status: string; service: string }> {
     const response = await fetch(`${this.baseUrl}/api/v1/health`);
     return response.json();
+  }
+
+  async listSources(collectionName: string): Promise<SourceFile[]> {
+    const response = await fetch(`${this.baseUrl}/api/v1/collections/${encodeURIComponent(collectionName)}/sources`);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to fetch sources');
+    }
+    const data = await response.json();
+    return data.sources || [];
+  }
+
+  async getSourceChunks(
+    collectionName: string,
+    documentId: string,
+    page: number = 1,
+    pageSize: number = 10
+  ): Promise<ChunksResponse> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      page_size: pageSize.toString(),
+    });
+    const response = await fetch(
+      `${this.baseUrl}/api/v1/collections/${encodeURIComponent(collectionName)}/sources/${encodeURIComponent(documentId)}/chunks?${params}`
+    );
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to fetch chunks');
+    }
+    return response.json();
+  }
+
+  async deleteSource(collectionName: string, documentId: string): Promise<void> {
+    const response = await fetch(
+      `${this.baseUrl}/api/v1/collections/${encodeURIComponent(collectionName)}/sources/${encodeURIComponent(documentId)}`,
+      {
+        method: 'DELETE',
+      }
+    );
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to delete source');
+    }
   }
 
   uploadFileWithProgress(
