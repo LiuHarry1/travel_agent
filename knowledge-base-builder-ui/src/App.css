@@ -69,8 +69,8 @@
   display: flex;
   flex: 1;
   overflow: hidden;
-  gap: var(--spacing-lg);
-  padding: var(--spacing-lg);
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
 }
 
 .sidebar {
@@ -87,7 +87,6 @@
   flex: 1;
   overflow-y: auto;
   min-width: 0;
-  padding: var(--spacing-xl);
 }
 
 .main-content-panel {
@@ -96,10 +95,12 @@
 
 .main-tabs {
   display: flex;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-xl);
+  gap: 0;
+  margin: 0 0 var(--spacing-md) 0;
+  padding: 0;
   border-bottom: 2px solid var(--border-light);
   position: relative;
+  align-items: flex-end;
 }
 
 .main-tabs button {
@@ -115,6 +116,10 @@
   transition: all var(--transition-base);
   position: relative;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
 }
 
 .main-tabs button:hover {

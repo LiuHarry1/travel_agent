@@ -1,7 +1,7 @@
 .file-upload-container {
   background: var(--bg-primary);
   border-radius: var(--radius-xl);
-  padding: var(--spacing-xl);
+  padding: var(--spacing-lg);
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--border-light);
   transition: all var(--transition-base);
@@ -12,9 +12,9 @@
 }
 
 .file-upload-container h2 {
-  margin: 0 0 var(--spacing-lg) 0;
+  margin: 0 0 var(--spacing-md) 0;
   color: var(--text-primary);
-  font-size: var(--text-2xl);
+  font-size: var(--text-lg);
   font-weight: var(--font-bold);
   display: flex;
   align-items: center;
@@ -23,17 +23,17 @@
 
 .file-upload-container h2::before {
   content: '📚';
-  font-size: var(--text-2xl);
+  font-size: var(--text-lg);
 }
 
 .drop-zone {
-  border: 3px dashed var(--border-medium);
-  border-radius: var(--radius-xl);
-  padding: var(--spacing-3xl) var(--spacing-xl);
+  border: 2px dashed var(--border-medium);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg) var(--spacing-md);
   text-align: center;
   cursor: pointer;
   transition: all var(--transition-base);
-  margin-bottom: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
   background: var(--bg-secondary);
   position: relative;
   overflow: hidden;
@@ -68,8 +68,8 @@
 }
 
 .drop-zone-icon {
-  font-size: 4rem;
-  margin-bottom: var(--spacing-md);
+  font-size: 2.5rem;
+  margin-bottom: var(--spacing-xs);
   display: block;
   animation: float 3s ease-in-out infinite;
 }
@@ -84,9 +84,9 @@
 }
 
 .drop-zone-label p {
-  margin: var(--spacing-sm) 0;
+  margin: var(--spacing-xs) 0;
   color: var(--text-secondary);
-  font-size: var(--text-base);
+  font-size: var(--text-sm);
   font-weight: var(--font-medium);
 }
 
