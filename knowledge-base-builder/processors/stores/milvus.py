@@ -150,9 +150,38 @@ class MilvusVectorStore(BaseVectorStore):
             
             embedding_dim = len(chunks[0].embedding)
             
-            # Ensure collection exists
+            # Ensure collection exists and check schema compatibility
+            collection = Collection(collection_name, using=self.alias)
+            
             if not self._collection_exists(collection_name):
                 self._create_collection(collection_name, embedding_dim)
+            else:
+                # Check if collection has document_id field
+                collection.load()
+                schema = collection.schema
+                
+                # Debug: log all field names
+                field_names = [field.name for field in schema.fields]
+                logger.debug(f"Collection '{collection_name}' schema fields: {field_names}")
+                
+                has_document_id = any(field.name == "document_id" for field in schema.fields)
+                
+                if not has_document_id:
+                    logger.warning(
+                        f"Collection '{collection_name}' missing 'document_id' field. "
+                        f"Available fields: {field_names}"
+                    )
+                    raise IndexingError(
+                        f"Collection '{collection_name}' exists but doesn't have 'document_id' field.\n"
+                        f"Available fields: {', '.join(field_names)}\n"
+                        f"This collection was created with an older schema. Please:\n"
+                        f"1. Delete the collection: DELETE /api/v1/collections/{collection_name}\n"
+                        f"2. Re-upload your files to recreate the collection with the new schema\n"
+                        f"Or use the cleanup script: python cleanup_milvus.py --delete {collection_name}"
+                    )
+            
+            # Ensure collection is loaded
+            collection.load()
             
             # Prepare data
             # Note: id field is auto_id=True, so we need to provide text, embedding, and document_id
@@ -162,7 +191,6 @@ class MilvusVectorStore(BaseVectorStore):
             
             # Insert data in batches to avoid memory issues
             batch_size = 1000
-            collection = Collection(collection_name, using=self.alias)
             
             for i in range(0, len(texts), batch_size):
                 batch_texts = texts[i:i + batch_size]
@@ -211,8 +239,9 @@ class MilvusVectorStore(BaseVectorStore):
             
             # Query to get all document_ids
             # Milvus doesn't support DISTINCT, so we query all and deduplicate
+            # Use a valid field expression to query all records: id >= 0 (always true for auto_id)
             results = collection.query(
-                expr="",
+                expr="id >= 0",
                 output_fields=["document_id"],
                 limit=16384  # Milvus max limit
             )

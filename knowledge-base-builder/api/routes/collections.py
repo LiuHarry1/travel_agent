@@ -146,6 +146,11 @@ async def create_collection(
                 dtype=DataType.FLOAT_VECTOR,
                 dim=embedding_dim
             ),
+            FieldSchema(
+                name="document_id",
+                dtype=DataType.VARCHAR,
+                max_length=1024
+            ),
         ]
         
         schema = CollectionSchema(
