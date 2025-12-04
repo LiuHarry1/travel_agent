@@ -318,5 +318,22 @@ export class ApiClient {
   }
 }
 
-export const apiClient = new ApiClient();
+// Default API client instance (will be updated when config changes)
+let defaultApiClient = new ApiClient();
+
+// Function to get API client with custom URL
+export function getApiClient(baseUrl?: string): ApiClient {
+  if (baseUrl) {
+    return new ApiClient(baseUrl);
+  }
+  return defaultApiClient;
+}
+
+// Function to update default API client URL
+export function updateApiClientUrl(baseUrl: string) {
+  defaultApiClient = new ApiClient(baseUrl);
+}
+
+// Export default instance
+export const apiClient = defaultApiClient;
 

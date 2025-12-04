@@ -12,7 +12,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   config,
   onConfigChange,
 }) => {
-  const [activeTab, setActiveTab] = useState<'milvus' | 'embedding' | 'chunking'>('milvus');
+  const [activeTab, setActiveTab] = useState<'api' | 'milvus' | 'embedding' | 'chunking'>('api');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -36,6 +36,12 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
     <div className="config-panel">
       <div className="config-tabs" data-active-tab={activeTab}>
         <button
+          className={activeTab === 'api' ? 'active' : ''}
+          onClick={() => setActiveTab('api')}
+        >
+          API Settings
+        </button>
+        <button
           className={activeTab === 'milvus' ? 'active' : ''}
           onClick={() => setActiveTab('milvus')}
         >
@@ -56,6 +62,13 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
       </div>
 
       <div className="config-content">
+        {activeTab === 'api' && (
+          <ApiConfigForm
+            apiUrl={config.apiUrl}
+            onChange={(apiUrl) => onConfigChange({ ...config, apiUrl })}
+          />
+        )}
+        
         {activeTab === 'milvus' && (
           <MilvusConfigForm
             config={config.milvus}

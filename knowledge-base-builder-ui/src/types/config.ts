@@ -19,6 +19,7 @@ export interface ChunkingConfig {
 }
 
 export interface AppConfig {
+  apiUrl: string;
   milvus: MilvusConfig;
   embedding: EmbeddingConfig;
   chunking: ChunkingConfig;
@@ -27,7 +28,11 @@ export interface AppConfig {
 }
 
 export function getDefaultConfig(): AppConfig {
+  // Get API URL from environment variable or use default
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+  
   return {
+    apiUrl,
     milvus: {
       host: 'localhost',
       port: 19530,

@@ -4,7 +4,7 @@ import { CollectionManager } from './components/CollectionManager';
 import { FileUpload } from './components/FileUpload';
 import type { AppConfig } from './types/config';
 import { getDefaultConfig } from './types/config';
-import { UploadResponse, BatchUploadResponse } from './api/client';
+import { UploadResponse, BatchUploadResponse, updateApiClientUrl } from './api/client';
 import './App.css';
 
 function App() {
@@ -18,8 +18,10 @@ function App() {
   const [uploadResult, setUploadResult] = useState<UploadResponse | BatchUploadResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Update API client URL when config changes
   useEffect(() => {
     localStorage.setItem('kb-config', JSON.stringify(config));
+    updateApiClientUrl(config.apiUrl);
   }, [config]);
 
   const handleUploadSuccess = (result: UploadResponse | BatchUploadResponse) => {

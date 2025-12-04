@@ -150,12 +150,21 @@ class MilvusVectorStore(BaseVectorStore):
                 self._create_collection(collection_name, embedding_dim)
             
             # Prepare data
+            # Note: id field is auto_id=True, so we only need to provide text and embedding
             texts = [chunk.text for chunk in chunks]
             embeddings = [list(chunk.embedding) for chunk in chunks]
             
-            # Insert data
+            # Insert data in batches to avoid memory issues
+            batch_size = 1000
             collection = Collection(collection_name, using=self.alias)
-            collection.insert([texts, embeddings])
+            
+            for i in range(0, len(texts), batch_size):
+                batch_texts = texts[i:i + batch_size]
+                batch_embeddings = embeddings[i:i + batch_size]
+                logger.debug(f"Inserting batch {i // batch_size + 1}/{(len(texts) + batch_size - 1) // batch_size}")
+                collection.insert([batch_texts, batch_embeddings])
+            
+            # Flush to ensure data is written
             collection.flush()
             
             logger.info(f"Indexed {len(chunks)} chunks to collection '{collection_name}'")
