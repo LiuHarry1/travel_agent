@@ -24,11 +24,12 @@ services:
     build:
       context: ./knowledge-base-builder-ui
       dockerfile: Dockerfile
+      args:
+        # Backend API URL - can be overridden via environment variable
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
     container_name: knowledge-base-builder-ui
     ports:
       - "80:80"
-    environment:
-      - VITE_API_URL=http://localhost:8000
     depends_on:
       - backend
     restart: unless-stopped

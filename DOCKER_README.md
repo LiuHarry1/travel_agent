@@ -17,6 +17,9 @@
 # 在项目根目录执行
 docker-compose up -d
 
+# 或者指定后端 API URL（如果需要）
+VITE_API_URL=http://your-backend-url:8000 docker-compose up -d
+
 # 查看日志
 docker-compose logs -f
 
@@ -53,9 +56,18 @@ docker run -d \
 
 #### 构建前端镜像
 
+构建时传入后端 API URL：
+
 ```bash
 cd knowledge-base-builder-ui
+
+# 使用默认 URL (http://localhost:8000)
 docker build -t knowledge-base-builder-ui:latest .
+
+# 或者指定自定义 API URL
+docker build \
+  --build-arg VITE_API_URL=http://your-backend-url:8000 \
+  -t knowledge-base-builder-ui:latest .
 ```
 
 运行前端容器：
@@ -66,6 +78,8 @@ docker run -d \
   -p 80:80 \
   knowledge-base-builder-ui:latest
 ```
+
+**注意**: Vite 的环境变量需要在构建时传入，运行时无法修改。如果需要更改 API URL，需要重新构建镜像。
 
 ## 环境变量
 
