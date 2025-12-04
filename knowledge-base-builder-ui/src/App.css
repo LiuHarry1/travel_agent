@@ -84,9 +84,25 @@
 
 .main-content {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
   min-width: 0;
   padding: var(--spacing-xl);
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content-area {
+  flex: 1;
+  display: flex;
+  gap: var(--spacing-lg);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.main-content-panel {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
 }
 
 .main-tabs {

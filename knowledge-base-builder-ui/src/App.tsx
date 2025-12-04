@@ -3,6 +3,7 @@ import { ConfigPanel } from './components/ConfigPanel';
 import { CollectionManager } from './components/CollectionManager';
 import { FileUpload } from './components/FileUpload';
 import { SourceFileManager } from './components/SourceFileManager';
+import { ChunksViewer } from './components/ChunksViewer';
 import type { AppConfig } from './types/config';
 import { getDefaultConfig } from './types/config';
 import { UploadResponse, BatchUploadResponse, updateApiClientUrl } from './api/client';
@@ -19,6 +20,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<'upload' | 'sources'>('upload');
   const [uploadResult, setUploadResult] = useState<UploadResponse | BatchUploadResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedSource, setSelectedSource] = useState<string | null>(null);
 
   // Update API client URL when config changes
   useEffect(() => {
@@ -80,56 +82,72 @@ function App() {
                 </button>
               </div>
 
-              {activeTab === 'upload' && (
-                <>
-                  <div className="upload-section">
-                    <FileUpload
-                      config={config}
-                      collection={currentCollection}
-                      onUploadSuccess={handleUploadSuccess}
-                      onUploadError={handleUploadError}
-                    />
-                  </div>
+              <div className="main-content-area">
+                <div className="main-content-panel">
+                  {activeTab === 'upload' && (
+                    <>
+                      <div className="upload-section">
+                        <FileUpload
+                          config={config}
+                          collection={currentCollection}
+                          onUploadSuccess={handleUploadSuccess}
+                          onUploadError={handleUploadError}
+                        />
+                      </div>
 
-                  {error && (
-                    <div className="error-message">
-                      <h3>Error</h3>
-                      <p>{error}</p>
-                    </div>
-                  )}
-
-                  {uploadResult && (
-                    <div className="success-message">
-                      <h3>✅ Upload Successful!</h3>
-                      {'chunks_indexed' in uploadResult ? (
-                        <div>
-                          <p><strong>File:</strong> {uploadResult.filename}</p>
-                          <p><strong>Chunks Indexed:</strong> {uploadResult.chunks_indexed}</p>
-                          <p><strong>Collection:</strong> {uploadResult.collection_name}</p>
-                          <p><strong>Message:</strong> {uploadResult.message}</p>
-                        </div>
-                      ) : (
-                        <div>
-                          <p><strong>Total Files:</strong> {uploadResult.total_files}</p>
-                          <ul>
-                            {uploadResult.results.map((result, index) => (
-                              <li key={index}>
-                                {result.filename}: {result.success ? 
-                                  `✓ ${result.chunks_indexed} chunks` : 
-                                  `✗ ${result.message}`}
-                              </li>
-                            ))}
-                          </ul>
+                      {error && (
+                        <div className="error-message">
+                          <h3>Error</h3>
+                          <p>{error}</p>
                         </div>
                       )}
-                    </div>
-                  )}
-                </>
-              )}
 
-              {activeTab === 'sources' && (
-                <SourceFileManager collectionName={currentCollection} />
-              )}
+                      {uploadResult && (
+                        <div className="success-message">
+                          <h3>✅ Upload Successful!</h3>
+                          {'chunks_indexed' in uploadResult ? (
+                            <div>
+                              <p><strong>File:</strong> {uploadResult.filename}</p>
+                              <p><strong>Chunks Indexed:</strong> {uploadResult.chunks_indexed}</p>
+                              <p><strong>Collection:</strong> {uploadResult.collection_name}</p>
+                              <p><strong>Message:</strong> {uploadResult.message}</p>
+                            </div>
+                          ) : (
+                            <div>
+                              <p><strong>Total Files:</strong> {uploadResult.total_files}</p>
+                              <ul>
+                                {uploadResult.results.map((result, index) => (
+                                  <li key={index}>
+                                    {result.filename}: {result.success ? 
+                                      `✓ ${result.chunks_indexed} chunks` : 
+                                      `✗ ${result.message}`}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {activeTab === 'sources' && (
+                    <SourceFileManager 
+                      collectionName={currentCollection}
+                      onViewChunks={setSelectedSource}
+                      selectedSource={selectedSource}
+                    />
+                  )}
+                </div>
+
+                {selectedSource && (
+                  <ChunksViewer
+                    collectionName={currentCollection}
+                    documentId={selectedSource}
+                    onClose={() => setSelectedSource(null)}
+                  />
+                )}
+              </div>
             </>
           )}
         </main>

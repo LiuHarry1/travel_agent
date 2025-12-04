@@ -338,25 +338,38 @@ class MilvusVectorStore(BaseVectorStore):
             collection = Collection(collection_name, using=self.alias)
             collection.load()
             
+            # Milvus delete() only supports deletion by primary key (id)
+            # So we need to:
+            # 1. Query all chunks with matching document_id to get their ids
+            # 2. Delete using those ids
+            
             # Escape quotes in document_id for expression
             escaped_doc_id = document_id.replace('"', '\\"')
             expr = f'document_id == "{escaped_doc_id}"'
             
-            # Query to get all IDs for this document_id
+            # Query to get all primary keys (ids) of chunks to delete
+            # Milvus query doesn't support offset, so we need to get all at once
             results = collection.query(
                 expr=expr,
                 output_fields=["id"],
-                limit=16384
+                limit=16384  # Milvus max limit
             )
             
             if not results:
                 return 0
             
-            # Delete by expression (more efficient than deleting by IDs)
-            collection.delete(expr=expr)
+            # Extract all primary key IDs
+            ids_to_delete = [result["id"] for result in results]
+            deleted_count = len(ids_to_delete)
+            
+            # Delete using primary keys
+            # Format: "id in [1, 2, 3, ...]"
+            ids_expr = f"id in [{', '.join(map(str, ids_to_delete))}]"
+            collection.delete(expr=ids_expr)
+            
+            # Flush to ensure deletion is persisted
             collection.flush()
             
-            deleted_count = len(results)
             logger.info(f"Deleted {deleted_count} chunks for document_id: {document_id}")
             
             return deleted_count
