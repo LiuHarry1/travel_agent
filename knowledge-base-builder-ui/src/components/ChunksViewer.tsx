@@ -61,12 +61,15 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
   ) || [];
 
   if (!documentId) {
-    return null;
+    return (
+      <div className="chunks-viewer-container">
+        <div className="empty-state">No document selected</div>
+      </div>
+    );
   }
 
   return (
-    <div className="chunks-viewer-overlay" onClick={onClose}>
-      <div className={`chunks-viewer-modal ${isExpanded ? 'expanded' : ''}`} onClick={(e) => e.stopPropagation()}>
+    <div className={`chunks-viewer-container ${isExpanded ? 'expanded' : ''}`}>
       <div className="chunks-viewer-header">
         <div className="chunks-viewer-title">
           <h4>

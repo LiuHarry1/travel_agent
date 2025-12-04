@@ -1,22 +1,13 @@
-.chunks-viewer-panel {
-  width: 50%;
-  min-width: 450px;
-  max-width: 800px;
+.chunks-viewer-container {
   background: var(--bg-primary);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-xl);
+  box-shadow: var(--shadow-lg);
   border: 1px solid var(--border-light);
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: width 0.3s ease;
-  box-shadow: var(--shadow-md);
-  height: 100%;
-}
-
-.chunks-viewer-panel.expanded {
-  width: 65%;
-  min-width: 600px;
-  max-width: 1000px;
 }
 
 .chunks-viewer-header {

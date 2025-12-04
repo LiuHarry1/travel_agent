@@ -17,10 +17,15 @@ function App() {
   
   const [currentCollection, setCurrentCollection] = useState(config.defaultCollection);
   const [showSettings, setShowSettings] = useState(false);
-  const [activeTab, setActiveTab] = useState<'upload' | 'sources'>('upload');
+  const [activeTab, setActiveTab] = useState<'upload' | 'sources' | 'chunks'>('upload');
   const [uploadResult, setUploadResult] = useState<UploadResponse | BatchUploadResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
+  
+  const handleViewChunks = (documentId: string) => {
+    setSelectedSource(documentId);
+    setActiveTab('chunks');
+  };
 
   // Update API client URL when config changes
   useEffect(() => {
@@ -80,71 +85,80 @@ function App() {
                 >
                   📁 Source Files
                 </button>
+                {selectedSource && (
+                  <button
+                    className={activeTab === 'chunks' ? 'active' : ''}
+                    onClick={() => setActiveTab('chunks')}
+                  >
+                    📄 Chunks
+                  </button>
+                )}
               </div>
 
-              <div className="main-content-area">
-                <div className="main-content-panel">
-                  {activeTab === 'upload' && (
-                    <>
-                      <div className="upload-section">
-                        <FileUpload
-                          config={config}
-                          collection={currentCollection}
-                          onUploadSuccess={handleUploadSuccess}
-                          onUploadError={handleUploadError}
-                        />
+              <div className="main-content-panel">
+                {activeTab === 'upload' && (
+                  <>
+                    <div className="upload-section">
+                      <FileUpload
+                        config={config}
+                        collection={currentCollection}
+                        onUploadSuccess={handleUploadSuccess}
+                        onUploadError={handleUploadError}
+                      />
+                    </div>
+
+                    {error && (
+                      <div className="error-message">
+                        <h3>Error</h3>
+                        <p>{error}</p>
                       </div>
+                    )}
 
-                      {error && (
-                        <div className="error-message">
-                          <h3>Error</h3>
-                          <p>{error}</p>
-                        </div>
-                      )}
+                    {uploadResult && (
+                      <div className="success-message">
+                        <h3>✅ Upload Successful!</h3>
+                        {'chunks_indexed' in uploadResult ? (
+                          <div>
+                            <p><strong>File:</strong> {uploadResult.filename}</p>
+                            <p><strong>Chunks Indexed:</strong> {uploadResult.chunks_indexed}</p>
+                            <p><strong>Collection:</strong> {uploadResult.collection_name}</p>
+                            <p><strong>Message:</strong> {uploadResult.message}</p>
+                          </div>
+                        ) : (
+                          <div>
+                            <p><strong>Total Files:</strong> {uploadResult.total_files}</p>
+                            <ul>
+                              {uploadResult.results.map((result, index) => (
+                                <li key={index}>
+                                  {result.filename}: {result.success ? 
+                                    `✓ ${result.chunks_indexed} chunks` : 
+                                    `✗ ${result.message}`}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
 
-                      {uploadResult && (
-                        <div className="success-message">
-                          <h3>✅ Upload Successful!</h3>
-                          {'chunks_indexed' in uploadResult ? (
-                            <div>
-                              <p><strong>File:</strong> {uploadResult.filename}</p>
-                              <p><strong>Chunks Indexed:</strong> {uploadResult.chunks_indexed}</p>
-                              <p><strong>Collection:</strong> {uploadResult.collection_name}</p>
-                              <p><strong>Message:</strong> {uploadResult.message}</p>
-                            </div>
-                          ) : (
-                            <div>
-                              <p><strong>Total Files:</strong> {uploadResult.total_files}</p>
-                              <ul>
-                                {uploadResult.results.map((result, index) => (
-                                  <li key={index}>
-                                    {result.filename}: {result.success ? 
-                                      `✓ ${result.chunks_indexed} chunks` : 
-                                      `✗ ${result.message}`}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </>
-                  )}
+                {activeTab === 'sources' && (
+                  <SourceFileManager 
+                    collectionName={currentCollection}
+                    onViewChunks={handleViewChunks}
+                    selectedSource={selectedSource}
+                  />
+                )}
 
-                  {activeTab === 'sources' && (
-                    <SourceFileManager 
-                      collectionName={currentCollection}
-                      onViewChunks={setSelectedSource}
-                      selectedSource={selectedSource}
-                    />
-                  )}
-                </div>
-
-                {selectedSource && (
+                {activeTab === 'chunks' && selectedSource && (
                   <ChunksViewer
                     collectionName={currentCollection}
                     documentId={selectedSource}
-                    onClose={() => setSelectedSource(null)}
+                    onClose={() => {
+                      setSelectedSource(null);
+                      setActiveTab('sources');
+                    }}
                   />
                 )}
               </div>
