@@ -42,6 +42,8 @@ cd knowledge-base-builder
 docker build -t knowledge-base-builder:latest .
 ```
 
+**注意**: 当前配置仅支持 API 方式的 embedding（Qwen 和 OpenAI），不包含本地模型依赖（如 BGE），构建速度更快。
+
 运行后端容器：
 
 ```bash

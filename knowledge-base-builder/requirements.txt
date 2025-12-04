@@ -10,7 +10,7 @@ pymilvus>=2.3.0
 
 # Embedding providers
 openai>=1.0.0  # For Qwen and OpenAI embeddings
-sentence-transformers>=2.2.0  # For BGE embeddings (optional, can use transformers instead)
+# sentence-transformers>=2.2.0  # For BGE embeddings (optional, not needed for API-only usage)
 # transformers>=4.30.0  # Alternative to sentence-transformers for BGE
 # torch>=2.0.0  # Required if using transformers
 

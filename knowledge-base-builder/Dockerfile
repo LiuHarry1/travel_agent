@@ -8,20 +8,20 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=300
 
-# Install system dependencies
+# Install system dependencies (minimal, no build tools needed for API-only)
 RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+# Install Python dependencies (API-only, no local model dependencies)
+RUN pip install --upgrade pip --timeout=300 --retries=5 && \
+    pip install --timeout=300 --retries=5 -r requirements.txt
 
 # Copy application code
 COPY . .
