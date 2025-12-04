@@ -1,8 +1,10 @@
 """FastAPI application entry point."""
+from pathlib import Path
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from api.routes import indexing, collections, config, sources
 from config.settings import get_settings
@@ -70,6 +72,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "detail": errors
         }
     )
+
+# Mount static files (for images and source files)
+static_dir = Path(settings.static_dir)
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    logger.info(f"Mounted static files from: {static_dir}")
+else:
+    logger.warning(f"Static directory not found: {static_dir}. Static files will not be served.")
 
 # Register routes
 app.include_router(indexing.router)

@@ -1,5 +1,6 @@
 """BAAI BGE Embedding client."""
 from typing import List, Optional
+import os
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -13,6 +14,12 @@ except ImportError:
     except ImportError:
         HAS_TRANSFORMERS = False
 
+try:
+    import requests
+    HAS_REQUESTS = True
+except ImportError:
+    HAS_REQUESTS = False
+
 from .base import BaseEmbedder
 from utils.exceptions import EmbeddingError
 from utils.logger import get_logger
@@ -22,26 +29,40 @@ logger = get_logger(__name__)
 
 class BGEEmbedder(BaseEmbedder):
     """
-    BAAI BGE Embedding client using Hugging Face models.
+    BAAI BGE Embedding client using Hugging Face models or API service.
     
     Supports models:
     - BAAI/bge-large-en-v1.5: 1024 dimensions (English)
     - BAAI/bge-base-en-v1.5: 768 dimensions (English)
     - BAAI/bge-small-en-v1.5: 384 dimensions (English)
+    
+    Can work in two modes:
+    1. Local mode: Loads model directly (requires sentence-transformers or transformers)
+    2. API mode: Uses remote embedding service via HTTP API
     """
     
     def __init__(
         self,
         model_name: str = "BAAI/bge-large-en-v1.5",
         device: Optional[str] = None,
-        model_kwargs: Optional[dict] = None
+        model_kwargs: Optional[dict] = None,
+        api_url: Optional[str] = None
     ):
-        """Initialize BGE embedder."""
+        """Initialize BGE embedder.
+        
+        Args:
+            model_name: Hugging Face model name
+            device: Device to run model on (cpu/cuda)
+            model_kwargs: Additional model arguments
+            api_url: If provided, use API service instead of local model
+        """
         self.model_name = model_name
         self.device = device or self._detect_device()
         self.model_kwargs = model_kwargs or {}
+        self.api_url = api_url or os.getenv("BGE_API_URL", None)
         self._model = None
         self._tokenizer = None
+        self._use_api = self.api_url is not None
     
     def _detect_device(self) -> str:
         """Auto-detect best device."""
@@ -120,12 +141,41 @@ class BGEEmbedder(BaseEmbedder):
         
         return embeddings.tolist()
     
+    def _embed_via_api(self, texts: List[str]) -> List[List[float]]:
+        """Generate embeddings via API service."""
+        if not HAS_REQUESTS:
+            raise EmbeddingError("requests library is required for API mode. Install with: pip install requests")
+        
+        try:
+            response = requests.post(
+                f"{self.api_url}/embed",
+                json={"texts": texts, "normalize": True},
+                timeout=300  # 5 minutes timeout for large batches
+            )
+            response.raise_for_status()
+            result = response.json()
+            return result["embeddings"]
+        except requests.exceptions.RequestException as e:
+            logger.error(f"API request failed: {str(e)}", exc_info=True)
+            raise EmbeddingError(f"BGE API request failed: {str(e)}") from e
+        except KeyError as e:
+            logger.error(f"Invalid API response format: {str(e)}", exc_info=True)
+            raise EmbeddingError(f"Invalid API response format: {str(e)}") from e
+    
     def embed(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings using BGE model."""
         if not texts:
             return []
         
         try:
+            # Use API if configured
+            if self._use_api:
+                logger.debug(f"Using BGE API service at {self.api_url}")
+                embeddings = self._embed_via_api(texts)
+                logger.debug(f"Generated {len(embeddings)} embeddings via API")
+                return embeddings
+            
+            # Otherwise use local model
             self._load_model()
             
             if HAS_SENTENCE_TRANSFORMERS:
@@ -133,7 +183,7 @@ class BGEEmbedder(BaseEmbedder):
             elif HAS_TRANSFORMERS:
                 embeddings = self._encode_with_transformers(texts)
             else:
-                raise EmbeddingError("No embedding library available")
+                raise EmbeddingError("No embedding library available. Install sentence-transformers or transformers, or set BGE_API_URL to use API mode.")
             
             logger.debug(f"Generated {len(embeddings)} embeddings using BGE model: {self.model_name}")
             return embeddings

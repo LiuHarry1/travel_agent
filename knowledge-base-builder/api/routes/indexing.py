@@ -87,7 +87,14 @@ async def process_file_with_progress(
         yield send_progress("parsing", 20, "正在解析文件...")
         try:
             from processors.loaders import LoaderFactory
-            loader = LoaderFactory.create(doc_type)
+            from config.settings import get_settings
+            settings = get_settings()
+            logger.info(f"Creating loader with static_dir={settings.static_dir}, base_url={settings.static_base_url}")
+            loader = LoaderFactory.create(
+                doc_type, 
+                static_dir=settings.static_dir,
+                base_url=settings.static_base_url
+            )
             document = loader.load(file_path, metadata={"original_filename": filename})
             # Use filename as document_id for better identification
             document.source = filename

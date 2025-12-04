@@ -1,5 +1,6 @@
 """Embedder factory."""
 from typing import Optional
+import os
 from .base import BaseEmbedder
 from .qwen import QwenEmbedder
 from .openai import OpenAIEmbedder
@@ -19,11 +20,29 @@ class EmbedderFactory:
         provider = provider.lower()
         
         if provider == "qwen":
-            return QwenEmbedder(model=model, **kwargs)
+            # Use default model if not provided
+            qwen_model = model or "text-embedding-v2"
+            return QwenEmbedder(model=qwen_model, **kwargs)
         elif provider == "openai":
-            return OpenAIEmbedder(model=model, **kwargs)
+            # OpenAI requires a model, use default if not provided
+            openai_model = model or "text-embedding-3-small"
+            return OpenAIEmbedder(model=openai_model, **kwargs)
         elif provider == "bge":
-            return BGEEmbedder(model_name=model or "BAAI/bge-large-en-v1.5", **kwargs)
+            # Check for API URL in kwargs, environment variable, or settings
+            api_url = kwargs.get("api_url") or os.getenv("BGE_API_URL")
+            if not api_url:
+                try:
+                    from config.settings import get_settings
+                    settings = get_settings()
+                    api_url = settings.bge_api_url or None
+                except:
+                    pass
+            
+            return BGEEmbedder(
+                model_name=model or "BAAI/bge-large-en-v1.5",
+                api_url=api_url,
+                **{k: v for k, v in kwargs.items() if k != "api_url"}
+            )
         else:
             raise ValueError(f"Unknown embedder provider: {provider}")
 

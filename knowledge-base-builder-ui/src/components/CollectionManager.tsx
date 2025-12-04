@@ -6,11 +6,13 @@ import './CollectionManager.css';
 interface CollectionManagerProps {
   currentCollection: string;
   onCollectionChange: (name: string) => void;
+  refreshTrigger?: number; // When this changes, refresh collections
 }
 
 export const CollectionManager: React.FC<CollectionManagerProps> = ({
   currentCollection,
   onCollectionChange,
+  refreshTrigger,
 }) => {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(false);
@@ -22,6 +24,13 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
   useEffect(() => {
     loadCollections();
   }, []);
+
+  // Refresh collections when refreshTrigger changes
+  useEffect(() => {
+    if (refreshTrigger !== undefined) {
+      loadCollections();
+    }
+  }, [refreshTrigger]);
 
   const loadCollections = async () => {
     setLoading(true);
@@ -77,9 +86,19 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
     <div className="collection-manager">
       <div className="collection-header">
         <h3>Collections</h3>
-        <button onClick={() => setShowCreateDialog(true)} className="create-btn">
-          + New
-        </button>
+        <div className="collection-header-actions">
+          <button 
+            onClick={loadCollections} 
+            className="refresh-btn" 
+            disabled={loading}
+            title="Refresh collections"
+          >
+            {loading ? '⏳' : '🔄'}
+          </button>
+          <button onClick={() => setShowCreateDialog(true)} className="create-btn">
+            + New
+          </button>
+        </div>
       </div>
 
       {error && (

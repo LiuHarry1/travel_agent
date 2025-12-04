@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     # Embedding
     default_embedding_provider: str = "qwen"
     default_embedding_model: str = "text-embedding-v2"
+    bge_api_url: str = ""  # BGE embedding service API URL (e.g., http://localhost:8001)
     
     # Chunking
     default_chunk_size: int = 1000
@@ -22,6 +23,10 @@ class Settings(BaseSettings):
     
     # Collection
     default_collection_name: str = "knowledge_base"
+    
+    # Static files directory
+    static_dir: str = "static"  # Directory for storing sources and images
+    static_base_url: str = ""  # Base URL for static files (e.g., http://localhost:8001). If empty, uses relative paths.
     
     # CORS
     cors_origins: List[str] = ["*"]

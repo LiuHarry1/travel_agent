@@ -6,12 +6,14 @@ interface SourceFileManagerProps {
   collectionName: string;
   onViewChunks: (documentId: string) => void;
   selectedSource: string | null;
+  onSourceDeleted?: () => void; // Callback when a source is deleted
 }
 
 export const SourceFileManager: React.FC<SourceFileManagerProps> = ({ 
   collectionName, 
   onViewChunks,
-  selectedSource 
+  selectedSource,
+  onSourceDeleted
 }) => {
   const [sources, setSources] = useState<SourceFile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -47,6 +49,10 @@ export const SourceFileManager: React.FC<SourceFileManagerProps> = ({
     try {
       await apiClient.deleteSource(collectionName, documentId);
       await loadSources();
+      // Notify parent component to refresh collections
+      if (onSourceDeleted) {
+        onSourceDeleted();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete source');
       console.error('Failed to delete source:', err);
@@ -69,7 +75,17 @@ export const SourceFileManager: React.FC<SourceFileManagerProps> = ({
     <div className="source-file-manager">
       <div className="source-file-header">
         <h3>Source Files</h3>
-        <button onClick={loadSources} className="refresh-btn" disabled={loading}>
+        <button 
+          onClick={() => {
+            loadSources();
+            // Also refresh collections to sync chunk counts
+            if (onSourceDeleted) {
+              onSourceDeleted();
+            }
+          }} 
+          className="refresh-btn" 
+          disabled={loading}
+        >
           {loading ? 'Loading...' : '🔄 Refresh'}
         </button>
       </div>

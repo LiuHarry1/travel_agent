@@ -44,7 +44,14 @@ class IndexingService:
         """
         try:
             # 1. Load document
-            loader = LoaderFactory.create(doc_type)
+            # 使用统一加载器，传入 static_dir 和 base_url 配置
+            from config.settings import get_settings
+            settings = get_settings()
+            loader = LoaderFactory.create(
+                doc_type, 
+                static_dir=settings.static_dir,
+                base_url=settings.static_base_url
+            )
             document = loader.load(source, **kwargs)
             logger.info(f"Loaded document: {document.source}")
             

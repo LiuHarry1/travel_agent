@@ -21,6 +21,7 @@ function App() {
   const [uploadResult, setUploadResult] = useState<UploadResponse | BatchUploadResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
+  const [collectionRefreshTrigger, setCollectionRefreshTrigger] = useState(0);
   
   const handleViewChunks = (documentId: string) => {
     setSelectedSource(documentId);
@@ -36,6 +37,8 @@ function App() {
   const handleUploadSuccess = (result: UploadResponse | BatchUploadResponse) => {
     setUploadResult(result);
     setError(null);
+    // Refresh collections to update chunk counts after successful upload
+    setCollectionRefreshTrigger(prev => prev + 1);
   };
 
   const handleUploadError = (errorMessage: string) => {
@@ -61,6 +64,7 @@ function App() {
           <CollectionManager
             currentCollection={currentCollection}
             onCollectionChange={setCurrentCollection}
+            refreshTrigger={collectionRefreshTrigger}
           />
         </aside>
 
@@ -148,6 +152,10 @@ function App() {
                     collectionName={currentCollection}
                     onViewChunks={handleViewChunks}
                     selectedSource={selectedSource}
+                    onSourceDeleted={() => {
+                      // Trigger collection refresh to update chunk counts
+                      setCollectionRefreshTrigger(prev => prev + 1);
+                    }}
                   />
                 )}
 
