@@ -1,7 +1,6 @@
 """OpenAI Embedding client."""
 from typing import List, Optional
 import os
-import logging
 
 try:
     from openai import OpenAI
@@ -11,8 +10,9 @@ except ImportError:
 
 from .base import BaseEmbedder
 from utils.exceptions import EmbeddingError
+from utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class OpenAIEmbedder(BaseEmbedder):

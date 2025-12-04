@@ -1,6 +1,5 @@
 """BAAI BGE Embedding client."""
 from typing import List, Optional
-import logging
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -16,8 +15,9 @@ except ImportError:
 
 from .base import BaseEmbedder
 from utils.exceptions import EmbeddingError
+from utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class BGEEmbedder(BaseEmbedder):

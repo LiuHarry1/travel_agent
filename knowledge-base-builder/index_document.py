@@ -16,6 +16,7 @@ Examples:
     python index_document.py document.md --chunk-size 2000 --chunk-overlap 400
 """
 import argparse
+
 import logging
 
 from models.document import DocumentType
@@ -23,13 +24,17 @@ from services.indexing_service import IndexingService
 from processors.stores import MilvusVectorStore
 from config.settings import get_settings
 from utils.exceptions import IndexingError
+from utils.logger import setup_logging, get_logger
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+setup_logging(
+    log_level=None,  # Will use default INFO level
+    log_dir="logs",
+    log_file="index-document.log",
+    console_output=True,
+    file_output=True
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def main():
@@ -127,7 +132,9 @@ def main():
     args = parser.parse_args()
     
     if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+        from utils.logger import setup_logging
+        import logging
+        setup_logging(log_level=logging.DEBUG, force=True)
     
     # Get settings
     settings = get_settings()

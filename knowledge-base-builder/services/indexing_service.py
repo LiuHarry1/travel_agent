@@ -1,5 +1,4 @@
 """Indexing service - main business logic."""
-import logging
 from typing import List, Optional
 
 from models.document import DocumentType
@@ -8,8 +7,9 @@ from processors.chunkers import RecursiveChunker
 from processors.embedders import EmbedderFactory
 from processors.stores import MilvusVectorStore
 from utils.exceptions import IndexingError
+from utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class IndexingService:

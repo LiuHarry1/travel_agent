@@ -3,17 +3,20 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-import logging
 
 from api.routes import indexing, collections, config
 from config.settings import get_settings
+from utils.logger import setup_logging, get_logger
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# Setup logging (before getting settings to avoid circular dependency)
+setup_logging(
+    log_level=None,  # Will use default INFO level
+    log_dir="logs",
+    log_file="knowledge-base-builder.log",
+    console_output=True,
+    file_output=True
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Get settings
 settings = get_settings()

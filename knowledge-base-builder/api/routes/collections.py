@@ -2,12 +2,12 @@
 from fastapi import APIRouter, HTTPException, Depends, Form
 from fastapi.responses import JSONResponse
 from typing import List
-import logging
 
 from processors.stores import MilvusVectorStore
 from config.settings import get_settings
+from utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1/collections", tags=["collections"])
 
 

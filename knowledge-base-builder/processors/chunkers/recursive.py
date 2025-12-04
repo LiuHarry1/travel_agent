@@ -26,8 +26,12 @@ class RecursiveChunker(BaseChunker):
         
         current_pos = 0
         chunk_index = 0
+        max_iterations = len(text) // max(1, self.chunk_size - self.chunk_overlap) + 10  # Safety limit
+        iteration = 0
         
-        while current_pos < len(text):
+        while current_pos < len(text) and iteration < max_iterations:
+            iteration += 1
+            
             # Find best split point
             end_pos = min(current_pos + self.chunk_size, len(text))
             chunk_text = text[current_pos:end_pos]
@@ -40,6 +44,12 @@ class RecursiveChunker(BaseChunker):
                         chunk_text = chunk_text[:last_sep_pos + len(sep)]
                         end_pos = current_pos + len(chunk_text)
                         break
+            
+            # Ensure we make progress
+            if end_pos <= current_pos:
+                # Force progress if we're stuck
+                end_pos = min(current_pos + 1, len(text))
+                chunk_text = text[current_pos:end_pos]
             
             # Create chunk
             chunk_id = self._generate_chunk_id(document.source, chunk_index)
@@ -57,9 +67,18 @@ class RecursiveChunker(BaseChunker):
             )
             chunks.append(chunk)
             
-            # Move position with overlap
-            current_pos = end_pos - self.chunk_overlap
+            # Move position with overlap, ensure we always make progress
+            next_pos = end_pos - self.chunk_overlap
+            if next_pos <= current_pos:
+                # If overlap would cause us to go backwards, just move forward
+                current_pos = end_pos
+            else:
+                current_pos = next_pos
+            
             chunk_index += 1
+        
+        if iteration >= max_iterations:
+            raise RuntimeError(f"Chunking exceeded maximum iterations ({max_iterations}). Possible infinite loop.")
         
         return chunks
     

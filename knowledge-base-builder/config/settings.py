@@ -26,9 +26,15 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: List[str] = ["*"]
     
+    # API Keys (optional, can be set via environment variables)
+    dashscope_api_key: str = ""
+    openai_api_key: str = ""
+    openai_base_url: str = ""
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "ignore"  # Ignore extra fields in .env that are not in the model
 
 
 _settings: Settings = None

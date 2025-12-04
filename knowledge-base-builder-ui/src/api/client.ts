@@ -241,6 +241,38 @@ export class ApiClient {
 
           let buffer = '';
 
+          let isCompleted = false;
+          let isError = false;
+          
+          const processBuffer = (line: string) => {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.substring(6));
+                console.log('Progress update received:', data); // Debug log
+                onProgress(data);
+                
+                if (data.stage === 'completed') {
+                  console.log('Processing completed');
+                  isCompleted = true;
+                  resolve();
+                  return;
+                }
+                if (data.stage === 'error') {
+                  console.error('Processing error:', data.message);
+                  isError = true;
+                  reject(new Error(data.message));
+                  return;
+                }
+              } catch (e) {
+                // Ignore parse errors for malformed JSON
+                console.warn('Failed to parse progress data:', line, e);
+              }
+            } else if (line.trim()) {
+              // Log non-data lines for debugging
+              console.log('Received non-data line:', line);
+            }
+          };
+          
           const readStream = (): void => {
             reader.read().then(({ done, value }) => {
               if (done) {
@@ -248,7 +280,11 @@ export class ApiClient {
                 if (buffer.trim()) {
                   processBuffer(buffer);
                 }
-                resolve();
+                // If stream ended without completion or error, something went wrong
+                if (!isCompleted && !isError) {
+                  console.warn('Stream ended without completion or error message');
+                  reject(new Error('Stream ended unexpectedly without completion'));
+                }
                 return;
               }
 
@@ -265,29 +301,14 @@ export class ApiClient {
                 }
               }
 
-              readStream();
-            }).catch(reject);
-          };
-
-          const processBuffer = (line: string) => {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.substring(6));
-                onProgress(data);
-                
-                if (data.stage === 'completed') {
-                  resolve();
-                  return;
-                }
-                if (data.stage === 'error') {
-                  reject(new Error(data.message));
-                  return;
-                }
-              } catch (e) {
-                // Ignore parse errors for malformed JSON
-                console.warn('Failed to parse progress data:', line);
+              // Continue reading only if not completed or errored
+              if (!isCompleted && !isError) {
+                readStream();
               }
-            }
+            }).catch((error) => {
+              console.error('Stream read error:', error);
+              reject(error);
+            });
           };
 
           readStream();

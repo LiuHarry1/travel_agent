@@ -7,15 +7,14 @@ import os
 import json
 import asyncio
 from pathlib import Path
-import logging
-
 from services.indexing_service import IndexingService
 from models.document import DocumentType
 from processors.stores import MilvusVectorStore
 from config.settings import get_settings
 from utils.exceptions import IndexingError
+from utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["indexing"])
 
 
@@ -74,34 +73,86 @@ async def process_file_with_progress(
     service: IndexingService
 ) -> AsyncGenerator[str, None]:
     """Process file with progress updates."""
+    document = None
+    chunks = None
+    
     try:
         # Stage 1: Uploading (already done, but notify)
+        logger.info(f"Starting file processing: {filename}")
         yield send_progress("uploading", 10, "文件上传完成")
         await asyncio.sleep(0.1)
         
         # Stage 2: Parsing
+        logger.info(f"Starting parsing stage for {filename}")
         yield send_progress("parsing", 20, "正在解析文件...")
-        from processors.loaders import LoaderFactory
-        loader = LoaderFactory.create(doc_type)
-        document = loader.load(file_path, metadata={"original_filename": filename})
-        char_count = len(document.content)
-        yield send_progress("parsing", 40, f"解析完成，共 {char_count} 个字符", {
-            "char_count": char_count
-        })
-        await asyncio.sleep(0.05)
+        try:
+            from processors.loaders import LoaderFactory
+            loader = LoaderFactory.create(doc_type)
+            document = loader.load(file_path, metadata={"original_filename": filename})
+            char_count = len(document.content)
+            logger.info(f"Parsed document: {char_count} characters")
+            yield send_progress("parsing", 80, f"解析中，已读取 {char_count} 个字符...", {
+                "char_count": char_count
+            })
+            await asyncio.sleep(0.05)
+            yield send_progress("parsing", 100, f"解析完成，共 {char_count} 个字符", {
+                "char_count": char_count
+            })
+            await asyncio.sleep(0.05)
+            logger.info(f"Parsing stage completed for {filename}")
+        except Exception as e:
+            logger.error(f"Parsing error: {str(e)}", exc_info=True)
+            yield send_progress("error", 0, f"解析失败: {str(e)}", {
+                "retryable": True,
+                "error_type": type(e).__name__
+            })
+            return
+        
+        # Validate document was loaded
+        if document is None:
+            logger.error("Document is None after parsing")
+            yield send_progress("error", 0, "解析失败: 文档为空", {
+                "retryable": True,
+                "error_type": "DocumentError"
+            })
+            return
         
         # Stage 3: Chunking
-        yield send_progress("chunking", 50, "正在分块...")
-        from processors.chunkers import RecursiveChunker
-        chunker = RecursiveChunker(
-            chunk_size=chunk_size or service.chunk_size,
-            chunk_overlap=chunk_overlap or service.chunk_overlap
-        )
-        chunks = chunker.chunk(document)
-        yield send_progress("chunking", 70, f"创建了 {len(chunks)} 个 chunks", {
-            "chunks_count": len(chunks)
-        })
-        await asyncio.sleep(0.05)
+        logger.info(f"Starting chunking stage for {filename}")
+        yield send_progress("chunking", 10, "正在分块...")
+        await asyncio.sleep(0.05)  # Give frontend time to update UI
+        
+        try:
+            from processors.chunkers import RecursiveChunker
+            chunk_size_val = chunk_size or service.chunk_size
+            chunk_overlap_val = chunk_overlap or service.chunk_overlap
+            logger.info(f"Creating chunker with chunk_size={chunk_size_val}, chunk_overlap={chunk_overlap_val}")
+            
+            chunker = RecursiveChunker(
+                chunk_size=chunk_size_val,
+                chunk_overlap=chunk_overlap_val
+            )
+            
+            logger.info(f"Starting chunk operation on document with {len(document.content)} characters")
+            chunks = chunker.chunk(document)
+            logger.info(f"Chunking completed: created {len(chunks)} chunks")
+            
+            yield send_progress("chunking", 90, f"分块中，已创建 {len(chunks)} 个 chunks...", {
+                "chunks_count": len(chunks)
+            })
+            await asyncio.sleep(0.05)
+            yield send_progress("chunking", 100, f"分块完成，共创建 {len(chunks)} 个 chunks", {
+                "chunks_count": len(chunks)
+            })
+            await asyncio.sleep(0.05)
+            logger.info(f"Chunking stage completed for {filename}")
+        except Exception as e:
+            logger.error(f"Chunking error: {str(e)}", exc_info=True)
+            yield send_progress("error", 0, f"分块失败: {str(e)}", {
+                "retryable": True,
+                "error_type": type(e).__name__
+            })
+            return
         
         if not chunks:
             yield send_progress("error", 0, "未生成任何 chunks", {
@@ -110,49 +161,85 @@ async def process_file_with_progress(
             return
         
         # Stage 4: Embedding
-        yield send_progress("embedding", 75, "生成嵌入向量中...")
-        from processors.embedders import EmbedderFactory
-        embedder = EmbedderFactory.create(
-            provider=embedding_provider,
-            model=embedding_model
-        )
-        texts = [chunk.text for chunk in chunks]
+        logger.info(f"Starting embedding stage for {filename} with {len(chunks)} chunks")
+        yield send_progress("embedding", 10, "生成嵌入向量中...")
+        await asyncio.sleep(0.05)
         
-        # Generate embeddings in batches for progress tracking
-        batch_size = 10
-        embeddings = []
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
-            batch_embeddings = embedder.embed(batch)
-            embeddings.extend(batch_embeddings)
-            progress = 75 + int((i + len(batch)) / len(texts) * 10)
-            yield send_progress("embedding", progress, f"已生成 {len(embeddings)}/{len(texts)} 个嵌入向量", {
+        try:
+            from processors.embedders import EmbedderFactory
+            logger.info(f"Creating embedder: provider={embedding_provider}, model={embedding_model}")
+            embedder = EmbedderFactory.create(
+                provider=embedding_provider,
+                model=embedding_model
+            )
+            texts = [chunk.text for chunk in chunks]
+            logger.info(f"Prepared {len(texts)} texts for embedding")
+            
+            # Generate embeddings in batches for progress tracking
+            batch_size = 10
+            embeddings = []
+            total_batches = (len(texts) + batch_size - 1) // batch_size
+            for i in range(0, len(texts), batch_size):
+                batch = texts[i:i + batch_size]
+                batch_embeddings = embedder.embed(batch)
+                embeddings.extend(batch_embeddings)
+                progress = 10 + int((len(embeddings) / len(texts)) * 80)
+                yield send_progress("embedding", progress, f"已生成 {len(embeddings)}/{len(texts)} 个嵌入向量", {
+                    "embeddings_generated": len(embeddings),
+                    "embeddings_total": len(texts)
+                })
+                await asyncio.sleep(0.05)
+            
+            # Attach embeddings
+            for chunk, embedding in zip(chunks, embeddings):
+                chunk.embedding = embedding
+            
+            yield send_progress("embedding", 100, f"嵌入向量生成完成，共 {len(embeddings)} 个", {
                 "embeddings_generated": len(embeddings),
                 "embeddings_total": len(texts)
             })
             await asyncio.sleep(0.05)
-        
-        # Attach embeddings
-        for chunk, embedding in zip(chunks, embeddings):
-            chunk.embedding = embedding
-        
-        yield send_progress("embedding", 90, "嵌入向量生成完成")
-        await asyncio.sleep(0.05)
+        except Exception as e:
+            logger.error(f"Embedding error: {str(e)}", exc_info=True)
+            yield send_progress("error", 0, f"生成嵌入向量失败: {str(e)}", {
+                "retryable": True,
+                "error_type": type(e).__name__
+            })
+            return
         
         # Stage 5: Indexing
-        yield send_progress("indexing", 92, "索引到 Milvus 中...")
-        chunks_indexed = service.vector_store.index(chunks, collection_name)
-        yield send_progress("indexing", 98, f"已索引 {chunks_indexed} 个 chunks", {
-            "chunks_indexed": chunks_indexed
-        })
+        logger.info(f"Starting indexing stage for {filename} to collection {collection_name}")
+        yield send_progress("indexing", 10, "索引到 Milvus 中...")
         await asyncio.sleep(0.05)
         
+        try:
+            logger.info(f"Indexing {len(chunks)} chunks to Milvus collection: {collection_name}")
+            chunks_indexed = service.vector_store.index(chunks, collection_name)
+            logger.info(f"Indexing completed: {chunks_indexed} chunks indexed")
+            yield send_progress("indexing", 90, f"索引中，已索引 {chunks_indexed} 个 chunks...", {
+                "chunks_indexed": chunks_indexed
+            })
+            await asyncio.sleep(0.05)
+            yield send_progress("indexing", 100, f"索引完成，共索引 {chunks_indexed} 个 chunks", {
+                "chunks_indexed": chunks_indexed
+            })
+            await asyncio.sleep(0.05)
+        except Exception as e:
+            logger.error(f"Indexing error: {str(e)}", exc_info=True)
+            yield send_progress("error", 0, f"索引失败: {str(e)}", {
+                "retryable": True,
+                "error_type": type(e).__name__
+            })
+            return
+        
         # Stage 6: Completed
+        logger.info(f"Processing completed for {filename}: {chunks_indexed} chunks indexed to {collection_name}")
         yield send_progress("completed", 100, f"成功索引 {chunks_indexed} 个 chunks 到 {collection_name}", {
             "chunks_indexed": chunks_indexed,
             "collection_name": collection_name,
             "filename": filename
         })
+        await asyncio.sleep(0.1)  # Give frontend time to process final update
         
     except IndexingError as e:
         logger.error(f"Indexing error: {str(e)}", exc_info=True)

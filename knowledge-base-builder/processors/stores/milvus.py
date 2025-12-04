@@ -2,7 +2,6 @@
 from typing import List
 import sys
 from pathlib import Path
-import logging
 
 try:
     from pymilvus import (
@@ -20,8 +19,9 @@ except ImportError:
 from .base import BaseVectorStore
 from models.chunk import Chunk
 from utils.exceptions import IndexingError
+from utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MilvusVectorStore(BaseVectorStore):
@@ -114,7 +114,22 @@ class MilvusVectorStore(BaseVectorStore):
             
             logger.info(f"Created collection '{collection_name}' with dimension {embedding_dim}")
         except Exception as e:
-            raise IndexingError(f"Failed to create collection: {str(e)}") from e
+            error_msg = str(e)
+            logger.error(f"Failed to create collection: {error_msg}", exc_info=True)
+            
+            # Provide more helpful error messages for common issues
+            if "No space left on device" in error_msg or "ENOSPC" in error_msg:
+                raise IndexingError(
+                    f"Milvus 磁盘空间不足。\n"
+                    f"错误详情: {error_msg}\n"
+                    f"建议解决方案:\n"
+                    f"1. 检查磁盘空间: df -h\n"
+                    f"2. 如果使用 Docker，清理容器和卷: docker system prune -a --volumes\n"
+                    f"3. 清理 Milvus 日志文件\n"
+                    f"4. 删除不需要的 collection 释放空间"
+                ) from e
+            else:
+                raise IndexingError(f"Failed to create collection: {error_msg}") from e
     
     def index(self, chunks: List[Chunk], collection_name: str) -> int:
         """Index chunks to Milvus."""
@@ -146,7 +161,24 @@ class MilvusVectorStore(BaseVectorStore):
             logger.info(f"Indexed {len(chunks)} chunks to collection '{collection_name}'")
             return len(chunks)
             
+        except IndexingError:
+            # Re-raise IndexingError as-is (already has helpful message)
+            raise
         except Exception as e:
-            logger.error(f"Failed to index chunks: {str(e)}", exc_info=True)
-            raise IndexingError(f"Indexing failed: {str(e)}") from e
+            error_msg = str(e)
+            logger.error(f"Failed to index chunks: {error_msg}", exc_info=True)
+            
+            # Provide more helpful error messages for common issues
+            if "No space left on device" in error_msg or "ENOSPC" in error_msg:
+                raise IndexingError(
+                    f"Milvus 磁盘空间不足。\n"
+                    f"错误详情: {error_msg}\n"
+                    f"建议解决方案:\n"
+                    f"1. 检查磁盘空间: df -h\n"
+                    f"2. 如果使用 Docker，清理容器和卷: docker system prune -a --volumes\n"
+                    f"3. 清理 Milvus 日志文件\n"
+                    f"4. 删除不需要的 collection 释放空间"
+                ) from e
+            else:
+                raise IndexingError(f"Indexing failed: {error_msg}") from e
 
