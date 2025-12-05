@@ -1,18 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '../api/client';
 import { Collection } from '../types/collection';
+import type { AppConfig, EmbeddingConfig } from '../types/config';
+import { getEmbeddingDimension } from '../utils/embedding';
 import './CollectionManager.css';
 
 interface CollectionManagerProps {
   currentCollection: string;
   onCollectionChange: (name: string) => void;
   refreshTrigger?: number; // When this changes, refresh collections
+  config?: AppConfig; // Optional config for embedding dimension
 }
 
 export const CollectionManager: React.FC<CollectionManagerProps> = ({
   currentCollection,
   onCollectionChange,
   refreshTrigger,
+  config,
 }) => {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(false);
@@ -20,6 +24,21 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
   const [newCollectionName, setNewCollectionName] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Embedding configuration for new collection
+  const [embeddingConfig, setEmbeddingConfig] = useState<EmbeddingConfig>(() => {
+    return config?.embedding || {
+      provider: 'qwen',
+      model: 'text-embedding-v2',
+    };
+  });
+
+  // Update embedding config when global config changes
+  useEffect(() => {
+    if (config?.embedding) {
+      setEmbeddingConfig(config.embedding);
+    }
+  }, [config]);
 
   useEffect(() => {
     loadCollections();
@@ -46,15 +65,49 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
     }
   };
 
+  const getModelOptions = (provider: string) => {
+    switch (provider) {
+      case 'qwen':
+        return [
+          { value: 'text-embedding-v2', label: 'text-embedding-v2 (1536d)' },
+          { value: 'text-embedding-v1', label: 'text-embedding-v1 (1536d)' },
+        ];
+      case 'openai':
+        return [
+          { value: 'text-embedding-3-small', label: 'text-embedding-3-small (1536d)' },
+          { value: 'text-embedding-3-large', label: 'text-embedding-3-large (3072d)' },
+          { value: 'text-embedding-ada-002', label: 'text-embedding-ada-002 (1536d)' },
+        ];
+      case 'bge':
+        return [
+          { value: 'BAAI/bge-large-en-v1.5', label: 'bge-large-en-v1.5 (1024d, English)' },
+          { value: 'BAAI/bge-base-en-v1.5', label: 'bge-base-en-v1.5 (768d, English)' },
+          { value: 'BAAI/bge-small-en-v1.5', label: 'bge-small-en-v1.5 (384d, English)' },
+          { value: 'BAAI/bge-large-zh-v1.5', label: 'bge-large-zh-v1.5 (1024d, Chinese)' },
+          { value: 'BAAI/bge-base-zh-v1.5', label: 'bge-base-zh-v1.5 (768d, Chinese)' },
+          { value: 'BAAI/bge-small-zh-v1.5', label: 'bge-small-zh-v1.5 (384d, Chinese)' },
+          { value: 'nvidia/llama-nemotron-embed-1b-v2', label: 'llama-nemotron-embed-1b-v2 (1024d)' },
+        ];
+      default:
+        return [];
+    }
+  };
+
   const handleCreate = async () => {
     if (!newCollectionName.trim()) return;
     
     setCreating(true);
     setError(null);
     try {
-      await apiClient.createCollection(newCollectionName.trim());
+      const embeddingDim = getEmbeddingDimension(embeddingConfig);
+      await apiClient.createCollection(newCollectionName.trim(), embeddingDim);
       setShowCreateDialog(false);
       setNewCollectionName('');
+      // Reset to default config
+      setEmbeddingConfig(config?.embedding || {
+        provider: 'qwen',
+        model: 'text-embedding-v2',
+      });
       await loadCollections();
       onCollectionChange(newCollectionName.trim());
     } catch (err) {
@@ -63,6 +116,16 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleCloseDialog = () => {
+    setShowCreateDialog(false);
+    setNewCollectionName('');
+    // Reset to default config
+    setEmbeddingConfig(config?.embedding || {
+      provider: 'qwen',
+      model: 'text-embedding-v2',
+    });
   };
 
   const handleDelete = async (name: string) => {
@@ -106,26 +169,87 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
       )}
 
       {showCreateDialog && (
-        <div className="modal-overlay" onClick={() => setShowCreateDialog(false)}>
+        <div className="modal-overlay" onClick={handleCloseDialog}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h3>Create New Collection</h3>
-            <input
-              type="text"
-              value={newCollectionName}
-              onChange={(e) => setNewCollectionName(e.target.value)}
-              placeholder="Collection name"
-              autoFocus
-              onKeyPress={(e) => {
-                if (e.key === 'Enter' && !creating) {
-                  handleCreate();
-                }
-              }}
-            />
+            
+            <div className="form-group">
+              <label>Collection Name:</label>
+              <input
+                type="text"
+                value={newCollectionName}
+                onChange={(e) => setNewCollectionName(e.target.value)}
+                placeholder="Collection name"
+                autoFocus
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !creating) {
+                    handleCreate();
+                  }
+                }}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Embedding Provider:</label>
+              <select
+                value={embeddingConfig.provider}
+                onChange={(e) => setEmbeddingConfig({
+                  ...embeddingConfig,
+                  provider: e.target.value as 'qwen' | 'openai' | 'bge',
+                  model: undefined, // Reset model when provider changes
+                  bgeApiUrl: e.target.value === 'bge' ? embeddingConfig.bgeApiUrl : undefined,
+                })}
+              >
+                <option value="qwen">Qwen (DashScope)</option>
+                <option value="openai">OpenAI</option>
+                <option value="bge">BGE (API)</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Embedding Model:</label>
+              <select
+                value={embeddingConfig.model || ''}
+                onChange={(e) => setEmbeddingConfig({
+                  ...embeddingConfig,
+                  model: e.target.value,
+                })}
+              >
+                {getModelOptions(embeddingConfig.provider).map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {embeddingConfig.provider === 'bge' && (
+              <div className="form-group">
+                <label>BGE API URL:</label>
+                <input
+                  type="text"
+                  value={embeddingConfig.bgeApiUrl || ''}
+                  onChange={(e) => setEmbeddingConfig({
+                    ...embeddingConfig,
+                    bgeApiUrl: e.target.value,
+                  })}
+                  placeholder="http://10.150.115.110:6000"
+                />
+                <small>Base URL for BGE embedding service</small>
+              </div>
+            )}
+
+            <div className="form-group">
+              <small style={{ color: '#666' }}>
+                Embedding Dimension: <strong>{getEmbeddingDimension(embeddingConfig)}</strong>
+              </small>
+            </div>
+
             <div className="modal-actions">
               <button onClick={handleCreate} disabled={creating || !newCollectionName.trim()}>
                 {creating ? 'Creating...' : 'Create'}
               </button>
-              <button onClick={() => setShowCreateDialog(false)} disabled={creating}>
+              <button onClick={handleCloseDialog} disabled={creating}>
                 Cancel
               </button>
             </div>

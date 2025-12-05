@@ -65,6 +65,7 @@ function App() {
             currentCollection={currentCollection}
             onCollectionChange={setCurrentCollection}
             refreshTrigger={collectionRefreshTrigger}
+            config={config}
           />
         </aside>
 

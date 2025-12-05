@@ -156,7 +156,7 @@ class MilvusVectorStore(BaseVectorStore):
             if not self._collection_exists(collection_name):
                 self._create_collection(collection_name, embedding_dim)
             else:
-                # Check if collection has document_id field
+                # Check if collection has document_id field and correct dimension
                 collection.load()
                 schema = collection.schema
                 
@@ -179,6 +179,35 @@ class MilvusVectorStore(BaseVectorStore):
                         f"2. Re-upload your files to recreate the collection with the new schema\n"
                         f"Or use the cleanup script: python cleanup_milvus.py --delete {collection_name}"
                     )
+                
+                # Check embedding dimension
+                embedding_field = None
+                for field in schema.fields:
+                    if field.name == "embedding":
+                        embedding_field = field
+                        break
+                
+                if embedding_field:
+                    schema_dim = embedding_field.params.get("dim")
+                    if schema_dim and schema_dim != embedding_dim:
+                        logger.error(
+                            f"Dimension mismatch: collection expects {schema_dim}D, "
+                            f"but embeddings are {embedding_dim}D"
+                        )
+                        raise IndexingError(
+                            f"Embedding dimension mismatch!\n"
+                            f"Collection '{collection_name}' was created with {schema_dim}-dimensional embeddings,\n"
+                            f"but you're trying to insert {embedding_dim}-dimensional embeddings.\n\n"
+                            f"This usually happens when switching embedding providers:\n"
+                            f"- Qwen/OpenAI: 1536 dimensions\n"
+                            f"- BGE large: 1024 dimensions\n"
+                            f"- BGE base: 768 dimensions\n"
+                            f"- BGE small: 384 dimensions\n\n"
+                            f"Solution:\n"
+                            f"1. Delete the collection: DELETE /api/v1/collections/{collection_name}\n"
+                            f"2. Re-upload your files with the new embedding provider\n"
+                            f"   (The collection will be recreated with the correct dimension)"
+                        )
             
             # Ensure collection is loaded
             collection.load()
