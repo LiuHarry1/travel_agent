@@ -76,30 +76,40 @@ export const ProcessingTimeline: React.FC<ProcessingTimelineProps> = ({ fileStat
       
       {(fileStatus.chunksCreated || fileStatus.chunksIndexed || fileStatus.charCount) && (
         <div className="timeline-stats">
-          {[
-            fileStatus.charCount && {
-              key: 'charCount',
-              value: fileStatus.charCount.toLocaleString(),
-              label: '字符数'
-            },
-            fileStatus.chunksCreated && {
-              key: 'chunksCreated',
-              value: fileStatus.chunksCreated,
-              label: 'Chunks'
-            },
-            fileStatus.chunksIndexed && {
-              key: 'chunksIndexed',
-              value: fileStatus.chunksIndexed,
-              label: '已索引'
+          {(() => {
+            const stats: Array<{ key: string; value: string | number; label: string }> = [];
+            
+            if (fileStatus.charCount) {
+              stats.push({
+                key: 'charCount',
+                value: fileStatus.charCount.toLocaleString(),
+                label: '字符数'
+              });
             }
-          ]
-            .filter((stat): stat is { key: string; value: string | number; label: string } => Boolean(stat))
-            .map((stat) => (
+            
+            if (fileStatus.chunksCreated) {
+              stats.push({
+                key: 'chunksCreated',
+                value: fileStatus.chunksCreated,
+                label: 'Chunks'
+              });
+            }
+            
+            if (fileStatus.chunksIndexed) {
+              stats.push({
+                key: 'chunksIndexed',
+                value: fileStatus.chunksIndexed,
+                label: '已索引'
+              });
+            }
+            
+            return stats.map((stat) => (
               <div key={stat.key} className="timeline-stat-item">
                 <div className="timeline-stat-value">{stat.value}</div>
                 <div className="timeline-stat-label">{stat.label}</div>
               </div>
-            ))}
+            ));
+          })()}
         </div>
       )}
     </div>

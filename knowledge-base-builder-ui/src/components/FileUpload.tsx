@@ -372,7 +372,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         <div className="processing-queue-section">
           <h3>处理中的文件 ({processingFiles.size})</h3>
           {Array.from(processingFiles.values()).map((fileStatus, index) => (
-            <div key={fileStatus.id || `file-${index}-${fileStatus.startTime || Date.now()}`} className="processing-file-item">
+            <div key={fileStatus.id || `file-${index}-${fileStatus.startTime || 0}`} className="processing-file-item">
               <div className="file-header">
                 <FileTypeIcon type={detectFileType(fileStatus.file?.name)} />
                 <span className="file-name">{fileStatus.file?.name || 'Unknown file'}</span>
