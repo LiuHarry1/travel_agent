@@ -60,11 +60,23 @@ async def list_collections(
                 collection = Collection(name, using=connection_alias)
                 collection.load()
                 
+                # Get embedding dimension from schema
+                embedding_dim = None
+                try:
+                    schema = collection.schema
+                    for field in schema.fields:
+                        if field.name == "embedding":
+                            embedding_dim = field.params.get("dim")
+                            break
+                except Exception as e:
+                    logger.warning(f"Failed to get embedding dim for {name}: {e}")
+                
                 # Get document count (approximate)
                 stats = {
                     "name": name,
                     "document_count": 0,  # Milvus doesn't directly track document count
                     "chunk_count": collection.num_entities,
+                    "embedding_dim": embedding_dim,
                     "created_at": "",  # Milvus doesn't store creation time
                     "last_updated": ""  # Milvus doesn't store update time
                 }
@@ -75,6 +87,7 @@ async def list_collections(
                     "name": name,
                     "document_count": 0,
                     "chunk_count": 0,
+                    "embedding_dim": None,
                     "created_at": "",
                     "last_updated": ""
                 })
@@ -150,6 +163,11 @@ async def create_collection(
                 name="document_id",
                 dtype=DataType.VARCHAR,
                 max_length=1024
+            ),
+            FieldSchema(
+                name="file_path",
+                dtype=DataType.VARCHAR,
+                max_length=2048
             ),
         ]
         

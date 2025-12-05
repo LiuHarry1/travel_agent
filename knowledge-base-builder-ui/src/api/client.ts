@@ -32,6 +32,7 @@ export interface SourceFile {
   document_id: string;
   filename: string;
   chunk_count: number;
+  file_path?: string;  // Actual file path for accessing the file
 }
 
 export interface Chunk {
@@ -239,6 +240,23 @@ export class ApiClient {
       throw new Error(error.detail || 'Failed to fetch chunks');
     }
     return response.json();
+  }
+
+  async getSourceFileUrl(collectionName: string, documentId: string): Promise<string> {
+    const response = await fetch(
+      `${this.baseUrl}/api/v1/collections/${encodeURIComponent(collectionName)}/sources/${encodeURIComponent(documentId)}/file`
+    );
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get source file URL');
+    }
+    const data = await response.json();
+    // Return full URL if it starts with http, otherwise construct it
+    if (data.file_url.startsWith('http')) {
+      return data.file_url;
+    }
+    // If relative URL, prepend baseUrl
+    return `${this.baseUrl}${data.file_url}`;
   }
 
   async deleteSource(collectionName: string, documentId: string): Promise<void> {

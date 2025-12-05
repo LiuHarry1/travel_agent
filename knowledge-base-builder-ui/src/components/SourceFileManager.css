@@ -125,6 +125,7 @@
   margin-left: var(--spacing-md);
 }
 
+.view-file-btn,
 .view-btn,
 .delete-btn {
   display: flex;
@@ -141,6 +142,17 @@
   white-space: nowrap;
   min-width: fit-content;
   flex-shrink: 0;
+}
+
+.view-file-btn {
+  background: #10b981;
+  color: var(--white);
+}
+
+.view-file-btn:hover {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
 }
 
 .view-btn {

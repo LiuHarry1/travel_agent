@@ -96,6 +96,11 @@ class MilvusVectorStore(BaseVectorStore):
                     dtype=DataType.VARCHAR,
                     max_length=1024
                 ),
+                FieldSchema(
+                    name="file_path",
+                    dtype=DataType.VARCHAR,
+                    max_length=2048
+                ),
             ]
             
             schema = CollectionSchema(
@@ -156,7 +161,7 @@ class MilvusVectorStore(BaseVectorStore):
             if not self._collection_exists(collection_name):
                 self._create_collection(collection_name, embedding_dim)
             else:
-                # Check if collection has document_id field and correct dimension
+                # Check if collection has required fields and correct dimension
                 collection.load()
                 schema = collection.schema
                 
@@ -165,6 +170,7 @@ class MilvusVectorStore(BaseVectorStore):
                 logger.debug(f"Collection '{collection_name}' schema fields: {field_names}")
                 
                 has_document_id = any(field.name == "document_id" for field in schema.fields)
+                has_file_path = any(field.name == "file_path" for field in schema.fields)
                 
                 if not has_document_id:
                     logger.warning(
@@ -176,8 +182,20 @@ class MilvusVectorStore(BaseVectorStore):
                         f"Available fields: {', '.join(field_names)}\n"
                         f"This collection was created with an older schema. Please:\n"
                         f"1. Delete the collection: DELETE /api/v1/collections/{collection_name}\n"
-                        f"2. Re-upload your files to recreate the collection with the new schema\n"
-                        f"Or use the cleanup script: python cleanup_milvus.py --delete {collection_name}"
+                        f"2. Re-upload your files to recreate the collection with the new schema"
+                    )
+                
+                if not has_file_path:
+                    logger.warning(
+                        f"Collection '{collection_name}' missing 'file_path' field. "
+                        f"Available fields: {field_names}"
+                    )
+                    raise IndexingError(
+                        f"Collection '{collection_name}' exists but doesn't have 'file_path' field.\n"
+                        f"Available fields: {', '.join(field_names)}\n"
+                        f"This collection was created with an older schema. Please:\n"
+                        f"1. Delete the collection: DELETE /api/v1/collections/{collection_name}\n"
+                        f"2. Re-upload your files to recreate the collection with the new schema"
                     )
                 
                 # Check embedding dimension
@@ -213,10 +231,11 @@ class MilvusVectorStore(BaseVectorStore):
             collection.load()
             
             # Prepare data
-            # Note: id field is auto_id=True, so we need to provide text, embedding, and document_id
+            # Note: id field is auto_id=True, so we need to provide text, embedding, document_id, and file_path
             texts = [chunk.text for chunk in chunks]
             embeddings = [list(chunk.embedding) for chunk in chunks]
             document_ids = [chunk.document_id for chunk in chunks]
+            file_paths = [chunk.file_path or "" for chunk in chunks]
             
             # Insert data in batches to avoid memory issues
             batch_size = 1000
@@ -225,8 +244,9 @@ class MilvusVectorStore(BaseVectorStore):
                 batch_texts = texts[i:i + batch_size]
                 batch_embeddings = embeddings[i:i + batch_size]
                 batch_document_ids = document_ids[i:i + batch_size]
+                batch_file_paths = file_paths[i:i + batch_size]
                 logger.debug(f"Inserting batch {i // batch_size + 1}/{(len(texts) + batch_size - 1) // batch_size}")
-                collection.insert([batch_texts, batch_embeddings, batch_document_ids])
+                collection.insert([batch_texts, batch_embeddings, batch_document_ids, batch_file_paths])
             
             # Flush to ensure data is written
             collection.flush()
@@ -266,31 +286,41 @@ class MilvusVectorStore(BaseVectorStore):
             collection = Collection(collection_name, using=self.alias)
             collection.load()
             
-            # Query to get all document_ids
+            # Query to get all document_ids and file_paths
             # Milvus doesn't support DISTINCT, so we query all and deduplicate
             # Use a valid field expression to query all records: id >= 0 (always true for auto_id)
             results = collection.query(
                 expr="id >= 0",
-                output_fields=["document_id"],
+                output_fields=["document_id", "file_path"],
                 limit=16384  # Milvus max limit
             )
             
-            # Get unique document_ids and count chunks for each
-            source_counts = {}
+            # Get unique document_ids, count chunks, and get file_path for each
+            source_info = {}  # {doc_id: {"count": int, "file_path": str}}
             for result in results:
                 doc_id = result.get("document_id", "")
                 if doc_id:
-                    source_counts[doc_id] = source_counts.get(doc_id, 0) + 1
+                    if doc_id not in source_info:
+                        source_info[doc_id] = {
+                            "count": 0,
+                            "file_path": result.get("file_path", "")
+                        }
+                    source_info[doc_id]["count"] += 1
+                    # Update file_path if we found one (prefer non-empty)
+                    if result.get("file_path") and not source_info[doc_id]["file_path"]:
+                        source_info[doc_id]["file_path"] = result.get("file_path", "")
             
             # Convert to list of dicts
-            sources = [
-                {
+            sources = []
+            for doc_id, info in source_info.items():
+                # doc_id is the original filename (e.g., "面试经验.pdf")
+                # file_path is the actual saved path (e.g., "static/sources/7a0b3112_面试经验.pdf")
+                sources.append({
                     "document_id": doc_id,
-                    "chunk_count": count,
-                    "filename": doc_id.split("/")[-1] if "/" in doc_id else doc_id
-                }
-                for doc_id, count in source_counts.items()
-            ]
+                    "chunk_count": info["count"],
+                    "filename": doc_id,  # Original filename for display
+                    "file_path": info["file_path"]  # Actual file path
+                })
             
             # Sort by filename
             sources.sort(key=lambda x: x["filename"])

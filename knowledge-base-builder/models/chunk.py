@@ -8,10 +8,11 @@ class Chunk:
     """Text chunk model."""
     text: str
     chunk_id: str
-    document_id: str
+    document_id: str  # Original filename for display
     chunk_index: int
     metadata: Dict[str, Any] = None
     embedding: Optional[list] = None
+    file_path: Optional[str] = None  # Actual file path for accessing the file
     
     def __post_init__(self):
         if self.metadata is None:

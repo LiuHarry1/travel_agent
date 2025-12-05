@@ -275,6 +275,9 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
                 <div className="collection-name">{collection.name}</div>
                 <div className="collection-stats">
                   {collection.chunk_count} chunks
+                  {collection.embedding_dim && (
+                    <span className="embedding-dim">• {collection.embedding_dim}D</span>
+                  )}
                 </div>
               </div>
               <div className="collection-actions">

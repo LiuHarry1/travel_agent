@@ -63,6 +63,18 @@ export const SourceFileManager: React.FC<SourceFileManagerProps> = ({
     onViewChunks(documentId);
   };
 
+  const handleViewFile = async (documentId: string) => {
+    try {
+      // Get the actual file URL from the backend
+      const fileUrl = await apiClient.getSourceFileUrl(collectionName, documentId);
+      // Open in new window/tab
+      window.open(fileUrl, '_blank');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to open file');
+      console.error('Failed to get file URL:', err);
+    }
+  };
+
   if (!collectionName) {
     return (
       <div className="source-file-manager">
@@ -114,6 +126,14 @@ export const SourceFileManager: React.FC<SourceFileManagerProps> = ({
                 </div>
               </div>
               <div className="source-file-actions">
+                <button
+                  onClick={() => handleViewFile(source.document_id)}
+                  className="view-file-btn"
+                  title="View source file in new window"
+                >
+                  <span className="btn-icon">📄</span>
+                  <span className="btn-text">View File</span>
+                </button>
                 <button
                   onClick={() => handleViewChunks(source.document_id)}
                   className="view-btn"

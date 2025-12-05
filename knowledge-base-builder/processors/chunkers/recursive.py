@@ -96,11 +96,14 @@ class RecursiveChunker(BaseChunker):
             
             # Create chunk
             chunk_id = self._generate_chunk_id(document.source, chunk_index)
+            # Get file_path from metadata if available
+            file_path = document.metadata.get("file_path") if document.metadata else None
             chunk = Chunk(
                 text=chunk_text_stripped,
                 chunk_id=chunk_id,
-                document_id=document.source,
+                document_id=document.source,  # Original filename
                 chunk_index=chunk_index,
+                file_path=file_path,  # Actual file path
                 metadata={
                     **document.metadata,
                     "chunk_size": len(chunk_text_stripped),
@@ -142,11 +145,14 @@ class RecursiveChunker(BaseChunker):
             remaining_text = text[current_pos:].strip()
             if remaining_text:
                 chunk_id = self._generate_chunk_id(document.source, chunk_index)
+                # Get file_path from metadata if available
+                file_path = document.metadata.get("file_path") if document.metadata else None
                 chunk = Chunk(
                     text=remaining_text,
                     chunk_id=chunk_id,
-                    document_id=document.source,
+                    document_id=document.source,  # Original filename
                     chunk_index=chunk_index,
+                    file_path=file_path,  # Actual file path
                     metadata={
                         **document.metadata,
                         "chunk_size": len(remaining_text),

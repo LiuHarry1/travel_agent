@@ -97,8 +97,15 @@ async def process_file_with_progress(
                 base_url=settings.static_base_url
             )
             document = loader.load(file_path, metadata={"original_filename": filename})
-            # Use filename as document_id for better identification
-            document.source = filename
+            # document.source contains the saved_source_path (e.g., "static/sources/7a0b3112_面试经验.pdf")
+            # We'll use original filename as document_id for display, but store the actual path in metadata
+            saved_source_path = document.source  # This is the actual saved file path
+            # Set document_id to original filename for display
+            document.source = filename  # Use original filename as document_id
+            # Store actual file path in metadata
+            if hasattr(document, 'metadata') and document.metadata:
+                document.metadata['file_path'] = saved_source_path
+                document.metadata['original_filename'] = filename
             char_count = len(document.content)
             logger.info(f"Parsed document: {char_count} characters")
             yield send_progress("parsing", 80, f"解析中，已读取 {char_count} 个字符...", {
