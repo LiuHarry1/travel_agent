@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ConfigPanel } from './components/ConfigPanel';
 import { CollectionManager } from './components/CollectionManager';
 import { FileUpload } from './components/FileUpload';

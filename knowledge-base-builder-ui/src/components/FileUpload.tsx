@@ -4,7 +4,7 @@ import type { AppConfig } from '../types/config';
 import { apiClient, UploadResponse, BatchUploadResponse } from '../api/client';
 import { ProcessingTimeline } from './ProcessingTimeline';
 import { ErrorDisplay } from './ErrorDisplay';
-import { ProcessingStage, FileProcessingStatus, ProcessingError } from '../types/processing';
+import { ProcessingStage, FileProcessingStatus } from '../types/processing';
 import './FileUpload.css';
 
 interface FileUploadProps {

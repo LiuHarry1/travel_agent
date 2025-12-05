@@ -93,7 +93,7 @@ export const ProcessingTimeline: React.FC<ProcessingTimelineProps> = ({ fileStat
               label: '已索引'
             }
           ]
-            .filter(Boolean)
+            .filter((stat): stat is { key: string; value: string | number; label: string } => Boolean(stat))
             .map((stat) => (
               <div key={stat.key} className="timeline-stat-item">
                 <div className="timeline-stat-value">{stat.value}</div>
