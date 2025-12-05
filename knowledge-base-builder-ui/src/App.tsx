@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ConfigPanel } from './components/ConfigPanel';
 import { CollectionManager } from './components/CollectionManager';
+import { DatabaseManager } from './components/DatabaseManager';
 import { FileUpload } from './components/FileUpload';
 import { SourceFileManager } from './components/SourceFileManager';
 import { ChunksViewer } from './components/ChunksViewer';
@@ -15,6 +16,7 @@ function App() {
     return saved ? JSON.parse(saved) : getDefaultConfig();
   });
   
+  const [currentDatabase, setCurrentDatabase] = useState<string>('default');
   const [currentCollection, setCurrentCollection] = useState(config.defaultCollection);
   const [showSettings, setShowSettings] = useState(false);
   const [activeTab, setActiveTab] = useState<'upload' | 'sources' | 'chunks'>('upload');
@@ -61,11 +63,16 @@ function App() {
 
       <div className="app-layout">
         <aside className="sidebar">
+          <DatabaseManager
+            currentDatabase={currentDatabase}
+            onDatabaseChange={setCurrentDatabase}
+          />
           <CollectionManager
             currentCollection={currentCollection}
             onCollectionChange={setCurrentCollection}
             refreshTrigger={collectionRefreshTrigger}
             config={config}
+            database={currentDatabase}
           />
         </aside>
 
@@ -107,6 +114,7 @@ function App() {
                       <FileUpload
                         config={config}
                         collection={currentCollection}
+                        database={currentDatabase}
                         onUploadSuccess={handleUploadSuccess}
                         onUploadError={handleUploadError}
                       />
@@ -151,6 +159,7 @@ function App() {
                 {activeTab === 'sources' && (
                   <SourceFileManager 
                     collectionName={currentCollection}
+                    database={currentDatabase}
                     onViewChunks={handleViewChunks}
                     selectedSource={selectedSource}
                     onSourceDeleted={() => {
@@ -164,6 +173,7 @@ function App() {
                   <ChunksViewer
                     collectionName={currentCollection}
                     documentId={selectedSource}
+                    database={currentDatabase}
                     onClose={() => {
                       setSelectedSource(null);
                       setActiveTab('sources');

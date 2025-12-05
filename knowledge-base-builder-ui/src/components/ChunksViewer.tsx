@@ -5,12 +5,14 @@ import './ChunksViewer.css';
 interface ChunksViewerProps {
   collectionName: string;
   documentId: string | null;
+  database?: string;
   onClose: () => void;
 }
 
 export const ChunksViewer: React.FC<ChunksViewerProps> = ({ 
   collectionName, 
-  documentId, 
+  documentId,
+  database,
   onClose 
 }) => {
   const [chunksData, setChunksData] = useState<ChunksResponse | null>(null);
@@ -29,7 +31,7 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
     } else {
       setChunksData(null);
     }
-  }, [documentId, collectionName]);
+  }, [documentId, collectionName, database]);
 
   useEffect(() => {
     if (documentId) {
@@ -42,7 +44,7 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
     
     setLoadingChunks(true);
     try {
-      const data = await apiClient.getSourceChunks(collectionName, docId, page, 10);
+      const data = await apiClient.getSourceChunks(collectionName, docId, page, 10, database);
       setChunksData(data);
     } catch (err) {
       console.error('Failed to load chunks:', err);

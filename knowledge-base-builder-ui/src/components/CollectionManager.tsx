@@ -10,6 +10,7 @@ interface CollectionManagerProps {
   onCollectionChange: (name: string) => void;
   refreshTrigger?: number; // When this changes, refresh collections
   config?: AppConfig; // Optional config for embedding dimension
+  database?: string; // Current database name
 }
 
 export const CollectionManager: React.FC<CollectionManagerProps> = ({
@@ -17,6 +18,7 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
   onCollectionChange,
   refreshTrigger,
   config,
+  database = 'default',
 }) => {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(false);
@@ -42,20 +44,20 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
 
   useEffect(() => {
     loadCollections();
-  }, []);
+  }, [database]);
 
   // Refresh collections when refreshTrigger changes
   useEffect(() => {
     if (refreshTrigger !== undefined) {
       loadCollections();
     }
-  }, [refreshTrigger]);
+  }, [refreshTrigger, database]);
 
   const loadCollections = async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiClient.listCollections();
+      const data = await apiClient.listCollections(database);
       setCollections(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load collections');
@@ -100,7 +102,7 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
     setError(null);
     try {
       const embeddingDim = getEmbeddingDimension(embeddingConfig);
-      await apiClient.createCollection(newCollectionName.trim(), embeddingDim);
+      await apiClient.createCollection(newCollectionName.trim(), embeddingDim, database);
       setShowCreateDialog(false);
       setNewCollectionName('');
       // Reset to default config
@@ -134,7 +136,7 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
     }
     
     try {
-      await apiClient.deleteCollection(name);
+      await apiClient.deleteCollection(name, database);
       await loadCollections();
       if (currentCollection === name) {
         onCollectionChange(collections[0]?.name || 'knowledge_base');

@@ -11,20 +11,37 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1/collections", tags=["collections"])
 
 
-def get_vector_store() -> MilvusVectorStore:
+def get_vector_store(database: str = None) -> MilvusVectorStore:
     """Dependency to get vector store."""
     settings = get_settings()
+    db_name = database or settings.milvus_database
     return MilvusVectorStore(
         host=settings.milvus_host,
         port=settings.milvus_port,
         user=settings.milvus_user,
-        password=settings.milvus_password
+        password=settings.milvus_password,
+        database=db_name
     )
+
+
+def get_database_from_query(database: str = None) -> str:
+    """Get database name from query parameter or default."""
+    if database:
+        return database
+    settings = get_settings()
+    return settings.milvus_database
+
+
+def get_vector_store_with_database(database: str = None) -> MilvusVectorStore:
+    """Dependency to get vector store with database parameter."""
+    db_name = get_database_from_query(database)
+    return get_vector_store(db_name)
 
 
 @router.get("")
 async def list_collections(
-    vector_store: MilvusVectorStore = Depends(get_vector_store)
+    database: str = None,
+    vector_store: MilvusVectorStore = Depends(get_vector_store_with_database)
 ):
     """List all collections in Milvus."""
     connection_alias = "default"
@@ -44,6 +61,7 @@ async def list_collections(
             port=vector_store.port,
             user=vector_store.user if vector_store.user else None,
             password=vector_store.password if vector_store.password else None,
+            db_name=vector_store.database
         )
         
         # Import here to avoid circular dependency
@@ -111,7 +129,8 @@ async def list_collections(
 async def create_collection(
     name: str = Form(...),
     embedding_dim: int = Form(1536),
-    vector_store: MilvusVectorStore = Depends(get_vector_store)
+    database: str = Form(None),
+    vector_store: MilvusVectorStore = Depends(get_vector_store_with_database)
 ):
     """Create a new collection."""
     connection_alias = "default"
@@ -130,6 +149,7 @@ async def create_collection(
             port=vector_store.port,
             user=vector_store.user if vector_store.user else None,
             password=vector_store.password if vector_store.password else None,
+            db_name=vector_store.database
         )
         
         from pymilvus import utility, Collection, CollectionSchema, FieldSchema, DataType
@@ -210,7 +230,8 @@ async def create_collection(
 @router.delete("/{name}")
 async def delete_collection(
     name: str,
-    vector_store: MilvusVectorStore = Depends(get_vector_store)
+    database: str = None,
+    vector_store: MilvusVectorStore = Depends(get_vector_store_with_database)
 ):
     """Delete a collection."""
     connection_alias = "default"
@@ -229,6 +250,7 @@ async def delete_collection(
             port=vector_store.port,
             user=vector_store.user if vector_store.user else None,
             password=vector_store.password if vector_store.password else None,
+            db_name=vector_store.database
         )
         
         from pymilvus import utility

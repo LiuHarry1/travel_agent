@@ -4,13 +4,15 @@ import './SourceFileManager.css';
 
 interface SourceFileManagerProps {
   collectionName: string;
+  database?: string;
   onViewChunks: (documentId: string) => void;
   selectedSource: string | null;
   onSourceDeleted?: () => void; // Callback when a source is deleted
 }
 
 export const SourceFileManager: React.FC<SourceFileManagerProps> = ({ 
-  collectionName, 
+  collectionName,
+  database,
   onViewChunks,
   selectedSource,
   onSourceDeleted
@@ -31,7 +33,7 @@ export const SourceFileManager: React.FC<SourceFileManagerProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const data = await apiClient.listSources(collectionName);
+      const data = await apiClient.listSources(collectionName, database);
       setSources(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load sources');
@@ -47,7 +49,7 @@ export const SourceFileManager: React.FC<SourceFileManagerProps> = ({
     }
     
     try {
-      await apiClient.deleteSource(collectionName, documentId);
+      await apiClient.deleteSource(collectionName, documentId, database);
       await loadSources();
       // Notify parent component to refresh collections
       if (onSourceDeleted) {
@@ -66,7 +68,7 @@ export const SourceFileManager: React.FC<SourceFileManagerProps> = ({
   const handleViewFile = async (documentId: string) => {
     try {
       // Get the actual file URL from the backend
-      const fileUrl = await apiClient.getSourceFileUrl(collectionName, documentId);
+      const fileUrl = await apiClient.getSourceFileUrl(collectionName, documentId, database);
       // Open in new window/tab
       window.open(fileUrl, '_blank');
     } catch (err) {
@@ -97,8 +99,9 @@ export const SourceFileManager: React.FC<SourceFileManagerProps> = ({
           }} 
           className="refresh-btn" 
           disabled={loading}
+          title="Refresh sources"
         >
-          {loading ? 'Loading...' : '🔄 Refresh'}
+          {loading ? '⏳' : '🔄'}
         </button>
       </div>
 

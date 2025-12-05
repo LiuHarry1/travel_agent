@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     milvus_port: int = 19530
     milvus_user: str = ""
     milvus_password: str = ""
+    milvus_database: str = "default"  # Milvus database name
     
     # Embedding
     default_embedding_provider: str = "qwen"

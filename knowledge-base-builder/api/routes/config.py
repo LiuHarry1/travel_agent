@@ -27,7 +27,8 @@ async def test_milvus_connection(config: MilvusConfigRequest):
             host=config.host,
             port=config.port,
             user=config.user or "",
-            password=config.password or ""
+            password=config.password or "",
+            database="default"
         )
         
         # Try to connect

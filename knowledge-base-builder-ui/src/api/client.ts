@@ -154,8 +154,12 @@ export class ApiClient {
     return response.json();
   }
 
-  async listCollections(): Promise<Collection[]> {
-    const response = await fetch(`${this.baseUrl}/api/v1/collections`);
+  async listCollections(database?: string): Promise<Collection[]> {
+    const url = new URL(`${this.baseUrl}/api/v1/collections`);
+    if (database) {
+      url.searchParams.append('database', database);
+    }
+    const response = await fetch(url.toString());
     if (!response.ok) {
       throw new Error('Failed to fetch collections');
     }
@@ -163,10 +167,13 @@ export class ApiClient {
     return data.collections || [];
   }
 
-  async createCollection(name: string, embeddingDim: number = 1536): Promise<void> {
+  async createCollection(name: string, embeddingDim: number = 1536, database?: string): Promise<void> {
     const formData = new FormData();
     formData.append('name', name);
     formData.append('embedding_dim', embeddingDim.toString());
+    if (database) {
+      formData.append('database', database);
+    }
     
     const response = await fetch(`${this.baseUrl}/api/v1/collections`, {
       method: 'POST',
@@ -178,8 +185,12 @@ export class ApiClient {
     }
   }
 
-  async deleteCollection(name: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/api/v1/collections/${encodeURIComponent(name)}`, {
+  async deleteCollection(name: string, database?: string): Promise<void> {
+    const url = new URL(`${this.baseUrl}/api/v1/collections/${encodeURIComponent(name)}`);
+    if (database) {
+      url.searchParams.append('database', database);
+    }
+    const response = await fetch(url.toString(), {
       method: 'DELETE',
     });
     if (!response.ok) {
@@ -212,8 +223,12 @@ export class ApiClient {
     return response.json();
   }
 
-  async listSources(collectionName: string): Promise<SourceFile[]> {
-    const response = await fetch(`${this.baseUrl}/api/v1/collections/${encodeURIComponent(collectionName)}/sources`);
+  async listSources(collectionName: string, database?: string): Promise<SourceFile[]> {
+    const url = new URL(`${this.baseUrl}/api/v1/collections/${encodeURIComponent(collectionName)}/sources`);
+    if (database) {
+      url.searchParams.append('database', database);
+    }
+    const response = await fetch(url.toString());
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.detail || 'Failed to fetch sources');
@@ -226,12 +241,16 @@ export class ApiClient {
     collectionName: string,
     documentId: string,
     page: number = 1,
-    pageSize: number = 10
+    pageSize: number = 10,
+    database?: string
   ): Promise<ChunksResponse> {
     const params = new URLSearchParams({
       page: page.toString(),
       page_size: pageSize.toString(),
     });
+    if (database) {
+      params.append('database', database);
+    }
     const response = await fetch(
       `${this.baseUrl}/api/v1/collections/${encodeURIComponent(collectionName)}/sources/${encodeURIComponent(documentId)}/chunks?${params}`
     );
@@ -242,10 +261,14 @@ export class ApiClient {
     return response.json();
   }
 
-  async getSourceFileUrl(collectionName: string, documentId: string): Promise<string> {
-    const response = await fetch(
+  async getSourceFileUrl(collectionName: string, documentId: string, database?: string): Promise<string> {
+    const url = new URL(
       `${this.baseUrl}/api/v1/collections/${encodeURIComponent(collectionName)}/sources/${encodeURIComponent(documentId)}/file`
     );
+    if (database) {
+      url.searchParams.append('database', database);
+    }
+    const response = await fetch(url.toString());
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.detail || 'Failed to get source file URL');
@@ -259,16 +282,56 @@ export class ApiClient {
     return `${this.baseUrl}${data.file_url}`;
   }
 
-  async deleteSource(collectionName: string, documentId: string): Promise<void> {
-    const response = await fetch(
-      `${this.baseUrl}/api/v1/collections/${encodeURIComponent(collectionName)}/sources/${encodeURIComponent(documentId)}`,
-      {
-        method: 'DELETE',
-      }
+  async deleteSource(collectionName: string, documentId: string, database?: string): Promise<void> {
+    const url = new URL(
+      `${this.baseUrl}/api/v1/collections/${encodeURIComponent(collectionName)}/sources/${encodeURIComponent(documentId)}`
     );
+    if (database) {
+      url.searchParams.append('database', database);
+    }
+    const response = await fetch(url.toString(), {
+      method: 'DELETE',
+    });
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.detail || 'Failed to delete source');
+    }
+  }
+
+  async listDatabases(): Promise<{ databases: string[]; current: string }> {
+    const response = await fetch(`${this.baseUrl}/api/v1/databases`);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to fetch databases');
+    }
+    const data = await response.json();
+    return {
+      databases: data.databases || [],
+      current: data.current || 'default'
+    };
+  }
+
+  async createDatabase(name: string): Promise<void> {
+    const formData = new FormData();
+    formData.append('name', name);
+    
+    const response = await fetch(`${this.baseUrl}/api/v1/databases`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to create database');
+    }
+  }
+
+  async deleteDatabase(name: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/api/v1/databases/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to delete database');
     }
   }
 
@@ -281,6 +344,7 @@ export class ApiClient {
       bgeApiUrl?: string;
       chunkSize?: number;
       chunkOverlap?: number;
+      database?: string;
     },
     onProgress: (progress: any) => void
   ): Promise<void> {

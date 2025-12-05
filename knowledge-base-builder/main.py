@@ -6,7 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.routes import indexing, collections, config, sources
+from api.routes import indexing, collections, config, sources, databases
 from config.settings import get_settings
 from utils.logger import setup_logging, get_logger
 
@@ -86,6 +86,7 @@ app.include_router(indexing.router)
 app.include_router(collections.router)
 app.include_router(config.router)
 app.include_router(sources.router)
+app.include_router(databases.router)
 
 @app.get("/")
 async def root():

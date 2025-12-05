@@ -33,7 +33,8 @@ class MilvusVectorStore(BaseVectorStore):
         port: int = 19530,
         user: str = "",
         password: str = "",
-        alias: str = "default"
+        alias: str = "default",
+        database: str = "default"
     ):
         """Initialize Milvus vector store."""
         if not HAS_PYMILVUS:
@@ -46,6 +47,7 @@ class MilvusVectorStore(BaseVectorStore):
         self.user = user
         self.password = password
         self.alias = alias
+        self.database = database
         self._connected = False
     
     def _connect(self):
@@ -58,9 +60,10 @@ class MilvusVectorStore(BaseVectorStore):
                     port=self.port,
                     user=self.user if self.user else None,
                     password=self.password if self.password else None,
+                    db_name=self.database
                 )
                 self._connected = True
-                logger.info(f"Connected to Milvus at {self.host}:{self.port}")
+                logger.info(f"Connected to Milvus at {self.host}:{self.port}, database: {self.database}")
             except Exception as e:
                 raise IndexingError(f"Failed to connect to Milvus: {str(e)}") from e
     

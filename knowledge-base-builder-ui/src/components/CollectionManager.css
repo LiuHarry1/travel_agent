@@ -55,7 +55,6 @@
 .refresh-btn:hover:not(:disabled) {
   background: var(--primary-light);
   border-color: var(--primary);
-  transform: rotate(180deg);
   box-shadow: var(--shadow-md);
 }
 

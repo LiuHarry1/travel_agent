@@ -11,15 +11,25 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1/collections", tags=["sources"])
 
 
-def get_vector_store() -> MilvusVectorStore:
+def get_vector_store(database: str = None) -> MilvusVectorStore:
     """Dependency to get vector store."""
     settings = get_settings()
+    db_name = database or settings.milvus_database
     return MilvusVectorStore(
         host=settings.milvus_host,
         port=settings.milvus_port,
         user=settings.milvus_user,
-        password=settings.milvus_password
+        password=settings.milvus_password,
+        database=db_name
     )
+
+
+def get_database_from_query(database: str = None) -> str:
+    """Get database name from query parameter or default."""
+    if database:
+        return database
+    settings = get_settings()
+    return settings.milvus_database
 
 
 @router.get("/{collection_name}/sources")

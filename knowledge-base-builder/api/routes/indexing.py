@@ -18,20 +18,36 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["indexing"])
 
 
-def get_indexing_service() -> IndexingService:
+def get_indexing_service(database: str = None) -> IndexingService:
     """Dependency to get indexing service."""
     settings = get_settings()
+    db_name = database or settings.milvus_database
     vector_store = MilvusVectorStore(
         host=settings.milvus_host,
         port=settings.milvus_port,
         user=settings.milvus_user,
-        password=settings.milvus_password
+        password=settings.milvus_password,
+        database=db_name
     )
     return IndexingService(
         vector_store=vector_store,
         chunk_size=settings.default_chunk_size,
         chunk_overlap=settings.default_chunk_overlap
     )
+
+
+def get_database_from_form(database: str = None) -> str:
+    """Get database name from form parameter or default."""
+    if database:
+        return database
+    settings = get_settings()
+    return settings.milvus_database
+
+
+def get_indexing_service_with_database(database: str = None) -> IndexingService:
+    """Dependency to get indexing service with database parameter."""
+    db_name = get_database_from_form(database)
+    return get_indexing_service(db_name)
 
 
 def detect_document_type(filename: str) -> DocumentType:
@@ -285,7 +301,8 @@ async def upload_and_index_stream(
     bge_api_url: Optional[str] = Form(None),
     chunk_size: Optional[int] = Form(None),
     chunk_overlap: Optional[int] = Form(None),
-    service: IndexingService = Depends(get_indexing_service)
+    database: Optional[str] = Form(None),
+    service: IndexingService = Depends(get_indexing_service_with_database)
 ):
     """
     Upload and index file with real-time progress updates via Server-Sent Events.
@@ -373,7 +390,8 @@ async def upload_and_index(
     bge_api_url: Optional[str] = Form(None),
     chunk_size: Optional[int] = Form(None),
     chunk_overlap: Optional[int] = Form(None),
-    service: IndexingService = Depends(get_indexing_service)
+    database: Optional[str] = Form(None),
+    service: IndexingService = Depends(get_indexing_service_with_database)
 ):
     """
     Upload a file and index it into knowledge base.
@@ -457,7 +475,8 @@ async def upload_batch(
     embedding_provider: Optional[str] = Form("qwen"),
     embedding_model: Optional[str] = Form(None),
     bge_api_url: Optional[str] = Form(None),
-    service: IndexingService = Depends(get_indexing_service)
+    database: Optional[str] = Form(None),
+    service: IndexingService = Depends(get_indexing_service_with_database)
 ):
     """Upload and index multiple files."""
     settings = get_settings()

@@ -10,6 +10,7 @@ import './FileUpload.css';
 interface FileUploadProps {
   config: AppConfig;
   collection: string;
+  database?: string;
   onUploadSuccess?: (result: UploadResponse | BatchUploadResponse) => void;
   onUploadError?: (error: string) => void;
 }
@@ -43,6 +44,7 @@ const formatFileSize = (bytes: number | undefined | null): string => {
 export const FileUpload: React.FC<FileUploadProps> = ({
   config,
   collection,
+  database,
   onUploadSuccess,
   onUploadError,
 }) => {
@@ -143,6 +145,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
             bgeApiUrl: config.embedding.bgeApiUrl,
             chunkSize: config.chunking.chunkSize,
             chunkOverlap: config.chunking.chunkOverlap,
+            database: database,
           },
           (progress) => {
             const stageMap: Record<string, ProcessingStage> = {
