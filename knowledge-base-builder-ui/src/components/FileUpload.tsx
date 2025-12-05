@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { FileText, File, BookOpen, Globe, FileCode, X, Book, ChevronDown, ChevronUp } from 'lucide-react';
 import { FileWithPreview, FileType } from '../types/file';
 import type { AppConfig } from '../types/config';
 import { apiClient, UploadResponse, BatchUploadResponse } from '../api/client';
@@ -51,6 +52,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [processingFiles, setProcessingFiles] = useState<Map<string, FileProcessingStatus>>(new Map());
   const [uploading, setUploading] = useState(false);
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -110,7 +112,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
             file,
             stage: ProcessingStage.UPLOADING,
             progress: 0,
-            message: '准备上传...',
+            message: 'Preparing to upload...',
             retryCount: 0,
             startTime: Date.now(),
             ...updates
@@ -133,7 +135,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         updateFileStatus(fileId, {
           stage: ProcessingStage.UPLOADING,
           progress: 0,
-          message: '开始上传...'
+          message: 'Starting upload...'
         });
 
         await apiClient.uploadFileWithProgress(
@@ -225,7 +227,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         retryCount: fileStatus.retryCount + 1,
         stage: ProcessingStage.UPLOADING,
         progress: 0,
-        message: `重试中 (${fileStatus.retryCount + 1}/3)...`,
+        message: `Retrying (${fileStatus.retryCount + 1}/3)...`,
         error: undefined,
       };
       
@@ -314,23 +316,43 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   };
 
   const FileTypeIcon: React.FC<{ type: FileType }> = ({ type }) => {
-    const icons: Record<FileType, string> = {
-      markdown: '📝',
-      pdf: '📄',
-      word: '📘',
-      html: '🌐',
-      text: '📃',
+    const iconMap: Record<FileType, React.ReactNode> = {
+      markdown: <FileText size={20} />,
+      pdf: <File size={20} />,
+      word: <BookOpen size={20} />,
+      html: <Globe size={20} />,
+      text: <FileCode size={20} />,
     };
-    return <span className="file-icon">{icons[type] || '📄'}</span>;
+    return <span className="file-icon">{iconMap[type] || <File size={20} />}</span>;
   };
+
+  const toggleFileExpansion = (fileId: string) => {
+    setExpandedFiles(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(fileId)) {
+        newSet.delete(fileId);
+      } else {
+        newSet.add(fileId);
+      }
+      return newSet;
+    });
+  };
+
+  const completedCount = Array.from(processingFiles.values()).filter(
+    f => f.stage === ProcessingStage.COMPLETED
+  ).length;
+  const totalProcessing = processingFiles.size;
 
   return (
     <div className="file-upload-container">
-      <h2>Upload Documents to Knowledge Base</h2>
+      <h2>
+        <Book size={20} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '8px' }} />
+        Upload Documents to Knowledge Base
+      </h2>
       
       {/* File Drop Zone */}
       <div
-        className={`drop-zone ${files.length > 0 ? 'has-files' : ''}`}
+        className={`drop-zone ${files.length > 0 || processingFiles.size > 0 ? 'has-files compact' : ''}`}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
@@ -343,7 +365,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           style={{ display: 'none' }}
         />
         <label htmlFor="file-input" className="drop-zone-label">
-          <div className="drop-zone-icon">📄</div>
+          <div className="drop-zone-icon">
+            <File size={48} />
+          </div>
           <p>Click to select files or drag and drop</p>
           <p className="drop-zone-hint">
             Supports: .md, .pdf, .docx, .html, .txt
@@ -353,74 +377,154 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
       {/* Selected Files */}
       {files.length > 0 && (
-        <div className="files-list">
-          <h3>Selected Files ({files.length})</h3>
-          {files.map((file, index) => (
-            <div key={index} className="file-item">
-              <FileTypeIcon type={file.fileType} />
-              <span className="file-name">{file.name || 'Unknown file'}</span>
-              <span className="file-size">{formatFileSize(file.size)}</span>
-              <button
-                className="remove-btn"
-                onClick={() => removeFile(index)}
-                disabled={uploading}
-              >
-                ×
-              </button>
+        <>
+          <div className="section-divider"></div>
+          <div className="files-list">
+            <h3>Selected Files ({files.length})</h3>
+            <div className="files-grid">
+              {files.map((file, index) => (
+                <div key={index} className="file-item">
+                  <FileTypeIcon type={file.fileType} />
+                  <div className="file-info">
+                    <span className="file-name">{file.name || 'Unknown file'}</span>
+                    <span className="file-size">{formatFileSize(file.size)}</span>
+                  </div>
+                  <button
+                    className="remove-btn"
+                    onClick={() => removeFile(index)}
+                    disabled={uploading}
+                    title="Remove file"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        </>
       )}
 
       {/* Processing Files with Timeline */}
       {processingFiles.size > 0 && (
-        <div className="processing-queue-section">
-          <h3>处理中的文件 ({processingFiles.size})</h3>
-          {Array.from(processingFiles.values()).map((fileStatus, index) => (
-            <div key={fileStatus.id || `file-${index}-${fileStatus.startTime || 0}`} className="processing-file-item">
-              <div className="file-header">
-                <FileTypeIcon type={detectFileType(fileStatus.file?.name)} />
-                <span className="file-name">{fileStatus.file?.name || 'Unknown file'}</span>
-                <span className={`status-badge ${fileStatus.stage}`}>
-                  {fileStatus.stage === ProcessingStage.ERROR ? '失败' : fileStatus.message}
-                </span>
-                {fileStatus.stage === ProcessingStage.ERROR && fileStatus.retryable && fileStatus.retryCount < 3 && (
-                  <button className="retry-small-btn" onClick={() => handleRetry(fileStatus.id)}>
-                    重试
-                  </button>
-                )}
-                <button className="remove-btn" onClick={() => removeProcessingFile(fileStatus.id)}>
-                  ×
-                </button>
-              </div>
-              <ProcessingTimeline fileStatus={fileStatus} />
-              
-              {fileStatus.stage === ProcessingStage.ERROR && fileStatus.error && (
-                <ErrorDisplay
-                  error={{
-                    stage: fileStatus.stage,
-                    error: fileStatus.error,
-                    errorType: fileStatus.errorType,
-                    retryable: fileStatus.retryable || false,
-                    retryCount: fileStatus.retryCount,
-                  }}
-                  onRetry={() => handleRetry(fileStatus.id)}
-                  onDismiss={() => removeProcessingFile(fileStatus.id)}
-                />
+        <>
+          <div className="section-divider"></div>
+          <div className="processing-queue-section">
+            <div className="processing-header">
+              <h3>Processing Files ({totalProcessing})</h3>
+              {totalProcessing > 0 && (
+                <div className="processing-summary">
+                  <span className="summary-text">
+                    {completedCount} of {totalProcessing} completed
+                  </span>
+                  <div className="summary-progress-bar">
+                    <div 
+                      className="summary-progress-fill"
+                      style={{ width: `${(completedCount / totalProcessing) * 100}%` }}
+                    />
+                  </div>
+                </div>
               )}
             </div>
-          ))}
+            <div className="processing-files-list">
+              {Array.from(processingFiles.values()).map((fileStatus, index) => {
+                const isExpanded = expandedFiles.has(fileStatus.id);
+                return (
+                  <div 
+                    key={fileStatus.id || `file-${index}-${fileStatus.startTime || 0}`} 
+                    className="processing-file-item"
+                  >
+                    <div 
+                      className="file-header"
+                      onClick={() => toggleFileExpansion(fileStatus.id)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <FileTypeIcon type={detectFileType(fileStatus.file?.name)} />
+                      <div className="file-info">
+                        <span className="file-name">{fileStatus.file?.name || 'Unknown file'}</span>
+                        <span className={`status-badge ${fileStatus.stage}`}>
+                          {fileStatus.stage === ProcessingStage.ERROR ? 'Failed' : 
+                           fileStatus.stage === ProcessingStage.COMPLETED ? 'Completed' :
+                           fileStatus.message}
+                        </span>
+                      </div>
+                      <div className="file-actions">
+                        {fileStatus.stage === ProcessingStage.ERROR && fileStatus.retryable && fileStatus.retryCount < 3 && (
+                          <button 
+                            className="retry-small-btn" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRetry(fileStatus.id);
+                            }}
+                          >
+                            Retry
+                          </button>
+                        )}
+                        <button 
+                          className="expand-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFileExpansion(fileStatus.id);
+                          }}
+                        >
+                          {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                        </button>
+                        <button 
+                          className="remove-btn" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeProcessingFile(fileStatus.id);
+                          }}
+                          title="Remove"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    </div>
+                    {isExpanded && (
+                      <div className="file-details">
+                        <ProcessingTimeline fileStatus={fileStatus} />
+                        
+                        {fileStatus.stage === ProcessingStage.ERROR && fileStatus.error && (
+                          <ErrorDisplay
+                            error={{
+                              stage: fileStatus.stage,
+                              error: fileStatus.error,
+                              errorType: fileStatus.errorType,
+                              retryable: fileStatus.retryable || false,
+                              retryCount: fileStatus.retryCount,
+                            }}
+                            onRetry={() => handleRetry(fileStatus.id)}
+                            onDismiss={() => removeProcessingFile(fileStatus.id)}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Sticky Action Bar */}
+      {files.length > 0 && (
+        <div className="upload-action-bar">
+          <div className="action-bar-content">
+            <span className="file-count">
+              {files.length} file{files.length !== 1 ? 's' : ''} selected
+            </span>
+            <button
+              className="upload-btn"
+              onClick={handleUpload}
+              disabled={files.length === 0 || uploading}
+            >
+              {uploading ? 'Processing...' : `Upload ${files.length} File${files.length !== 1 ? 's' : ''}`}
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Upload Button */}
-      <button
-        className="upload-btn"
-        onClick={handleUpload}
-        disabled={files.length === 0 || uploading}
-      >
-        {uploading ? 'Processing...' : `Upload ${files.length} File(s)`}
-      </button>
     </div>
   );
 };

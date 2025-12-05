@@ -1,4 +1,5 @@
 import React from 'react';
+import { Upload, Search, Scissors, Brain, Database, Check, X } from 'lucide-react';
 import { ProcessingStage, type FileProcessingStatus } from '../types/processing';
 import './ProcessingTimeline.css';
 
@@ -7,12 +8,12 @@ interface ProcessingTimelineProps {
 }
 
 const STAGES = [
-  { key: ProcessingStage.UPLOADING, label: '上传', icon: '📤' },
-  { key: ProcessingStage.PARSING, label: '解析', icon: '🔍' },
-  { key: ProcessingStage.CHUNKING, label: '分块', icon: '✂️' },
-  { key: ProcessingStage.EMBEDDING, label: '嵌入', icon: '🧠' },
-  { key: ProcessingStage.INDEXING, label: '索引', icon: '💾' },
-  { key: ProcessingStage.COMPLETED, label: '完成', icon: '✅' },
+  { key: ProcessingStage.UPLOADING, label: 'Upload', icon: Upload },
+  { key: ProcessingStage.PARSING, label: 'Parse', icon: Search },
+  { key: ProcessingStage.CHUNKING, label: 'Chunk', icon: Scissors },
+  { key: ProcessingStage.EMBEDDING, label: 'Embed', icon: Brain },
+  { key: ProcessingStage.INDEXING, label: 'Index', icon: Database },
+  { key: ProcessingStage.COMPLETED, label: 'Complete', icon: Check },
 ];
 
 const getStageIndex = (stage: ProcessingStage): number => {
@@ -38,7 +39,13 @@ export const ProcessingTimeline: React.FC<ProcessingTimelineProps> = ({ fileStat
               className={`timeline-item ${isCompleted ? 'completed' : ''} ${isActive ? 'active' : ''} ${isErrorStage ? 'error' : ''}`}
             >
               <div className="timeline-icon">
-                {isCompleted ? '✓' : isErrorStage ? '✕' : stage.icon}
+                {isCompleted ? (
+                  <Check size={20} />
+                ) : isErrorStage ? (
+                  <X size={20} />
+                ) : (
+                  React.createElement(stage.icon, { size: 20 })
+                )}
               </div>
               <div className="timeline-content">
                 <div className="timeline-label">{stage.label}</div>
@@ -60,7 +67,7 @@ export const ProcessingTimeline: React.FC<ProcessingTimelineProps> = ({ fileStat
                 )}
                 {isCompleted && index < STAGES.length - 1 && (
                   <div className="timeline-details" style={{ color: 'var(--success)', fontSize: '12px' }}>
-                    完成
+                    Complete
                   </div>
                 )}
                 {isErrorStage && (
@@ -83,7 +90,7 @@ export const ProcessingTimeline: React.FC<ProcessingTimelineProps> = ({ fileStat
               stats.push({
                 key: 'charCount',
                 value: fileStatus.charCount.toLocaleString(),
-                label: '字符数'
+                label: 'Characters'
               });
             }
             
@@ -99,7 +106,7 @@ export const ProcessingTimeline: React.FC<ProcessingTimelineProps> = ({ fileStat
               stats.push({
                 key: 'chunksIndexed',
                 value: fileStatus.chunksIndexed,
-                label: '已索引'
+                label: 'Indexed'
               });
             }
             

@@ -8,7 +8,6 @@
 .app-header {
   background: var(--bg-primary);
   padding: var(--spacing-md) var(--spacing-xl);
-  box-shadow: var(--shadow-md);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -52,13 +51,11 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
-  box-shadow: var(--shadow-sm);
 }
 
 .settings-btn:hover {
   background: var(--primary-dark);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  opacity: 0.9;
 }
 
 .settings-btn:active {
@@ -77,10 +74,12 @@
   width: 320px;
   background: var(--bg-primary);
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
-  overflow-y: auto;
+  overflow: hidden;
   border: 1px solid var(--border-light);
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--spacing-md) * 2 - 80px);
 }
 
 .main-content {

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '../api/client';
+import { ConfirmDialog } from './ui/ConfirmDialog';
+import { Skeleton } from './ui/Skeleton';
 import './DatabaseManager.css';
 
 interface DatabaseManagerProps {
@@ -17,6 +19,7 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newDatabaseName, setNewDatabaseName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; name: string }>({ isOpen: false, name: '' });
 
   useEffect(() => {
     loadDatabases();
@@ -66,16 +69,17 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
     }
   };
 
-  const handleDeleteDatabase = async (name: string) => {
+  const handleDeleteDatabase = (name: string) => {
     if (name === 'default') {
       setError('Cannot delete the default database');
       return;
     }
+    setDeleteConfirm({ isOpen: true, name });
+  };
 
-    if (!confirm(`Are you sure you want to delete database "${name}"? This action cannot be undone.`)) {
-      return;
-    }
-
+  const confirmDeleteDatabase = async () => {
+    const { name } = deleteConfirm;
+    setDeleteConfirm({ isOpen: false, name: '' });
     setLoading(true);
     setError(null);
     try {
@@ -107,7 +111,7 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
           onClick={() => setShowCreateModal(true)}
           title="Create new database"
         >
-          + New
+          New
         </button>
       </div>
 
@@ -116,7 +120,13 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
       )}
 
       {loading && databases.length === 0 ? (
-        <div className="database-loading">Loading databases...</div>
+        <div className="database-list">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="database-item" style={{ pointerEvents: 'none' }}>
+              <Skeleton width="60%" height={20} variant="text" />
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="database-list">
           {databases.map((db) => (
@@ -189,6 +199,17 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={deleteConfirm.isOpen}
+        title="Delete Database"
+        message={`Are you sure you want to delete database "${deleteConfirm.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        onConfirm={confirmDeleteDatabase}
+        onCancel={() => setDeleteConfirm({ isOpen: false, name: '' })}
+      />
     </div>
   );
 };

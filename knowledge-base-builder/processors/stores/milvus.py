@@ -159,76 +159,77 @@ class MilvusVectorStore(BaseVectorStore):
             embedding_dim = len(chunks[0].embedding)
             
             # Ensure collection exists and check schema compatibility
-            collection = Collection(collection_name, using=self.alias)
-            
             if not self._collection_exists(collection_name):
                 self._create_collection(collection_name, embedding_dim)
-            else:
-                # Check if collection has required fields and correct dimension
-                collection.load()
-                schema = collection.schema
-                
-                # Debug: log all field names
-                field_names = [field.name for field in schema.fields]
-                logger.debug(f"Collection '{collection_name}' schema fields: {field_names}")
-                
-                has_document_id = any(field.name == "document_id" for field in schema.fields)
-                has_file_path = any(field.name == "file_path" for field in schema.fields)
-                
-                if not has_document_id:
-                    logger.warning(
-                        f"Collection '{collection_name}' missing 'document_id' field. "
-                        f"Available fields: {field_names}"
+            
+            # Get collection object after ensuring it exists
+            collection = Collection(collection_name, using=self.alias)
+            
+            # Check if collection has required fields and correct dimension
+            collection.load()
+            schema = collection.schema
+            
+            # Debug: log all field names
+            field_names = [field.name for field in schema.fields]
+            logger.debug(f"Collection '{collection_name}' schema fields: {field_names}")
+            
+            has_document_id = any(field.name == "document_id" for field in schema.fields)
+            has_file_path = any(field.name == "file_path" for field in schema.fields)
+            
+            if not has_document_id:
+                logger.warning(
+                    f"Collection '{collection_name}' missing 'document_id' field. "
+                    f"Available fields: {field_names}"
+                )
+                raise IndexingError(
+                    f"Collection '{collection_name}' exists but doesn't have 'document_id' field.\n"
+                    f"Available fields: {', '.join(field_names)}\n"
+                    f"This collection was created with an older schema. Please:\n"
+                    f"1. Delete the collection: DELETE /api/v1/collections/{collection_name}\n"
+                    f"2. Re-upload your files to recreate the collection with the new schema"
+                )
+            
+            if not has_file_path:
+                logger.warning(
+                    f"Collection '{collection_name}' missing 'file_path' field. "
+                    f"Available fields: {field_names}"
+                )
+                raise IndexingError(
+                    f"Collection '{collection_name}' exists but doesn't have 'file_path' field.\n"
+                    f"Available fields: {', '.join(field_names)}\n"
+                    f"This collection was created with an older schema. Please:\n"
+                    f"1. Delete the collection: DELETE /api/v1/collections/{collection_name}\n"
+                    f"2. Re-upload your files to recreate the collection with the new schema"
+                )
+            
+            # Check embedding dimension
+            embedding_field = None
+            for field in schema.fields:
+                if field.name == "embedding":
+                    embedding_field = field
+                    break
+            
+            if embedding_field:
+                schema_dim = embedding_field.params.get("dim")
+                if schema_dim and schema_dim != embedding_dim:
+                    logger.error(
+                        f"Dimension mismatch: collection expects {schema_dim}D, "
+                        f"but embeddings are {embedding_dim}D"
                     )
                     raise IndexingError(
-                        f"Collection '{collection_name}' exists but doesn't have 'document_id' field.\n"
-                        f"Available fields: {', '.join(field_names)}\n"
-                        f"This collection was created with an older schema. Please:\n"
+                        f"Embedding dimension mismatch!\n"
+                        f"Collection '{collection_name}' was created with {schema_dim}-dimensional embeddings,\n"
+                        f"but you're trying to insert {embedding_dim}-dimensional embeddings.\n\n"
+                        f"This usually happens when switching embedding providers:\n"
+                        f"- Qwen/OpenAI: 1536 dimensions\n"
+                        f"- BGE large: 1024 dimensions\n"
+                        f"- BGE base: 768 dimensions\n"
+                        f"- BGE small: 384 dimensions\n\n"
+                        f"Solution:\n"
                         f"1. Delete the collection: DELETE /api/v1/collections/{collection_name}\n"
-                        f"2. Re-upload your files to recreate the collection with the new schema"
+                        f"2. Re-upload your files with the new embedding provider\n"
+                        f"   (The collection will be recreated with the correct dimension)"
                     )
-                
-                if not has_file_path:
-                    logger.warning(
-                        f"Collection '{collection_name}' missing 'file_path' field. "
-                        f"Available fields: {field_names}"
-                    )
-                    raise IndexingError(
-                        f"Collection '{collection_name}' exists but doesn't have 'file_path' field.\n"
-                        f"Available fields: {', '.join(field_names)}\n"
-                        f"This collection was created with an older schema. Please:\n"
-                        f"1. Delete the collection: DELETE /api/v1/collections/{collection_name}\n"
-                        f"2. Re-upload your files to recreate the collection with the new schema"
-                    )
-                
-                # Check embedding dimension
-                embedding_field = None
-                for field in schema.fields:
-                    if field.name == "embedding":
-                        embedding_field = field
-                        break
-                
-                if embedding_field:
-                    schema_dim = embedding_field.params.get("dim")
-                    if schema_dim and schema_dim != embedding_dim:
-                        logger.error(
-                            f"Dimension mismatch: collection expects {schema_dim}D, "
-                            f"but embeddings are {embedding_dim}D"
-                        )
-                        raise IndexingError(
-                            f"Embedding dimension mismatch!\n"
-                            f"Collection '{collection_name}' was created with {schema_dim}-dimensional embeddings,\n"
-                            f"but you're trying to insert {embedding_dim}-dimensional embeddings.\n\n"
-                            f"This usually happens when switching embedding providers:\n"
-                            f"- Qwen/OpenAI: 1536 dimensions\n"
-                            f"- BGE large: 1024 dimensions\n"
-                            f"- BGE base: 768 dimensions\n"
-                            f"- BGE small: 384 dimensions\n\n"
-                            f"Solution:\n"
-                            f"1. Delete the collection: DELETE /api/v1/collections/{collection_name}\n"
-                            f"2. Re-upload your files with the new embedding provider\n"
-                            f"   (The collection will be recreated with the correct dimension)"
-                        )
             
             # Ensure collection is loaded
             collection.load()

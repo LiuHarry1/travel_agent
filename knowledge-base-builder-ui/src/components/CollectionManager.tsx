@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Folder, BarChart3, Inbox, Sparkles, Search, X as XIcon } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { Collection } from '../types/collection';
 import type { AppConfig, EmbeddingConfig } from '../types/config';
 import { getEmbeddingDimension } from '../utils/embedding';
+import { ConfirmDialog } from './ui/ConfirmDialog';
+import { Skeleton } from './ui/Skeleton';
 import './CollectionManager.css';
 
 interface CollectionManagerProps {
@@ -26,6 +29,8 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
   const [newCollectionName, setNewCollectionName] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; name: string }>({ isOpen: false, name: '' });
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Embedding configuration for new collection
   const [embeddingConfig, setEmbeddingConfig] = useState<EmbeddingConfig>(() => {
@@ -130,10 +135,13 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
     });
   };
 
-  const handleDelete = async (name: string) => {
-    if (!confirm(`Are you sure you want to delete collection "${name}"? This action cannot be undone.`)) {
-      return;
-    }
+  const handleDelete = (name: string) => {
+    setDeleteConfirm({ isOpen: true, name });
+  };
+
+  const confirmDelete = async () => {
+    const { name } = deleteConfirm;
+    setDeleteConfirm({ isOpen: false, name: '' });
     
     try {
       await apiClient.deleteCollection(name, database);
@@ -147,21 +155,52 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
     }
   };
 
+  const filteredCollections = useMemo(() => {
+    if (!searchQuery.trim()) return collections;
+    const query = searchQuery.toLowerCase();
+    return collections.filter(collection => 
+      collection.name.toLowerCase().includes(query)
+    );
+  }, [collections, searchQuery]);
+
   return (
     <div className="collection-manager">
       <div className="collection-header">
-        <h3>Collections</h3>
-        <div className="collection-header-actions">
+        <div className="collection-header-top">
+          <h3>
+            <Folder size={20} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '8px' }} />
+            Collections
+          </h3>
+          <button onClick={() => setShowCreateDialog(true)} className="create-btn">
+            New
+          </button>
+        </div>
+        <div className="collection-header-bottom">
+          <div className="search-container">
+            <Search size={16} className="search-icon" />
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search collections..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                className="search-clear-btn"
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
+              >
+                <XIcon size={14} />
+              </button>
+            )}
+          </div>
           <button 
             onClick={loadCollections} 
             className="refresh-btn" 
             disabled={loading}
             title="Refresh collections"
           >
-            {loading ? '⏳' : '🔄'}
-          </button>
-          <button onClick={() => setShowCreateDialog(true)} className="create-btn">
-            + New
           </button>
         </div>
       </div>
@@ -173,7 +212,10 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
       {showCreateDialog && (
         <div className="modal-overlay" onClick={handleCloseDialog}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>Create New Collection</h3>
+            <h3>
+              <Sparkles size={20} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '8px' }} />
+              Create New Collection
+            </h3>
             
             <div className="form-group">
               <label>Collection Name:</label>
@@ -261,11 +303,46 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
 
       <div className="collection-list">
         {loading ? (
-          <div className="loading">Loading...</div>
-        ) : collections.length === 0 ? (
-          <div className="empty-state">No collections found</div>
+          <div>
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="collection-item" style={{ pointerEvents: 'none' }}>
+                <div className="collection-info">
+                  <Skeleton width="70%" height={20} variant="text" />
+                  <Skeleton width="40%" height={16} variant="text" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filteredCollections.length === 0 ? (
+          <div className="empty-state">
+            <Inbox size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
+            <p style={{ margin: 0, fontWeight: 'var(--font-medium, 500)' }}>
+              {searchQuery ? 'No collections match your search' : 'No collections found'}
+            </p>
+            <p style={{ margin: '8px 0 0 0', fontSize: 'var(--text-sm, 14px)', color: 'var(--text-secondary, #666)' }}>
+              {searchQuery ? 'Try a different search term' : 'Create a new collection to start organizing your documents'}
+            </p>
+            {!searchQuery && (
+              <button
+                onClick={() => setShowCreateDialog(true)}
+                style={{
+                  marginTop: '16px',
+                  padding: 'var(--spacing-sm, 8px) var(--spacing-md, 16px)',
+                  background: 'var(--primary, #3b82f6)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 'var(--radius-md, 6px)',
+                  cursor: 'pointer',
+                  fontSize: 'var(--text-sm, 14px)',
+                  fontWeight: 'var(--font-medium, 500)',
+                }}
+              >
+                Create Collection
+              </button>
+            )}
+          </div>
         ) : (
-          collections.map((collection) => (
+          filteredCollections.map((collection) => (
             <div
               key={collection.name}
               className={`collection-item ${
@@ -276,6 +353,7 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
               <div className="collection-info">
                 <div className="collection-name">{collection.name}</div>
                 <div className="collection-stats">
+                  <BarChart3 size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
                   {collection.chunk_count} chunks
                   {collection.embedding_dim && (
                     <span className="embedding-dim">• {collection.embedding_dim}D</span>
@@ -298,6 +376,17 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
           ))
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={deleteConfirm.isOpen}
+        title="Delete Collection"
+        message={`Are you sure you want to delete collection "${deleteConfirm.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirm({ isOpen: false, name: '' })}
+      />
     </div>
   );
 };

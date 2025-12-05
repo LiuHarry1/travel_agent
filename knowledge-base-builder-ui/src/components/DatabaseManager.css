@@ -28,7 +28,6 @@
   font-size: var(--text-sm);
   font-weight: var(--font-semibold);
   transition: all var(--transition-base);
-  box-shadow: var(--shadow-sm);
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
@@ -41,8 +40,8 @@
 }
 
 .btn-create-db:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  opacity: 0.9;
+  transform: translateY(-1px);
 }
 
 .btn-create-db:active {
@@ -81,6 +80,13 @@
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
+  /* 确保不是输入框样式 */
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  /* 确保是块级元素 */
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .database-item:hover {
@@ -97,15 +103,30 @@
   flex: 1;
   font-size: 13px;
   color: #333;
+  /* 确保不是输入框 */
+  display: block;
+  background: transparent;
+  border: none;
+  outline: none;
+  pointer-events: none;
+  user-select: none;
 }
 
 .database-badge {
-  font-size: 11px;
-  padding: 2px 6px;
-  background: #007bff;
-  color: white;
-  border-radius: 3px;
+  font-size: 10px;
+  padding: 3px 8px;
+  background: #e7f3ff;
+  color: #007bff;
+  border-radius: 12px;
   margin-right: 8px;
+  font-weight: 500;
+  border: none;
+  box-shadow: none;
+  /* 确保不是按钮 */
+  pointer-events: none;
+  user-select: none;
+  display: inline-block;
+  white-space: nowrap;
 }
 
 .btn-delete-db {

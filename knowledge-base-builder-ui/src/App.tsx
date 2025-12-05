@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react';
+import { Settings, Upload, Folder, File, Check, X } from 'lucide-react';
 import { ConfigPanel } from './components/ConfigPanel';
 import { CollectionManager } from './components/CollectionManager';
 import { DatabaseManager } from './components/DatabaseManager';
 import { FileUpload } from './components/FileUpload';
 import { SourceFileManager } from './components/SourceFileManager';
 import { ChunksViewer } from './components/ChunksViewer';
+import { ToastContainer, useToast } from './components/ui/Toast';
 import type { AppConfig } from './types/config';
 import { getDefaultConfig } from './types/config';
 import { UploadResponse, BatchUploadResponse, updateApiClientUrl } from './api/client';
 import './App.css';
 
 function App() {
+  const toast = useToast();
   const [config, setConfig] = useState<AppConfig>(() => {
     const saved = localStorage.getItem('kb-config');
     return saved ? JSON.parse(saved) : getDefaultConfig();
@@ -20,8 +23,6 @@ function App() {
   const [currentCollection, setCurrentCollection] = useState(config.defaultCollection);
   const [showSettings, setShowSettings] = useState(false);
   const [activeTab, setActiveTab] = useState<'upload' | 'sources' | 'chunks'>('upload');
-  const [uploadResult, setUploadResult] = useState<UploadResponse | BatchUploadResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const [collectionRefreshTrigger, setCollectionRefreshTrigger] = useState(0);
   
@@ -37,19 +38,23 @@ function App() {
   }, [config]);
 
   const handleUploadSuccess = (result: UploadResponse | BatchUploadResponse) => {
-    setUploadResult(result);
-    setError(null);
+    if ('chunks_indexed' in result) {
+      toast.success(`File "${result.filename}" uploaded successfully! ${result.chunks_indexed} chunks indexed.`);
+    } else {
+      const successCount = result.results.filter(r => r.success).length;
+      toast.success(`Batch upload completed! ${successCount}/${result.total_files} files processed successfully.`);
+    }
     // Refresh collections to update chunk counts after successful upload
     setCollectionRefreshTrigger(prev => prev + 1);
   };
 
   const handleUploadError = (errorMessage: string) => {
-    setError(errorMessage);
-    setUploadResult(null);
+    toast.error(errorMessage);
   };
 
   return (
     <div className="app">
+      <ToastContainer toasts={toast.toasts} onDismiss={toast.dismissToast} />
       <header className="app-header">
         <h1>Knowledge Base Builder</h1>
         <p>Upload documents to index into vector knowledge base</p>
@@ -57,7 +62,8 @@ function App() {
           onClick={() => setShowSettings(!showSettings)} 
           className="settings-btn"
         >
-          ⚙️ {showSettings ? 'Hide Settings' : 'Settings'}
+          <Settings size={18} />
+          {showSettings ? 'Hide Settings' : 'Settings'}
         </button>
       </header>
 
@@ -89,20 +95,23 @@ function App() {
                   className={activeTab === 'upload' ? 'active' : ''}
                   onClick={() => setActiveTab('upload')}
                 >
-                  📤 Upload Files
+                  <Upload size={18} />
+                  Upload Files
                 </button>
                 <button
                   className={activeTab === 'sources' ? 'active' : ''}
                   onClick={() => setActiveTab('sources')}
                 >
-                  📁 Source Files
+                  <Folder size={18} />
+                  Source Files
                 </button>
                 {selectedSource && (
                   <button
                     className={activeTab === 'chunks' ? 'active' : ''}
                     onClick={() => setActiveTab('chunks')}
                   >
-                    📄 Chunks
+                    <File size={18} />
+                    Chunks
                   </button>
                 )}
               </div>
@@ -119,40 +128,6 @@ function App() {
                         onUploadError={handleUploadError}
                       />
                     </div>
-
-                    {error && (
-                      <div className="error-message">
-                        <h3>Error</h3>
-                        <p>{error}</p>
-                      </div>
-                    )}
-
-                    {uploadResult && (
-                      <div className="success-message">
-                        <h3>✅ Upload Successful!</h3>
-                        {'chunks_indexed' in uploadResult ? (
-                          <div>
-                            <p><strong>File:</strong> {uploadResult.filename}</p>
-                            <p><strong>Chunks Indexed:</strong> {uploadResult.chunks_indexed}</p>
-                            <p><strong>Collection:</strong> {uploadResult.collection_name}</p>
-                            <p><strong>Message:</strong> {uploadResult.message}</p>
-                          </div>
-                        ) : (
-                          <div>
-                            <p><strong>Total Files:</strong> {uploadResult.total_files}</p>
-                            <ul>
-                              {uploadResult.results.map((result, index) => (
-                                <li key={index}>
-                                  {result.filename}: {result.success ? 
-                                    `✓ ${result.chunks_indexed} chunks` : 
-                                    `✗ ${result.message}`}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </>
                 )}
 

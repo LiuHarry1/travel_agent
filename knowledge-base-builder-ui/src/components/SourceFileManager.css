@@ -2,7 +2,6 @@
   background: var(--bg-primary);
   border-radius: var(--radius-xl);
   padding: var(--spacing-lg);
-  box-shadow: var(--shadow-lg);
   border: 1px solid var(--border-light);
   height: 100%;
   display: flex;
@@ -25,6 +24,75 @@
   font-size: var(--text-xl);
 }
 
+.search-container {
+  position: relative;
+  flex: 1;
+  max-width: 300px;
+  min-width: 200px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary, #6b7280);
+  pointer-events: none;
+  transition: color 0.2s;
+  z-index: 1;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 12px 8px 36px;
+  border: 1px solid var(--border-light, #e5e7eb);
+  border-radius: var(--radius-lg, 8px);
+  font-size: var(--text-sm, 14px);
+  background: var(--bg-primary, #ffffff);
+  color: var(--text-primary, #111827);
+  transition: all 0.2s;
+  outline: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.search-input::placeholder {
+  color: var(--text-tertiary, #9ca3af);
+}
+
+.search-input:focus {
+  border-color: var(--primary, #3b82f6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  background: var(--bg-primary, #ffffff);
+}
+
+.search-container:focus-within .search-icon {
+  color: var(--primary, #3b82f6);
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--bg-secondary, #f3f4f6);
+  border: none;
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary, #6b7280);
+  transition: all 0.2s;
+  opacity: 0.7;
+}
+
+.search-clear-btn:hover {
+  background: var(--bg-tertiary, #e5e7eb);
+  color: var(--text-primary, #111827);
+  opacity: 1;
+}
+
 .refresh-btn {
   padding: var(--spacing-sm);
   background: var(--bg-tertiary);
@@ -34,18 +102,28 @@
   cursor: pointer;
   font-size: var(--text-base);
   transition: all var(--transition-base);
-  box-shadow: var(--shadow-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   width: 32px;
   height: 32px;
+  position: relative;
+}
+
+.refresh-btn::before {
+  content: '↻';
+  font-size: var(--text-lg);
+  line-height: 1;
+  display: block;
+}
+
+.refresh-btn:disabled::before {
+  content: '⏳';
 }
 
 .refresh-btn:hover:not(:disabled) {
   background: var(--primary-light);
   border-color: var(--primary);
-  box-shadow: var(--shadow-md);
 }
 
 .refresh-btn:disabled {
@@ -90,18 +168,18 @@
   border: 1px solid var(--border-light);
   transition: all var(--transition-base);
   cursor: pointer;
+  overflow: visible;
+  position: relative;
 }
 
 .source-file-item:hover {
   border-color: var(--primary);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
+  background: var(--bg-tertiary);
 }
 
 .source-file-item.selected {
   border-color: var(--primary);
   background: var(--primary-light);
-  box-shadow: var(--shadow-sm);
 }
 
 .source-file-info {
@@ -130,6 +208,7 @@
   align-items: center;
   flex-shrink: 0;
   margin-left: var(--spacing-md);
+  flex-wrap: nowrap;
 }
 
 .view-file-btn,
@@ -145,10 +224,13 @@
   cursor: pointer;
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
-  transition: all var(--transition-base);
+  transition: background-color 0.2s, opacity 0.2s;
   white-space: nowrap;
   min-width: fit-content;
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  transform: none;
 }
 
 .view-file-btn {
@@ -158,8 +240,7 @@
 
 .view-file-btn:hover {
   background: #059669;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+  opacity: 0.9;
 }
 
 .view-btn {
@@ -169,8 +250,7 @@
 
 .view-btn:hover {
   background: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+  opacity: 0.9;
 }
 
 .delete-btn {
@@ -180,8 +260,8 @@
 
 .delete-btn:hover {
   background: #dc2626;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+  opacity: 0.9;
+  transform: none;
 }
 
 .btn-icon {
@@ -362,12 +442,12 @@
 
 .chunk-item:hover {
   border-color: var(--primary);
-  box-shadow: var(--shadow-sm);
+  background: var(--bg-secondary);
 }
 
 .chunk-item.expanded {
   border-color: var(--primary);
-  box-shadow: var(--shadow-md);
+  background: var(--bg-secondary);
 }
 
 .chunk-header {
@@ -520,8 +600,7 @@
 
 .page-btn:hover:not(:disabled) {
   background: var(--primary-dark);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(139, 92, 246, 0.3);
+  opacity: 0.9;
 }
 
 .page-btn:disabled {
