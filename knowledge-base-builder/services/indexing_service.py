@@ -71,9 +71,13 @@ class IndexingService:
                 }
             
             # 3. Generate embeddings
+            embedder_kwargs = {}
+            if embedding_provider.lower() == "bge" and kwargs.get("bge_api_url"):
+                embedder_kwargs["api_url"] = kwargs["bge_api_url"]
             embedder = EmbedderFactory.create(
                 provider=embedding_provider,
-                model=embedding_model
+                model=embedding_model,
+                **embedder_kwargs
             )
             texts = [chunk.text for chunk in chunks]
             embeddings = embedder.embed(texts)

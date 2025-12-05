@@ -70,7 +70,8 @@ async def process_file_with_progress(
     embedding_model: Optional[str],
     chunk_size: Optional[int],
     chunk_overlap: Optional[int],
-    service: IndexingService
+    service: IndexingService,
+    bge_api_url: Optional[str] = None
 ) -> AsyncGenerator[str, None]:
     """Process file with progress updates."""
     document = None
@@ -176,10 +177,14 @@ async def process_file_with_progress(
         
         try:
             from processors.embedders import EmbedderFactory
-            logger.info(f"Creating embedder: provider={embedding_provider}, model={embedding_model}")
+            logger.info(f"Creating embedder: provider={embedding_provider}, model={embedding_model}, bge_api_url={bge_api_url}")
+            embedder_kwargs = {}
+            if embedding_provider.lower() == "bge" and bge_api_url:
+                embedder_kwargs["api_url"] = bge_api_url
             embedder = EmbedderFactory.create(
                 provider=embedding_provider,
-                model=embedding_model
+                model=embedding_model,
+                **embedder_kwargs
             )
             texts = [chunk.text for chunk in chunks]
             logger.info(f"Prepared {len(texts)} texts for embedding")
@@ -270,6 +275,7 @@ async def upload_and_index_stream(
     collection_name: Optional[str] = Form(None),
     embedding_provider: Optional[str] = Form(None),
     embedding_model: Optional[str] = Form(None),
+    bge_api_url: Optional[str] = Form(None),
     chunk_size: Optional[int] = Form(None),
     chunk_overlap: Optional[int] = Form(None),
     service: IndexingService = Depends(get_indexing_service)
@@ -295,6 +301,7 @@ async def upload_and_index_stream(
         collection_name = collection_name if collection_name and collection_name.strip() else None
         embedding_provider = embedding_provider if embedding_provider and embedding_provider.strip() else None
         embedding_model = embedding_model if embedding_model and embedding_model.strip() else None
+        bge_api_url = bge_api_url if bge_api_url and bge_api_url.strip() else None
         
         # Detect document type
         doc_type = detect_document_type(file.filename)
@@ -317,7 +324,8 @@ async def upload_and_index_stream(
                 embedding_model,
                 chunk_size,
                 chunk_overlap,
-                service
+                service,
+                bge_api_url
             ):
                 yield progress
         
@@ -355,6 +363,7 @@ async def upload_and_index(
     collection_name: Optional[str] = Form(None),
     embedding_provider: Optional[str] = Form("qwen"),
     embedding_model: Optional[str] = Form(None),
+    bge_api_url: Optional[str] = Form(None),
     chunk_size: Optional[int] = Form(None),
     chunk_overlap: Optional[int] = Form(None),
     service: IndexingService = Depends(get_indexing_service)
@@ -379,16 +388,19 @@ async def upload_and_index(
             temp_path = tmp.name
             
             # Index document
-            result = service.index_document(
-                source=temp_path,
-                doc_type=doc_type,
-                collection_name=collection_name or settings.default_collection_name,
-                embedding_provider=embedding_provider or settings.default_embedding_provider,
-                embedding_model=embedding_model,
-                chunk_size=chunk_size,
-                chunk_overlap=chunk_overlap,
-                metadata={"original_filename": file.filename}
-            )
+            index_kwargs = {
+                "source": temp_path,
+                "doc_type": doc_type,
+                "collection_name": collection_name or settings.default_collection_name,
+                "embedding_provider": embedding_provider or settings.default_embedding_provider,
+                "embedding_model": embedding_model,
+                "chunk_size": chunk_size,
+                "chunk_overlap": chunk_overlap,
+                "metadata": {"original_filename": file.filename}
+            }
+            if embedding_provider and embedding_provider.lower() == "bge" and bge_api_url:
+                index_kwargs["bge_api_url"] = bge_api_url
+            result = service.index_document(**index_kwargs)
             
             if result["success"]:
                 return JSONResponse(
@@ -436,6 +448,8 @@ async def upload_batch(
     files: List[UploadFile] = File(...),
     collection_name: Optional[str] = Form(None),
     embedding_provider: Optional[str] = Form("qwen"),
+    embedding_model: Optional[str] = Form(None),
+    bge_api_url: Optional[str] = Form(None),
     service: IndexingService = Depends(get_indexing_service)
 ):
     """Upload and index multiple files."""
@@ -455,13 +469,18 @@ async def upload_batch(
                 temp_paths.append(tmp.name)
                 
                 try:
-                    result = service.index_document(
-                        source=tmp.name,
-                        doc_type=doc_type,
-                        collection_name=collection_name or settings.default_collection_name,
-                        embedding_provider=embedding_provider or settings.default_embedding_provider,
-                        metadata={"original_filename": file.filename}
-                    )
+                    index_kwargs = {
+                        "source": tmp.name,
+                        "doc_type": doc_type,
+                        "collection_name": collection_name or settings.default_collection_name,
+                        "embedding_provider": embedding_provider or settings.default_embedding_provider,
+                        "metadata": {"original_filename": file.filename}
+                    }
+                    if embedding_model:
+                        index_kwargs["embedding_model"] = embedding_model
+                    if embedding_provider and embedding_provider.lower() == "bge" and bge_api_url:
+                        index_kwargs["bge_api_url"] = bge_api_url
+                    result = service.index_document(**index_kwargs)
                     results.append({
                         "filename": file.filename,
                         "success": result["success"],

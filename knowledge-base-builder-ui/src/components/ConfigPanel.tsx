@@ -162,9 +162,13 @@ const EmbeddingConfigForm: React.FC<{
         ];
       case 'bge':
         return [
-          { value: 'BAAI/bge-large-en-v1.5', label: 'bge-large-en-v1.5 (1024d)' },
-          { value: 'BAAI/bge-base-en-v1.5', label: 'bge-base-en-v1.5 (768d)' },
-          { value: 'BAAI/bge-small-en-v1.5', label: 'bge-small-en-v1.5 (384d)' },
+          { value: 'BAAI/bge-large-en-v1.5', label: 'bge-large-en-v1.5 (1024d, English)' },
+          { value: 'BAAI/bge-base-en-v1.5', label: 'bge-base-en-v1.5 (768d, English)' },
+          { value: 'BAAI/bge-small-en-v1.5', label: 'bge-small-en-v1.5 (384d, English)' },
+          { value: 'BAAI/bge-large-zh-v1.5', label: 'bge-large-zh-v1.5 (1024d, Chinese)' },
+          { value: 'BAAI/bge-base-zh-v1.5', label: 'bge-base-zh-v1.5 (768d, Chinese)' },
+          { value: 'BAAI/bge-small-zh-v1.5', label: 'bge-small-zh-v1.5 (384d, Chinese)' },
+          { value: 'nvidia/llama-nemotron-embed-1b-v2', label: 'llama-nemotron-embed-1b-v2 (1024d)' },
         ];
       default:
         return [];
@@ -181,7 +185,7 @@ const EmbeddingConfigForm: React.FC<{
         >
           <option value="qwen">Qwen (DashScope)</option>
           <option value="openai">OpenAI</option>
-          <option value="bge">BGE (Local)</option>
+          <option value="bge">BGE (API)</option>
         </select>
       </div>
       
@@ -198,6 +202,19 @@ const EmbeddingConfigForm: React.FC<{
           ))}
         </select>
       </div>
+      
+      {config.provider === 'bge' && (
+        <div className="form-group">
+          <label>BGE API URL:</label>
+          <input
+            type="text"
+            value={config.bgeApiUrl || ''}
+            onChange={(e) => onChange({ ...config, bgeApiUrl: e.target.value })}
+            placeholder="http://10.150.115.110:6000"
+          />
+          <small>Base URL for BGE embedding service (e.g., http://10.150.115.110:6000 for English, :6001 for Chinese)</small>
+        </div>
+      )}
       
       {(config.provider === 'qwen' || config.provider === 'openai') && (
         <div className="form-group">

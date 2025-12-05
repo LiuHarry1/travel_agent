@@ -72,6 +72,7 @@ export class ApiClient {
       collectionName?: string;
       embeddingProvider?: string;
       embeddingModel?: string;
+      bgeApiUrl?: string;
       chunkSize?: number;
       chunkOverlap?: number;
     } = {}
@@ -87,6 +88,9 @@ export class ApiClient {
     }
     if (options.embeddingModel) {
       formData.append('embedding_model', options.embeddingModel);
+    }
+    if (options.bgeApiUrl) {
+      formData.append('bge_api_url', options.bgeApiUrl);
     }
     if (options.chunkSize) {
       formData.append('chunk_size', options.chunkSize.toString());
@@ -113,6 +117,8 @@ export class ApiClient {
     options: {
       collectionName?: string;
       embeddingProvider?: string;
+      embeddingModel?: string;
+      bgeApiUrl?: string;
     } = {}
   ): Promise<BatchUploadResponse> {
     const formData = new FormData();
@@ -126,6 +132,12 @@ export class ApiClient {
     }
     if (options.embeddingProvider) {
       formData.append('embedding_provider', options.embeddingProvider);
+    }
+    if (options.embeddingModel) {
+      formData.append('embedding_model', options.embeddingModel);
+    }
+    if (options.bgeApiUrl) {
+      formData.append('bge_api_url', options.bgeApiUrl);
     }
 
     const response = await fetch(`${this.baseUrl}/api/v1/upload/batch`, {
@@ -248,6 +260,7 @@ export class ApiClient {
       collectionName?: string;
       embeddingProvider?: string;
       embeddingModel?: string;
+      bgeApiUrl?: string;
       chunkSize?: number;
       chunkOverlap?: number;
     },
@@ -272,6 +285,9 @@ export class ApiClient {
       }
       if (options.embeddingModel) {
         formData.append('embedding_model', options.embeddingModel);
+      }
+      if (options.bgeApiUrl) {
+        formData.append('bge_api_url', options.bgeApiUrl);
       }
       if (options.chunkSize !== undefined && options.chunkSize !== null) {
         formData.append('chunk_size', options.chunkSize.toString());

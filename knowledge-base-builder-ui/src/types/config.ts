@@ -2,6 +2,7 @@ export interface EmbeddingConfig {
   provider: 'qwen' | 'openai' | 'bge';
   model?: string;
   apiKey?: string;
+  bgeApiUrl?: string;  // BGE API service URL (e.g., http://10.150.115.110:6000)
 }
 
 export interface ChunkingConfig {

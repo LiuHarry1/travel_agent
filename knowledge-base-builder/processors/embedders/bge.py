@@ -37,8 +37,13 @@ class BGEEmbedder(BaseEmbedder):
     - BAAI/bge-small-en-v1.5: 384 dimensions (English)
     
     Can work in two modes:
-    1. Local mode: Loads model directly (requires sentence-transformers or transformers)
-    2. API mode: Uses remote embedding service via HTTP API
+    1. Local mode: Loads model directly (requires sentence-transformers or transformers) - NOT RECOMMENDED
+    2. API mode: Uses remote embedding service via HTTP API (RECOMMENDED)
+    
+    API endpoints are determined by model:
+    - English BGE models (bge-*-en-*): /embed/en
+    - Chinese BGE models (bge-*-zh-*): /embed/zh
+    - Other models: /embed
     """
     
     def __init__(
@@ -141,24 +146,60 @@ class BGEEmbedder(BaseEmbedder):
         
         return embeddings.tolist()
     
+    def _get_api_endpoint(self) -> str:
+        """Get API endpoint based on model name."""
+        # Determine endpoint based on model name
+        model_lower = self.model_name.lower()
+        
+        if "bge-large-en" in model_lower or "bge-base-en" in model_lower or "bge-small-en" in model_lower:
+            # English BGE models use /embed/en
+            return f"{self.api_url}/embed/en"
+        elif "bge-large-zh" in model_lower or "bge-base-zh" in model_lower or "bge-small-zh" in model_lower:
+            # Chinese BGE models use /embed/zh
+            return f"{self.api_url}/embed/zh"
+        else:
+            # Other models (e.g., nvidia/llama-nemotron-embed-1b-v2) use /embed
+            return f"{self.api_url}/embed"
+    
     def _embed_via_api(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings via API service."""
         if not HAS_REQUESTS:
             raise EmbeddingError("requests library is required for API mode. Install with: pip install requests")
         
+        if not self.api_url:
+            raise EmbeddingError("BGE API URL is not configured. Please set BGE_API_URL or provide api_url parameter.")
+        
+        endpoint = self._get_api_endpoint()
+        logger.info(f"Calling BGE API endpoint: {endpoint} for model: {self.model_name}")
+        
         try:
             response = requests.post(
-                f"{self.api_url}/embed",
-                json={"texts": texts, "normalize": True},
+                endpoint,
+                json={"texts": texts},
                 timeout=300  # 5 minutes timeout for large batches
             )
             response.raise_for_status()
             result = response.json()
-            return result["embeddings"]
+            
+            # Handle different response formats
+            if "embeddings" in result:
+                embeddings = result["embeddings"]
+            elif "data" in result and isinstance(result["data"], list):
+                # Some APIs return {"data": [[...], [...]]}
+                embeddings = result["data"]
+            else:
+                # Try to get embeddings from root level if it's a list
+                embeddings = result if isinstance(result, list) else result.get("embedding", [])
+            
+            if not embeddings:
+                raise EmbeddingError("Empty embeddings returned from API")
+            
+            logger.debug(f"Received {len(embeddings)} embeddings from API")
+            return embeddings
         except requests.exceptions.RequestException as e:
             logger.error(f"API request failed: {str(e)}", exc_info=True)
             raise EmbeddingError(f"BGE API request failed: {str(e)}") from e
-        except KeyError as e:
+        except (KeyError, TypeError) as e:
             logger.error(f"Invalid API response format: {str(e)}", exc_info=True)
             raise EmbeddingError(f"Invalid API response format: {str(e)}") from e
     
@@ -198,6 +239,10 @@ class BGEEmbedder(BaseEmbedder):
             "BAAI/bge-large-en-v1.5": 1024,
             "BAAI/bge-base-en-v1.5": 768,
             "BAAI/bge-small-en-v1.5": 384,
+            "BAAI/bge-large-zh-v1.5": 1024,
+            "BAAI/bge-base-zh-v1.5": 768,
+            "BAAI/bge-small-zh-v1.5": 384,
+            "nvidia/llama-nemotron-embed-1b-v2": 1024,
         }
         if self.model_name in dim_map:
             return dim_map[self.model_name]
