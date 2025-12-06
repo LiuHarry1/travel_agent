@@ -23,6 +23,10 @@ body {
 
 #root {
   min-height: 100vh;
+  height: 100vh; /* 固定高度，撑满视口 */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* Smooth scrolling */

@@ -1,12 +1,13 @@
 .source-file-manager {
   background: var(--bg-primary);
   border-radius: var(--radius-xl);
-  padding: var(--spacing-lg);
+  padding: var(--spacing-md);
   border: 1px solid var(--border-light);
   height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0;
 }
 
 .source-file-header {
@@ -139,28 +140,27 @@
 .source-file-list {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
   overflow-y: auto;
   flex: 1;
-  padding-right: var(--spacing-sm);
+  padding-right: var(--spacing-xs);
 }
 
 .source-file-list::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 .source-file-list::-webkit-scrollbar-track {
   background: var(--bg-secondary);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-full);
 }
 
 .source-file-list::-webkit-scrollbar-thumb {
-  background: var(--border-medium);
-  border-radius: var(--radius-sm);
+  background: var(--gray-300);
+  border-radius: var(--radius-full);
 }
 
 .source-file-list::-webkit-scrollbar-thumb:hover {
-  background: var(--text-tertiary);
+  background: var(--gray-400);
 }
 
 .source-file-item {
@@ -168,24 +168,46 @@
   justify-content: space-between;
   align-items: center;
   padding: var(--spacing-sm) var(--spacing-md);
+  margin-bottom: var(--spacing-xs);
   background: var(--bg-secondary);
-  border-radius: var(--radius-md);
   border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
   transition: all var(--transition-base);
   cursor: pointer;
-  overflow: visible;
+  overflow: hidden;
   position: relative;
-  min-height: 56px;
+  min-height: 48px;
+}
+
+.source-file-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--primary);
+  transform: scaleY(0);
+  transition: transform var(--transition-base);
 }
 
 .source-file-item:hover {
-  border-color: var(--primary);
   background: var(--bg-tertiary);
+  border-color: var(--primary-light);
+  transform: translateX(2px);
+}
+
+.source-file-item:hover::before {
+  transform: scaleY(1);
 }
 
 .source-file-item.selected {
+  background: var(--primary-bg);
   border-color: var(--primary);
-  background: var(--primary-light);
+}
+
+.source-file-item.selected::before {
+  transform: scaleY(1);
 }
 
 .source-file-info {
@@ -203,6 +225,11 @@
   white-space: nowrap;
   font-size: var(--text-sm);
   line-height: 1.4;
+}
+
+.source-file-item.selected .source-file-name {
+  color: var(--primary-dark);
+  font-weight: var(--font-bold);
 }
 
 .source-file-meta {

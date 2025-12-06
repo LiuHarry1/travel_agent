@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { FileText, File, BookOpen, Globe, FileCode, X, Book, ChevronDown, ChevronUp } from 'lucide-react';
 import { FileWithPreview, FileType } from '../types/file';
 import type { AppConfig } from '../types/config';
@@ -53,6 +53,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   const [processingFiles, setProcessingFiles] = useState<Map<string, FileProcessingStatus>>(new Map());
   const [uploading, setUploading] = useState(false);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+  const [filesCollapsed, setFilesCollapsed] = useState(false); // 控制 Selected Files 是否折叠
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -127,6 +128,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     if (files.length === 0) return;
 
     setUploading(true);
+    setFilesCollapsed(true); // 自动折叠 Selected Files，给 Processing Files 更多空间
 
     for (const file of files) {
       const fileId = file.name;
@@ -315,6 +317,18 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     });
   };
 
+  // 清除所有状态，返回到初始上传状态
+  const handleClearAll = useCallback(() => {
+    setFiles([]);
+    setProcessingFiles(new Map());
+    setUploading(false);
+    setFilesCollapsed(false);
+    setExpandedFiles(new Set());
+  }, []);
+
+  // 判断是否处于处理状态
+  const isProcessing = uploading || processingFiles.size > 0;
+
   const FileTypeIcon: React.FC<{ type: FileType }> = ({ type }) => {
     const iconMap: Record<FileType, React.ReactNode> = {
       markdown: <FileText size={20} />,
@@ -350,12 +364,13 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         Upload Documents to Knowledge Base
       </h2>
       
-      {/* File Drop Zone */}
-      <div
-        className={`drop-zone ${files.length > 0 || processingFiles.size > 0 ? 'has-files compact' : ''}`}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-      >
+      {/* File Drop Zone - 只在没有处理中时显示 */}
+      {!isProcessing && (
+        <div
+          className={`drop-zone ${files.length > 0 ? 'has-files compact' : ''}`}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
         <input
           type="file"
           id="file-input"
@@ -374,32 +389,45 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           </p>
         </label>
       </div>
+      )}
 
-      {/* Selected Files */}
-      {files.length > 0 && (
+      {/* Selected Files - 只在没有处理中时显示 */}
+      {files.length > 0 && !isProcessing && (
         <>
           <div className="section-divider"></div>
-          <div className="files-list">
-            <h3>Selected Files ({files.length})</h3>
-            <div className="files-grid">
-              {files.map((file, index) => (
-                <div key={index} className="file-item">
-                  <FileTypeIcon type={file.fileType} />
-                  <div className="file-info">
-                    <span className="file-name">{file.name || 'Unknown file'}</span>
-                    <span className="file-size">{formatFileSize(file.size)}</span>
-                  </div>
-                  <button
-                    className="remove-btn"
-                    onClick={() => removeFile(index)}
-                    disabled={uploading}
-                    title="Remove file"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              ))}
+          <div className={`files-list ${filesCollapsed ? 'collapsed' : ''}`}>
+            <div 
+              className="files-list-header"
+              onClick={() => setFilesCollapsed(!filesCollapsed)}
+              style={{ cursor: 'pointer' }}
+            >
+              <h3>Selected Files ({files.length})</h3>
+              <ChevronDown 
+                size={18} 
+                className={`collapse-icon ${filesCollapsed ? 'rotated' : ''}`}
+              />
             </div>
+            {!filesCollapsed && (
+              <div className="files-grid">
+                {files.map((file, index) => (
+                  <div key={index} className="file-item">
+                    <FileTypeIcon type={file.fileType} />
+                    <div className="file-info">
+                      <span className="file-name">{file.name || 'Unknown file'}</span>
+                      <span className="file-size">{formatFileSize(file.size)}</span>
+                    </div>
+                    <button
+                      className="remove-btn"
+                      onClick={() => removeFile(index)}
+                      disabled={uploading}
+                      title="Remove file"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </>
       )}
@@ -508,19 +536,45 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       )}
 
       {/* Sticky Action Bar */}
-      {files.length > 0 && (
+      {(files.length > 0 || isProcessing) && (
         <div className="upload-action-bar">
           <div className="action-bar-content">
-            <span className="file-count">
-              {files.length} file{files.length !== 1 ? 's' : ''} selected
-            </span>
-            <button
-              className="upload-btn"
-              onClick={handleUpload}
-              disabled={files.length === 0 || uploading}
-            >
-              {uploading ? 'Processing...' : `Upload ${files.length} File${files.length !== 1 ? 's' : ''}`}
-            </button>
+            {isProcessing ? (
+              <>
+                <div className="processing-status-info">
+                  <span className="status-text">
+                    {completedCount} of {totalProcessing} completed
+                  </span>
+                  <div className="status-progress-bar">
+                    <div 
+                      className="status-progress-fill"
+                      style={{ width: `${totalProcessing > 0 ? (completedCount / totalProcessing) * 100 : 0}%` }}
+                    />
+                  </div>
+                </div>
+                <button
+                  className="clear-all-btn"
+                  onClick={handleClearAll}
+                  disabled={uploading}
+                  title="Clear all and start new upload"
+                >
+                  New Upload
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="file-count">
+                  {files.length} file{files.length !== 1 ? 's' : ''} selected
+                </span>
+                <button
+                  className="upload-btn"
+                  onClick={handleUpload}
+                  disabled={files.length === 0 || uploading}
+                >
+                  {uploading ? 'Processing...' : `Upload ${files.length} File${files.length !== 1 ? 's' : ''}`}
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

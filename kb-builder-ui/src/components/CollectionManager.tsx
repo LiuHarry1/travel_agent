@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Folder, BarChart3, Inbox, Sparkles, Search, X as XIcon } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { Collection } from '../types/collection';
@@ -31,6 +31,22 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; name: string }>({ isOpen: false, name: '' });
   const [searchQuery, setSearchQuery] = useState('');
+  const loadingRef = useRef(false);
+  
+  // 排序函数：按创建时间排序，如果相同则按名称排序
+  const sortCollections = useCallback((data: Collection[]): Collection[] => {
+    return [...data].sort((a, b) => {
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      
+      if (timeA > 0 && timeB > 0 && timeA !== timeB) {
+        return timeA - timeB; // 升序：最早创建的在前
+      }
+      
+      // 如果创建时间相同或无效，按名称排序以保持稳定的顺序
+      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, []);
   
   // Embedding configuration for new collection
   const [embeddingConfig, setEmbeddingConfig] = useState<EmbeddingConfig>(() => {
@@ -47,30 +63,31 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
     }
   }, [config]);
 
-  useEffect(() => {
-    loadCollections();
-  }, [database]);
-
-  // Refresh collections when refreshTrigger changes
-  useEffect(() => {
-    if (refreshTrigger !== undefined) {
-      loadCollections();
-    }
-  }, [refreshTrigger, database]);
-
-  const loadCollections = async () => {
+  const loadCollections = useCallback(async () => {
+    // 防止重复加载
+    if (loadingRef.current) return;
+    
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
     try {
       const data = await apiClient.listCollections(database);
-      setCollections(data);
+      // 使用统一的排序函数确保排序稳定
+      const sortedData = sortCollections(data);
+      setCollections(sortedData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load collections');
       console.error('Failed to load collections:', err);
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
-  };
+  }, [database, sortCollections]);
+
+  // Load collections when database changes or refreshTrigger changes
+  useEffect(() => {
+    loadCollections();
+  }, [database, refreshTrigger, loadCollections]);
 
   const getModelOptions = (provider: string) => {
     switch (provider) {
@@ -168,7 +185,7 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
       <div className="collection-header">
         <div className="collection-header-top">
           <h3>
-            <Folder size={20} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '8px' }} />
+            <Folder size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '8px' }} />
             Collections
           </h3>
           <button onClick={() => setShowCreateDialog(true)} className="create-btn">

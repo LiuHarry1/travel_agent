@@ -1,8 +1,10 @@
 .app {
   min-height: 100vh;
+  height: 100vh; /* 添加固定高度，撑满整个视口 */
   display: flex;
   flex-direction: column;
   background: transparent;
+  overflow: hidden; /* 防止整体滚动 */
 }
 
 .app-header {
@@ -64,10 +66,12 @@
 
 .app-layout {
   display: flex;
-  flex: 1;
+  flex: 1; /* 占据剩余空间，自动撑满 */
   overflow: hidden;
   gap: var(--spacing-md);
   padding: var(--spacing-md);
+  min-height: 0; /* 重要：允许 flex 子元素缩小 */
+  align-items: stretch; /* 确保子元素高度一致 */
 }
 
 .sidebar {
@@ -79,22 +83,31 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - var(--spacing-md) * 2 - 80px);
+  height: 100%; /* 使用 100% 而不是 calc */
   box-shadow: var(--shadow-md);
 }
 
 .main-content {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden; /* 改为 hidden，防止整体滚动 */
   min-width: 0;
   background: var(--bg-primary);
   border-radius: var(--radius-xl);
-  padding: var(--spacing-lg);
+  padding: var(--spacing-md);
   box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  height: 100%; /* 与 sidebar 一致 */
+  min-height: 0; /* 重要：允许 flex 子元素缩小 */
 }
 
 .main-content-panel {
   width: 100%;
+  flex: 1; /* 占据剩余空间 */
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* 重要：允许 flex 子元素缩小 */
+  overflow: hidden; /* 防止溢出 */
 }
 
 .main-tabs {
@@ -140,7 +153,10 @@
 }
 
 .upload-section {
-  margin-bottom: var(--spacing-xl);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .success-message,

@@ -1,15 +1,15 @@
 .file-upload-container {
   background: var(--bg-primary);
   border-radius: var(--radius-xl);
-  padding: var(--spacing-lg);
+  padding: var(--spacing-sm); /* 减小 padding */
   border: 1px solid var(--border-light);
   transition: all var(--transition-base);
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-lg);
-  position: relative;
-  padding-bottom: calc(var(--spacing-lg) + 90px); /* Space for sticky action bar */
-  min-height: 400px;
+  gap: var(--spacing-sm); /* 减小 gap */
+  height: 100%; /* 占满父容器 */
+  overflow: hidden; /* 防止容器溢出 */
+  min-height: 0; /* 重要：允许 flex 子元素缩小 */
 }
 
 .file-upload-container:hover {
@@ -17,27 +17,28 @@
 }
 
 .file-upload-container h2 {
-  margin: 0 0 var(--spacing-md) 0;
+  margin: 0 0 var(--spacing-xs) 0; /* 减小 margin */
   color: var(--text-primary);
-  font-size: var(--text-lg);
-  font-weight: var(--font-bold);
+  font-size: var(--text-base); /* 减小字体大小 */
+  font-weight: var(--font-semibold); /* 减小字重 */
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-xs); /* 减小 gap */
 }
 
 
 .drop-zone {
   border: 2px dashed var(--border-medium);
   border-radius: var(--radius-lg);
-  padding: var(--spacing-lg) var(--spacing-md);
+  padding: var(--spacing-sm); /* 减小 padding */
   text-align: center;
   cursor: pointer;
   transition: all var(--transition-base);
-  margin-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-xs); /* 减小 margin */
   background: var(--bg-secondary);
   position: relative;
   overflow: hidden;
+  flex-shrink: 1; /* 允许缩小 */
 }
 
 .drop-zone::before {
@@ -68,9 +69,10 @@
 }
 
 .drop-zone.compact {
-  padding: var(--spacing-sm) var(--spacing-md);
-  min-height: 80px;
+  padding: var(--spacing-xs) var(--spacing-sm); /* 减小 padding */
+  min-height: 50px; /* 进一步减小最小高度 */
   margin-bottom: 0;
+  flex-shrink: 1; /* 有文件时可以缩小 */
 }
 
 .drop-zone.compact .drop-zone-icon {
@@ -121,18 +123,110 @@
 .section-divider {
   height: 1px;
   background: var(--border-light);
-  margin: var(--spacing-md) 0;
+  margin: var(--spacing-xs) 0; /* 减小 margin */
   opacity: 0.5;
 }
 
+
 .files-list {
   animation: fadeIn 0.3s ease-out;
+  flex-shrink: 1; /* 允许缩小，给 processing files 更多空间 */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+/* Files List Header - 可点击的标题栏 */
+.files-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-xs) 0;
+  user-select: none;
+  transition: background 0.2s ease;
+}
+
+.files-list-header:hover {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  margin: calc(-1 * var(--spacing-xs)) 0;
+}
+
+.files-list-header h3 {
+  margin: 0; /* 移除 margin，由父容器控制 */
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+/* 折叠图标 */
+.collapse-icon {
+  transition: transform 0.3s ease;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.collapse-icon.rotated {
+  transform: rotate(-90deg);
+}
+
+.files-list-header:hover .collapse-icon {
+  color: var(--primary);
+}
+
+/* 折叠状态 */
+.files-list.collapsed .files-grid {
+  display: none;
+}
+
+/* 当 Selected Files 折叠时，Processing Files 获得更多空间 */
+.file-upload-container:has(.files-list.collapsed) .processing-queue-section {
+  flex: 1 1 auto;
+  min-height: 400px;
+}
+
+/* 当有 processing files 时，限制 selected files 的最大高度 */
+.file-upload-container:has(.processing-queue-section) .files-list {
+  flex-shrink: 1;
 }
 
 .files-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--spacing-sm);
+  gap: var(--spacing-xs); /* 减小 gap */
+  max-height: 300px; /* 默认最大高度 */
+  overflow-y: auto; /* 文件多时纵向滚动 */
+  overflow-x: hidden;
+  padding-right: var(--spacing-xs);
+}
+
+/* 当有 processing files 时，减小 selected files grid 的最大高度 */
+.file-upload-container:has(.processing-queue-section) .files-grid {
+  max-height: 200px; /* 减小高度，给 processing files 更多空间 */
+}
+
+/* 滚动条样式 */
+.files-grid::-webkit-scrollbar {
+  width: 6px;
+}
+
+.files-grid::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-full);
+}
+
+.files-grid::-webkit-scrollbar-thumb {
+  background: var(--gray-300);
+  border-radius: var(--radius-full);
+}
+
+.files-grid::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-400);
 }
 
 @keyframes fadeIn {
@@ -144,21 +238,13 @@
   }
 }
 
-.files-list h3 {
-  margin-bottom: var(--spacing-md);
-  font-size: var(--text-lg);
-  color: var(--text-primary);
-  font-weight: var(--font-semibold);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-}
+/* files-list h3 样式现在在 .files-list-header h3 中定义 */
 
 .file-item {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
+  gap: var(--spacing-xs); /* 减小 gap */
+  padding: var(--spacing-xs) var(--spacing-sm); /* 减小 padding */
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-light);
@@ -252,11 +338,13 @@
 }
 
 .upload-action-bar {
-  position: sticky;
-  bottom: 0;
+  flex-shrink: 0; /* 不缩小 */
+  margin-top: auto; /* 推到底部 */
   border-top: 1px solid var(--border-light);
-  padding: var(--spacing-md) var(--spacing-lg);
-  margin: var(--spacing-lg) calc(-1 * var(--spacing-lg)) calc(-1 * var(--spacing-lg));
+  padding: var(--spacing-sm); /* 减小 padding */
+  margin-left: calc(-1 * var(--spacing-sm));
+  margin-right: calc(-1 * var(--spacing-sm));
+  margin-bottom: calc(-1 * var(--spacing-sm));
   z-index: 10;
   backdrop-filter: blur(10px);
   background: var(--bg-primary);
@@ -268,7 +356,7 @@
   justify-content: space-between;
   align-items: center;
   max-width: 100%;
-  gap: var(--spacing-md);
+  gap: var(--spacing-sm); /* 减小 gap */
 }
 
 .file-count {
@@ -278,12 +366,12 @@
 }
 
 .upload-btn {
-  padding: var(--spacing-md) var(--spacing-xl);
+  padding: var(--spacing-sm) var(--spacing-lg); /* 减小 padding */
   background: var(--gradient-primary);
   color: var(--white);
   border: none;
   border-radius: var(--radius-lg);
-  font-size: var(--text-base);
+  font-size: var(--text-sm); /* 减小字体大小 */
   font-weight: var(--font-semibold);
   cursor: pointer;
   transition: all var(--transition-base);
@@ -328,29 +416,100 @@
   transform: none;
 }
 
+/* 处理状态信息 */
+.processing-status-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  flex: 1;
+  min-width: 0;
+}
+
+.status-text {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  white-space: nowrap;
+}
+
+.status-progress-bar {
+  height: 4px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  width: 100%;
+  max-width: 300px;
+}
+
+.status-progress-fill {
+  height: 100%;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease-out;
+}
+
+/* Clear All / New Upload 按钮 */
+.clear-all-btn {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.clear-all-btn:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  border-color: var(--border-medium);
+  color: var(--primary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.clear-all-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.clear-all-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .processing-queue-section {
   animation: fadeIn 0.5s ease-out;
+  flex: 1 1 auto; /* 优先占据剩余空间 */
+  display: flex;
+  flex-direction: column;
+  min-height: 250px; /* 确保最小可见高度 */
+  overflow: hidden;
 }
 
 .processing-header {
-  margin-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-xs); /* 减小 margin */
 }
 
 .processing-header h3 {
-  margin: 0 0 var(--spacing-sm) 0;
-  font-size: var(--text-lg);
+  margin: 0 0 var(--spacing-xs) 0; /* 减小 margin */
+  font-size: var(--text-base); /* 减小字体大小 */
   color: var(--text-primary);
-  font-weight: var(--font-bold);
+  font-weight: var(--font-semibold); /* 减小字重 */
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-xs); /* 减小 gap */
 }
 
 .processing-summary {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
-  margin-top: var(--spacing-sm);
+  gap: var(--spacing-sm); /* 减小 gap */
+  margin-top: var(--spacing-xs); /* 减小 margin */
 }
 
 .summary-text {
@@ -377,17 +536,44 @@
 }
 
 .processing-files-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
+  flex: 1; /* 占据剩余空间 */
+  overflow-y: auto;
+  padding-right: var(--spacing-xs);
+  min-height: 0; /* 重要 */
+}
+
+/* 滚动条样式 */
+.processing-files-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.processing-files-list::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-full);
+}
+
+.processing-files-list::-webkit-scrollbar-thumb {
+  background: var(--gray-300);
+  border-radius: var(--radius-full);
+}
+
+.processing-files-list::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-400);
 }
 
 .processing-file-item {
-  background: var(--bg-primary);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin-bottom: var(--spacing-xs);
+  background: var(--bg-secondary);
   border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  cursor: pointer;
   transition: all var(--transition-base);
+  position: relative;
+  overflow: hidden;
+  min-height: 48px;
   animation: slideInUp 0.4s ease-out;
 }
 
@@ -402,49 +588,66 @@
   }
 }
 
+.processing-file-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--primary);
+  transform: scaleY(0);
+  transition: transform var(--transition-base);
+}
+
 .processing-file-item:hover {
-  border-color: var(--primary);
-  background: var(--bg-secondary);
+  background: var(--bg-tertiary);
+  border-color: var(--primary-light);
+  transform: translateX(2px);
+}
+
+.processing-file-item:hover::before {
+  transform: scaleY(1);
 }
 
 .file-header {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  transition: all var(--transition-base);
-}
-
-.file-header:hover {
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-xs);
-  margin: calc(-1 * var(--spacing-xs));
+  justify-content: space-between;
+  gap: var(--spacing-xs);
+  flex: 1;
+  min-width: 0;
 }
 
 .file-header .file-info {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
-  min-width: 0;
+  gap: 2px;
 }
 
 .file-header .file-name {
   font-weight: var(--font-semibold);
   color: var(--text-primary);
+  margin-bottom: 2px;
   font-size: var(--text-sm);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 200px;
-  display: block;
+  line-height: 1.4;
 }
 
 .file-actions {
   display: flex;
-  align-items: center;
   gap: var(--spacing-xs);
+  opacity: 0;
+  transition: opacity var(--transition-base);
   flex-shrink: 0;
+}
+
+.processing-file-item:hover .file-actions {
+  opacity: 1;
 }
 
 .expand-btn {
@@ -466,8 +669,8 @@
 }
 
 .file-details {
-  margin-top: var(--spacing-md);
-  padding-top: var(--spacing-md);
+  margin-top: var(--spacing-xs); /* 进一步减小 margin */
+  padding-top: var(--spacing-xs); /* 进一步减小 padding */
   border-top: 1px solid var(--border-light);
   animation: slideDown 0.3s ease-out;
 }

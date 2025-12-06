@@ -57,10 +57,12 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
     setExpandedChunkId(expandedChunkId === chunkIndex ? null : chunkIndex);
   };
 
-  // Filter chunks based on search query
-  const filteredChunks = chunksData?.chunks.filter(chunk => 
-    chunk.text.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || [];
+  // Filter chunks based on search query and sort by index
+  const filteredChunks = chunksData?.chunks
+    .filter(chunk => 
+      chunk.text.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => a.index - b.index) || [];
 
   if (!documentId) {
     return (

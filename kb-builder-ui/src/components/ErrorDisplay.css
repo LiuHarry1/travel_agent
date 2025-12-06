@@ -2,8 +2,8 @@
   background: linear-gradient(135deg, var(--warning-bg) 0%, #fff3cd 100%);
   border: 2px solid var(--warning);
   border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
-  margin: var(--spacing-md) 0;
+  padding: var(--spacing-sm); /* 减小 padding */
+  margin: var(--spacing-xs) 0; /* 减小 margin */
   animation: slideInDown 0.3s ease-out;
   box-shadow: var(--shadow-md);
   position: relative;
@@ -40,14 +40,14 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: var(--spacing-md);
-  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xs); /* 减小 margin */
+  gap: var(--spacing-sm); /* 减小 gap */
 }
 
 .error-header h3 {
   margin: 0;
   color: var(--warning-dark);
-  font-size: var(--text-lg);
+  font-size: var(--text-base); /* 减小字体大小 */
   font-weight: var(--font-bold);
   display: flex;
   align-items: center;
@@ -76,14 +76,14 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--spacing-md);
-  margin: var(--spacing-md) 0;
+  gap: var(--spacing-sm); /* 减小 gap */
+  margin: var(--spacing-xs) 0; /* 减小 margin */
 }
 
 .error-message-text {
   color: var(--warning-dark);
-  font-size: var(--text-base);
-  line-height: 1.6;
+  font-size: var(--text-sm); /* 减小字体大小 */
+  line-height: 1.5; /* 减小行高 */
   font-weight: var(--font-medium);
   flex: 1;
   margin: 0;
@@ -110,8 +110,8 @@
 }
 
 .error-solution {
-  margin: var(--spacing-md) 0;
-  padding: var(--spacing-md);
+  margin: var(--spacing-xs) 0; /* 减小 margin */
+  padding: var(--spacing-sm); /* 减小 padding */
   background: rgba(59, 130, 246, 0.1);
   border-radius: var(--radius-md);
   border-left: 3px solid var(--primary);
@@ -136,9 +136,9 @@
 }
 
 .error-type {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs); /* 减小字体大小 */
   color: var(--text-secondary);
-  margin: var(--spacing-sm) 0;
+  margin: var(--spacing-xs) 0; /* 减小 margin */
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
@@ -161,9 +161,9 @@
 .error-actions {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
-  margin-top: var(--spacing-lg);
-  padding-top: var(--spacing-md);
+  gap: var(--spacing-sm); /* 减小 gap */
+  margin-top: var(--spacing-sm); /* 减小 margin */
+  padding-top: var(--spacing-sm); /* 减小 padding */
   border-top: 1px solid rgba(0, 0, 0, 0.1);
 }
 
@@ -221,8 +221,8 @@
 }
 
 .error-note {
-  margin-top: var(--spacing-md);
-  padding: var(--spacing-md);
+  margin-top: var(--spacing-xs); /* 减小 margin */
+  padding: var(--spacing-sm); /* 减小 padding */
   background: rgba(255, 255, 255, 0.6);
   border-radius: var(--radius-md);
   font-size: var(--text-xs);

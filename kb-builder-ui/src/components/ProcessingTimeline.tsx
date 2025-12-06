@@ -40,11 +40,11 @@ export const ProcessingTimeline: React.FC<ProcessingTimelineProps> = ({ fileStat
             >
               <div className="timeline-icon">
                 {isCompleted ? (
-                  <Check size={20} />
+                  <Check size={16} />
                 ) : isErrorStage ? (
-                  <X size={20} />
+                  <X size={16} />
                 ) : (
-                  React.createElement(stage.icon, { size: 20 })
+                  React.createElement(stage.icon, { size: 16 })
                 )}
               </div>
               <div className="timeline-content">
@@ -57,16 +57,16 @@ export const ProcessingTimeline: React.FC<ProcessingTimelineProps> = ({ fileStat
                         style={{ width: `${fileStatus.progress}%` }}
                       />
                     </div>
-                    <span className="timeline-progress-text">{fileStatus.progress}%</span>
+                    <div className="timeline-progress-text">{fileStatus.progress}%</div>
                   </div>
                 )}
                 {isActive && fileStatus.message && (
-                  <div className="timeline-details" style={{ marginTop: '4px', fontSize: '12px' }}>
+                  <div className="timeline-details" style={{ marginTop: '2px', fontSize: '11px' }}>
                     {fileStatus.message}
                   </div>
                 )}
                 {isCompleted && index < STAGES.length - 1 && (
-                  <div className="timeline-details" style={{ color: 'var(--success)', fontSize: '12px' }}>
+                  <div className="timeline-details" style={{ color: 'var(--success)', fontSize: '11px' }}>
                     Complete
                   </div>
                 )}
