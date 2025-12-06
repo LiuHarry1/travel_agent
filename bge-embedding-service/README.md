@@ -1,6 +1,6 @@
 # BGE Embedding Service
 
-这是一个独立的 BGE (BAAI General Embedding) embedding 服务，可以在 Docker 中运行，为 knowledge-base-builder 提供 embedding 功能。
+这是一个独立的 BGE (BAAI General Embedding) embedding 服务，可以在 Docker 中运行，为 kb-builder-service 提供 embedding 功能。
 
 ## 功能特性
 
@@ -80,11 +80,11 @@ curl -X POST http://localhost:8001/embed \
 }
 ```
 
-## 在 knowledge-base-builder 中使用
+## 在 kb-builder-service 中使用
 
 ### 方法 1: 环境变量
 
-在 knowledge-base-builder 的 `.env` 文件中添加：
+在 kb-builder-service 的 `.env` 文件中添加：
 
 ```env
 BGE_API_URL=http://localhost:8001
@@ -92,7 +92,7 @@ BGE_API_URL=http://localhost:8001
 
 ### 方法 2: 配置文件
 
-在 `knowledge-base-builder/config/settings.py` 中设置：
+在 `kb-builder-service/config/settings.py` 中设置：
 
 ```python
 bge_api_url: str = "http://localhost:8001"
@@ -112,7 +112,7 @@ embedder = EmbedderFactory.create(
 
 ## 在前端页面中使用
 
-在 knowledge-base-builder-ui 的配置页面中：
+在 kb-builder-ui 的配置页面中：
 
 1. 设置 **Embedding Provider** 为 `bge`
 2. 设置 **Embedding Model** 为 `BAAI/bge-large-en-v1.5`
