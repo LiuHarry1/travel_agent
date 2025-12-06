@@ -187,7 +187,7 @@ const ChunkingConfigForm: React.FC<{
       </div>
       
       <div className="preview-info">
-        <Lightbulb size={20} style={{ position: 'absolute', top: 'var(--spacing-md)', right: 'var(--spacing-md)', opacity: 0.3 }} />
+        <Lightbulb size={16} style={{ position: 'absolute', top: 'var(--spacing-sm)', right: 'var(--spacing-sm)', opacity: 0.3 }} />
         <p>Preview: With chunk size {config.chunkSize} and overlap {config.chunkOverlap},</p>
         <p>a 10,000 character document will create approximately {estimatedChunks(10000)} chunks.</p>
       </div>
