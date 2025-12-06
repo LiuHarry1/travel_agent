@@ -1,0 +1,19 @@
+# Core dependencies
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.10.0
+pydantic-settings>=2.0.0
+
+# Vector database
+pymilvus>=2.3.0
+
+# Embedding providers
+openai>=1.0.0  # For Qwen and OpenAI embeddings
+requests>=2.31.0  # For BGE API mode
+
+# LLM
+dashscope>=1.17.0  # For Qwen LLM
+
+# Utilities
+python-multipart>=0.0.6
+
