@@ -147,3 +147,7 @@ re-rank模型暂时没有，你可以mock一下，
 页面上我需要一个可以输入问题，并且可以展示每一个模型的搜索结果，去重复之后的结果，rerank之后的结果， 以及模型过滤没有用的chunk的最总的结果。
 
 后端用python, 前端用react
+
+
+
+给我想一下retrieval service 哪些可以配置的。比如我在调用search/debug或者search的时候，需要传入某个项目名字，以及问题，然后这个项目要在retrieval-service 这里根据项目名字查询相应的知识数据库地址，database, 和collection.  然后在 milvus中搜索。 rarank的逻辑应该是可以根据项目名字查询配置的rarank 模型地址，然后调用。llm  evaluation 也是一样，根据项目名字查询具体的llm 然后调用。 还有chunk size 多少在每个步骤中。等等。
