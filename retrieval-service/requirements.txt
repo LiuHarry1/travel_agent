@@ -16,4 +16,6 @@ dashscope>=1.17.0  # For Qwen LLM
 
 # Utilities
 python-multipart>=0.0.6
+pyyaml>=6.0
+python-dotenv>=1.0.0  # For loading .env files
 

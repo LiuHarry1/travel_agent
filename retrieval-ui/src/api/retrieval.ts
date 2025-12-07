@@ -1,6 +1,7 @@
 import type { RetrievalResponse, DebugRetrievalResponse } from '../types'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8003'
+// Use proxy in development, or direct URL if VITE_API_BASE_URL is set
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '' : 'http://localhost:8003')
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -10,24 +11,32 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export async function search(query: string): Promise<RetrievalResponse> {
+export async function search(query: string, pipelineName?: string): Promise<RetrievalResponse> {
+  const body: any = { query }
+  if (pipelineName) {
+    body.pipeline_name = pipelineName
+  }
   const response = await fetch(`${API_BASE_URL}/api/v1/retrieval/search`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify(body),
   })
   return handleResponse<RetrievalResponse>(response)
 }
 
-export async function searchWithDebug(query: string): Promise<DebugRetrievalResponse> {
+export async function searchWithDebug(query: string, pipelineName?: string): Promise<DebugRetrievalResponse> {
+  const body: any = { query }
+  if (pipelineName) {
+    body.pipeline_name = pipelineName
+  }
   const response = await fetch(`${API_BASE_URL}/api/v1/retrieval/search/debug`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify(body),
   })
   return handleResponse<DebugRetrievalResponse>(response)
 }

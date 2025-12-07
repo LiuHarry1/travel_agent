@@ -7,12 +7,12 @@ from typing import Any, Dict, Tuple
 
 from pydantic import BaseModel
 
-from app.config.project_config import (
+from app.infrastructure.config.pipeline_config import (
     ChunkSizes,
     LLMFilterConfig,
     MilvusConfig,
-    ProjectConfig,
-    ProjectsFile,
+    PipelineConfig,
+    PipelinesFile,
     RerankConfig,
     RetrievalParams,
 )
@@ -40,46 +40,46 @@ class ValidationResult(BaseModel):
 
 
 class ConfigValidator:
-    """Validate project configuration and external connections."""
+    """Validate pipeline configuration and external connections."""
 
-    def validate_projects(self, projects_file: ProjectsFile) -> ValidationResult:
-        """Validate the overall projects file."""
+    def validate_pipelines(self, pipelines_file: PipelinesFile) -> ValidationResult:
+        """Validate the overall pipelines file."""
         errors: Dict[str, Any] = {}
 
-        if not projects_file.default:
-            errors["default"] = "Default project name is required"
-        elif projects_file.default not in projects_file.projects:
-            errors["default"] = f"Default project '{projects_file.default}' not found in projects"
+        if not pipelines_file.default:
+            errors["default"] = "Default pipeline name is required"
+        elif pipelines_file.default not in pipelines_file.pipelines:
+            errors["default"] = f"Default pipeline '{pipelines_file.default}' not found in pipelines"
 
-        for name, project in projects_file.projects.items():
-            result = self.validate_project(project)
+        for name, pipeline in pipelines_file.pipelines.items():
+            result = self.validate_project(pipeline)
             if not result.ok:
                 errors[name] = result.details
 
         return ValidationResult(ok=len(errors) == 0, details=errors)
 
-    def validate_project(self, project: ProjectConfig) -> ValidationResult:
-        """Validate a single project configuration."""
+    def validate_project(self, pipeline: PipelineConfig) -> ValidationResult:
+        """Validate a single pipeline configuration."""
         errors: Dict[str, Any] = {}
 
-        if not project.embedding_models:
+        if not pipeline.embedding_models:
             errors["embedding_models"] = "At least one embedding model is required"
 
         # Validate nested configs
-        milvus_ok, milvus_err = self._test_milvus(project.milvus)
+        milvus_ok, milvus_err = self._test_milvus(pipeline.milvus)
         if not milvus_ok:
             errors["milvus"] = milvus_err
 
-        rerank_ok, rerank_err = self._test_rerank(project.rerank)
+        rerank_ok, rerank_err = self._test_rerank(pipeline.rerank)
         if not rerank_ok:
             errors["rerank"] = rerank_err
 
-        llm_ok, llm_err = self._test_llm(project.llm_filter)
+        llm_ok, llm_err = self._test_llm(pipeline.llm_filter)
         if not llm_ok:
             errors["llm_filter"] = llm_err
 
         # Validate retrieval params
-        retrieval_errors = self._validate_retrieval(project.retrieval, project.chunk_sizes)
+        retrieval_errors = self._validate_retrieval(pipeline.retrieval, pipeline.chunk_sizes)
         if retrieval_errors:
             errors["retrieval"] = retrieval_errors
 

@@ -1,6 +1,7 @@
 """LLM-based chunk filtering."""
 from typing import List, Dict, Any, Optional
 import os
+from app.config.pipeline_config import LLMFilterConfig
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -13,17 +14,21 @@ except ImportError:
 
 
 class QwenLLMFilter:
-    """Qwen LLM for filtering irrelevant chunks."""
+    """LLM for filtering irrelevant chunks."""
     
-    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None, model: str = "qwen-plus"):
-        """Initialize Qwen LLM filter."""
+    def __init__(self, config: LLMFilterConfig):
+        """Initialize LLM filter with project configuration."""
         if not HAS_OPENAI:
             raise ImportError("openai package is required")
         
-        self.api_key = api_key or os.getenv("DASHSCOPE_API_KEY") or os.getenv("QWEN_API_KEY")
-        self.base_url = base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1"
-        self.model = model
+        # Use config values, fallback to environment variables if empty
+        self.api_key = config.api_key or os.getenv("DASHSCOPE_API_KEY") or os.getenv("QWEN_API_KEY")
+        self.base_url = config.base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        self.model = config.model
         self._client = None
+        
+        if not self.api_key:
+            logger.warning("LLM API key not found in config or environment variables")
     
     def _get_client(self) -> OpenAI:
         """Get OpenAI client."""

@@ -20,6 +20,14 @@ export interface DebugRetrievalResponse extends RetrievalResponse {
     deduplicated: DebugChunkResult[]
     reranked: DebugChunkResult[]
     final: DebugChunkResult[]
+    timing?: {
+      embedding_total?: number
+      [key: string]: number | undefined
+      deduplication?: number
+      rerank?: number
+      llm_filter?: number
+      total?: number
+    }
   }
 }
 

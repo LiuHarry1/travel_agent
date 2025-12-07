@@ -5,7 +5,7 @@ import threading
 import time
 from typing import Dict, Optional, Tuple
 
-from app.config.project_config import MilvusConfig
+from app.config.pipeline_config import MilvusConfig
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -97,7 +97,7 @@ class MilvusConnectionPool:
                 port=config.port,
                 user=config.user or None,
                 password=config.password or None,
-                db_name=getattr(config, "database", None) or None,
+                db_name=config.database or None,
             )
             logger.info(
                 "Connected to Milvus",
@@ -105,7 +105,7 @@ class MilvusConnectionPool:
                     "alias": alias,
                     "host": config.host,
                     "port": config.port,
-                    "database": getattr(config, "database", None),
+                    "database": config.database,
                 },
             )
             return alias

@@ -1,11 +1,17 @@
 """Application configuration."""
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 import os
 
 
 class Settings(BaseSettings):
     """Application settings."""
+    
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore"  # Ignore extra fields from .env file
+    )
     
     # Milvus settings
     milvus_host: str = "localhost"
@@ -44,13 +50,22 @@ class Settings(BaseSettings):
     rerank_top_k: int = 20  # Number of results to keep after rerank
     final_top_k: int = 10  # Final number of results after LLM filtering
     
-    # CORS
-    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"]
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    # CORS - Allow all localhost ports for development
+    cors_origins: List[str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost:8080",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5175",
+        "http://127.0.0.1:8080",
+    ]
 
 
 settings = Settings()
+
+
 

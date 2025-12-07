@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  reranker-service:
+    build: .
+    container_name: reranker-service
+    ports:
+      - "8002:8002"
+    environment:
+      - RERANKER_MODEL=BAAI/bge-reranker-base
+      - PORT=8002
+    volumes:
+      - ./app:/app/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
