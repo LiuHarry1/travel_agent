@@ -7,7 +7,7 @@ import re
 from urllib.parse import urlparse, urljoin
 
 from .base import BaseLoader
-from models.document import Document, DocumentType
+from models.document import Document, DocumentType, DocumentStructure
 from utils.exceptions import LoaderError
 from utils.logger import get_logger
 
@@ -99,17 +99,18 @@ class UnifiedLoader(BaseLoader):
         logger.info(f"Loading {doc_type} file: {original_filename} (file_id: {file_id})")
         
         # 根据类型加载并转换
+        structure = None
         try:
             if doc_type == DocumentType.PDF:
-                content = self._load_pdf(path, file_id)
+                content, structure = self._load_pdf(path, file_id)
             elif doc_type == DocumentType.DOCX:
-                content = self._load_docx(path, file_id)
+                content, structure = self._load_docx(path, file_id)
             elif doc_type == DocumentType.HTML:
-                content = self._load_html(path, file_id)
+                content, structure = self._load_html(path, file_id)
             elif doc_type == DocumentType.TXT:
                 content = self._load_txt(path)
             elif doc_type == DocumentType.MARKDOWN:
-                content = self._load_markdown(path, file_id)
+                content, structure = self._load_markdown(path, file_id)
             else:
                 raise LoaderError(f"Unsupported document type: {doc_type}")
         except Exception as e:
@@ -126,11 +127,16 @@ class UnifiedLoader(BaseLoader):
             **kwargs.get("metadata", {})
         }
         
+        # 添加页面信息到metadata（用于PDF）
+        if structure and structure.total_pages:
+            metadata["pages_info"] = structure.total_pages
+        
         return Document(
             content=content,
             source=str(saved_source_path),  # 使用保存后的路径
             doc_type=DocumentType.MARKDOWN,  # 统一为 Markdown
-            metadata=metadata
+            metadata=metadata,
+            structure=structure
         )
     
     def _detect_type(self, path: Path) -> DocumentType:
@@ -184,21 +190,54 @@ class UnifiedLoader(BaseLoader):
                          f"To use full URL, set STATIC_BASE_URL in .env file or config.")
             return relative_path
     
-    def _load_pdf(self, path: Path, file_id: str) -> str:
-        """加载 PDF 并转换为 Markdown"""
+    def _load_pdf(self, path: Path, file_id: str) -> tuple[str, DocumentStructure]:
+        """加载 PDF 并转换为 Markdown，返回内容和结构信息"""
         if not HAS_PDF:
             raise LoaderError("pdfplumber is required for PDF files. Install with: pip install pdfplumber")
         
         markdown_parts = []
         image_counter = 0
+        pages_info = []
+        pdf_metadata = {}
+        tables_info = []
         
         try:
             with pdfplumber.open(path) as pdf:
+                # 提取PDF元数据
+                if pdf.metadata:
+                    pdf_metadata = {
+                        "title": pdf.metadata.get("Title", ""),
+                        "author": pdf.metadata.get("Author", ""),
+                        "subject": pdf.metadata.get("Subject", ""),
+                        "creator": pdf.metadata.get("Creator", ""),
+                    }
+                
                 for page_num, page in enumerate(pdf.pages, 1):
+                    page_start_char = len("\n".join(markdown_parts))
+                    
                     # 提取文本
                     text = page.extract_text()
+                    
+                    # 提取表格
+                    tables = page.extract_tables()
+                    if tables:
+                        for table_idx, table in enumerate(tables):
+                            # 将表格转换为Markdown格式
+                            table_md = self._table_to_markdown(table)
+                            markdown_parts.append(f'\n<table index="{len(tables_info)}" page="{page_num}">\n{table_md}\n</table>\n\n')
+                            tables_info.append({
+                                "page": page_num,
+                                "index": len(tables_info),
+                                "rows": len(table),
+                                "cols": len(table[0]) if table else 0
+                            })
+                    
                     if text:
-                        markdown_parts.append(f"## Page {page_num}\n\n{text}\n\n")
+                        # 使用 <page> 标签包裹每页内容，记录位置信息
+                        markdown_parts.append(
+                            f'<page page="{page_num}" start_char="{page_start_char}">\n\n'
+                            f'## Page {page_num}\n\n{text}\n\n'
+                        )
                     
                     # 尝试提取图片（使用 PyMuPDF/fitz 如果可用）
                     try:
@@ -216,7 +255,10 @@ class UnifiedLoader(BaseLoader):
                                 
                                 image_counter += 1
                                 img_url = self._save_image(image_bytes, file_id, image_counter, image_ext)
-                                markdown_parts.append(f'\n<img src="{img_url}" alt="Page {page_num} Image {img_idx + 1}" />\n\n')
+                                markdown_parts.append(
+                                    f'<img src="{img_url}" alt="Page {page_num} Image {img_idx + 1}" '
+                                    f'page="{page_num}" image_index="{image_counter}" />\n\n'
+                                )
                             except Exception as e:
                                 logger.warning(f"Failed to extract image from PDF page {page_num}: {e}")
                                 continue
@@ -227,12 +269,47 @@ class UnifiedLoader(BaseLoader):
                         pass
                     except Exception as e:
                         logger.warning(f"Failed to extract images from PDF: {e}")
+                    
+                    # 关闭页面标签
+                    if text:
+                        page_end_char = len("\n".join(markdown_parts))
+                        markdown_parts.append(f'</page>\n\n')
+                        pages_info.append({
+                            "page": page_num,
+                            "start_char": page_start_char,
+                            "end_char": page_end_char,
+                            "bbox": list(page.bbox) if hasattr(page, 'bbox') else None
+                        })
         except Exception as e:
             raise LoaderError(f"Failed to process PDF: {str(e)}") from e
         
-        return "\n".join(markdown_parts)
+        # 构建DocumentStructure
+        structure = DocumentStructure(
+            total_pages=len(pages_info),
+            pdf_metadata=pdf_metadata if pdf_metadata else None,
+            tables=tables_info if tables_info else None
+        )
+        
+        return "\n".join(markdown_parts), structure
     
-    def _load_docx(self, path: Path, file_id: str) -> str:
+    def _table_to_markdown(self, table: list) -> str:
+        """将表格转换为Markdown格式"""
+        if not table or not table[0]:
+            return ""
+        
+        md_lines = []
+        # 表头
+        header = table[0]
+        md_lines.append("| " + " | ".join(str(cell) if cell else "" for cell in header) + " |")
+        md_lines.append("| " + " | ".join("---" for _ in header) + " |")
+        
+        # 数据行
+        for row in table[1:]:
+            md_lines.append("| " + " | ".join(str(cell) if cell else "" for cell in row) + " |")
+        
+        return "\n".join(md_lines)
+    
+    def _load_docx(self, path: Path, file_id: str) -> tuple[str, DocumentStructure]:
         """加载 DOCX 并转换为 Markdown，提取图片"""
         if not HAS_DOCX:
             raise LoaderError("python-docx is required for DOCX files. Install with: pip install python-docx")
@@ -286,9 +363,14 @@ class UnifiedLoader(BaseLoader):
         except Exception as e:
             logger.warning(f"Failed to extract images from DOCX: {e}")
         
-        return "\n\n".join(markdown_parts)
+        # 构建DocumentStructure
+        structure = DocumentStructure(
+            total_sections=len([p for p in markdown_parts if p.strip()])
+        )
+        
+        return "\n\n".join(markdown_parts), structure
     
-    def _load_html(self, path: Path, file_id: str) -> str:
+    def _load_html(self, path: Path, file_id: str) -> tuple[str, DocumentStructure]:
         """加载 HTML 并转换为 Markdown，处理图片"""
         if not HAS_HTML:
             raise LoaderError("beautifulsoup4 is required for HTML files. Install with: pip install beautifulsoup4")
@@ -366,6 +448,16 @@ class UnifiedLoader(BaseLoader):
                 logger.warning(f"Failed to process image {src}: {e}")
                 continue
         
+        # 提取标题信息
+        headings = []
+        for heading in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+            level = int(heading.name[1])
+            headings.append({
+                "level": level,
+                "text": heading.get_text().strip(),
+                "id": heading.get('id', '')
+            })
+        
         # 转换为 Markdown
         if HAS_MARKDOWNIFY:
             markdown = markdownify.markdownify(str(soup), heading_style="ATX")
@@ -374,7 +466,13 @@ class UnifiedLoader(BaseLoader):
             markdown = soup.get_text()
             logger.warning("markdownify not available, using simple text extraction")
         
-        return markdown
+        # 构建DocumentStructure
+        structure = DocumentStructure(
+            html_title=soup.title.string if soup.title else None,
+            html_headings=headings if headings else None
+        )
+        
+        return markdown, structure
     
     def _load_txt(self, path: Path) -> str:
         """加载纯文本文件"""
@@ -384,7 +482,7 @@ class UnifiedLoader(BaseLoader):
             # 尝试其他编码
             return path.read_text(encoding='gbk', errors='ignore')
     
-    def _load_markdown(self, path: Path, file_id: str) -> str:
+    def _load_markdown(self, path: Path, file_id: str) -> tuple[str, DocumentStructure]:
         """加载 Markdown 文件，处理其中的图片"""
         try:
             content = path.read_text(encoding='utf-8')
@@ -492,7 +590,34 @@ class UnifiedLoader(BaseLoader):
         # 替换 HTML img 标签
         content = re.sub(r'<img[^>]+>', replace_html_image, content)
         
-        return content
+        # 提取标题和代码块信息
+        headings = []
+        code_blocks = []
+        
+        # 提取Markdown标题
+        heading_pattern = r'^(#{1,6})\s+(.+)$'
+        for match in re.finditer(heading_pattern, content, re.MULTILINE):
+            level = len(match.group(1))
+            text = match.group(2).strip()
+            headings.append({"level": level, "text": text})
+        
+        # 提取代码块
+        code_block_pattern = r'```(\w+)?\n(.*?)```'
+        for idx, match in enumerate(re.finditer(code_block_pattern, content, re.DOTALL)):
+            lang = match.group(1) or ""
+            code_blocks.append({
+                "index": idx,
+                "language": lang,
+                "length": len(match.group(2))
+            })
+        
+        # 构建DocumentStructure
+        structure = DocumentStructure(
+            md_headings=headings if headings else None,
+            md_code_blocks=code_blocks if code_blocks else None
+        )
+        
+        return content, structure
     
     def supports(self, doc_type: DocumentType) -> bool:
         """支持所有文档类型"""

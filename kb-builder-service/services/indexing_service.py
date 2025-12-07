@@ -3,7 +3,8 @@ from typing import List, Optional
 
 from models.document import DocumentType
 from processors.loaders import LoaderFactory
-from processors.chunkers import RecursiveChunker
+from processors.chunkers import ChunkerFactory
+from processors.extractors import LocationExtractor
 from processors.embedders import EmbedderFactory
 from processors.stores import MilvusVectorStore
 from utils.exceptions import IndexingError
@@ -34,6 +35,7 @@ class IndexingService:
         embedding_model: Optional[str] = None,
         chunk_size: Optional[int] = None,
         chunk_overlap: Optional[int] = None,
+        base_url: Optional[str] = None,
         **kwargs
     ) -> dict:
         """
@@ -47,21 +49,47 @@ class IndexingService:
             # 使用统一加载器，传入 static_dir 和 base_url 配置
             from config.settings import get_settings
             settings = get_settings()
+            # 优先使用传入的 base_url，否则使用配置的 static_base_url
+            final_base_url = base_url or settings.static_base_url
             loader = LoaderFactory.create(
                 doc_type, 
                 static_dir=settings.static_dir,
-                base_url=settings.static_base_url
+                base_url=final_base_url
             )
             document = loader.load(source, **kwargs)
             logger.info(f"Loaded document: {document.source}")
             
-            # 2. Chunk document
-            chunker = RecursiveChunker(
+            # 2. Chunk document using type-specific chunker
+            # Get original document type from metadata
+            original_type = document.metadata.get("original_type")
+            if original_type:
+                doc_type = DocumentType(original_type)
+            else:
+                # Fallback: try to detect from source
+                from pathlib import Path
+                ext = Path(source).suffix.lower()
+                type_map = {
+                    ".pdf": DocumentType.PDF,
+                    ".docx": DocumentType.DOCX,
+                    ".doc": DocumentType.DOCX,
+                    ".html": DocumentType.HTML,
+                    ".htm": DocumentType.HTML,
+                    ".md": DocumentType.MARKDOWN,
+                    ".markdown": DocumentType.MARKDOWN,
+                    ".txt": DocumentType.TXT,
+                }
+                doc_type = type_map.get(ext, DocumentType.TXT)
+            
+            chunker = ChunkerFactory.create(
+                doc_type=doc_type,
                 chunk_size=chunk_size or self.chunk_size,
                 chunk_overlap=chunk_overlap or self.chunk_overlap
             )
             chunks = chunker.chunk(document)
-            logger.info(f"Created {len(chunks)} chunks")
+            logger.info(f"Created {len(chunks)} chunks using {chunker.__class__.__name__}")
+            
+            # 3. Enrich chunks with location information
+            chunks = self._enrich_with_locations(chunks, doc_type)
             
             if not chunks:
                 return {
@@ -70,7 +98,7 @@ class IndexingService:
                     "chunks_indexed": 0
                 }
             
-            # 3. Generate embeddings
+            # 4. Generate embeddings
             embedder_kwargs = {}
             if embedding_provider.lower() == "bge" and kwargs.get("bge_api_url"):
                 embedder_kwargs["api_url"] = kwargs["bge_api_url"]
@@ -83,11 +111,11 @@ class IndexingService:
             embeddings = embedder.embed(texts)
             logger.info(f"Generated {len(embeddings)} embeddings")
             
-            # 4. Attach embeddings
+            # 5. Attach embeddings
             for chunk, embedding in zip(chunks, embeddings):
                 chunk.embedding = embedding
             
-            # 5. Index to vector store
+            # 6. Index to vector store
             chunks_indexed = self.vector_store.index(chunks, collection_name)
             logger.info(f"Indexed {chunks_indexed} chunks to {collection_name}")
             
@@ -96,12 +124,46 @@ class IndexingService:
                 "document_id": document.source,
                 "chunks_indexed": chunks_indexed,
                 "collection_name": collection_name,
+                "document_type": doc_type.value,
+                "structure": document.structure.to_dict() if document.structure else None,
                 "message": f"Successfully indexed {chunks_indexed} chunks"
             }
             
         except Exception as e:
             logger.error(f"Indexing failed: {str(e)}", exc_info=True)
             raise IndexingError(f"Failed to index document: {str(e)}") from e
+    
+    def _enrich_with_locations(self, chunks: List, doc_type: DocumentType) -> List:
+        """Enrich chunks with location information."""
+        extractor = LocationExtractor()
+        
+        for chunk in chunks:
+            # 如果chunk已经有location信息（从chunker设置），跳过
+            if chunk.location:
+                continue
+            
+            # 从metadata获取位置信息
+            start_pos = chunk.metadata.get("start_pos", 0)
+            end_pos = chunk.metadata.get("end_pos", len(chunk.text))
+            
+            # 根据文件类型提取位置信息
+            if doc_type == DocumentType.PDF:
+                chunk.location = extractor.extract_for_pdf(chunk.text, start_pos, end_pos)
+            elif doc_type == DocumentType.DOCX:
+                chunk.location = extractor.extract_for_docx(chunk.text, start_pos, end_pos)
+            elif doc_type == DocumentType.HTML:
+                chunk.location = extractor.extract_for_html(chunk.text, start_pos, end_pos)
+            elif doc_type == DocumentType.MARKDOWN:
+                chunk.location = extractor.extract_for_markdown(chunk.text, start_pos, end_pos)
+            else:
+                # 默认：只设置基本位置信息
+                from models.chunk import ChunkLocation
+                chunk.location = ChunkLocation(
+                    start_char=start_pos,
+                    end_char=end_pos
+                )
+        
+        return chunks
     
     def index_batch(
         self,

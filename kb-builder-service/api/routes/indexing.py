@@ -1,5 +1,5 @@
 """Indexing API routes."""
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Form
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Form, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from typing import Optional, List, AsyncGenerator
 import tempfile
@@ -87,7 +87,8 @@ async def process_file_with_progress(
     chunk_size: Optional[int],
     chunk_overlap: Optional[int],
     service: IndexingService,
-    bge_api_url: Optional[str] = None
+    bge_api_url: Optional[str] = None,
+    base_url: Optional[str] = None
 ) -> AsyncGenerator[str, None]:
     """Process file with progress updates."""
     document = None
@@ -106,11 +107,13 @@ async def process_file_with_progress(
             from processors.loaders import LoaderFactory
             from config.settings import get_settings
             settings = get_settings()
-            logger.info(f"Creating loader with static_dir={settings.static_dir}, base_url={settings.static_base_url}")
+            # 优先使用传入的 base_url，否则使用配置的 static_base_url
+            final_base_url = base_url or settings.static_base_url
+            logger.info(f"Creating loader with static_dir={settings.static_dir}, base_url={final_base_url}")
             loader = LoaderFactory.create(
                 doc_type, 
                 static_dir=settings.static_dir,
-                base_url=settings.static_base_url
+                base_url=final_base_url
             )
             document = loader.load(file_path, metadata={"original_filename": filename})
             # document.source contains the saved_source_path (e.g., "static/sources/7a0b3112_面试经验.pdf")
@@ -294,6 +297,7 @@ async def process_file_with_progress(
 
 @router.post("/upload/stream")
 async def upload_and_index_stream(
+    request: Request,
     file: UploadFile = File(...),
     collection_name: Optional[str] = Form(None),
     embedding_provider: Optional[str] = Form(None),
@@ -327,6 +331,23 @@ async def upload_and_index_stream(
         embedding_model = embedding_model if embedding_model and embedding_model.strip() else None
         bge_api_url = bge_api_url if bge_api_url and bge_api_url.strip() else None
         
+        # 从请求中获取 hostname 和端口，构建 base_url
+        # 如果配置中有 static_base_url，优先使用配置；否则从请求中获取
+        base_url = settings.static_base_url
+        if not base_url:
+            # 从请求中获取 hostname 和端口
+            # Host header 通常已经包含端口号（如果有非标准端口）
+            host = request.headers.get("host")
+            if not host:
+                # 如果 Host header 不存在，从 URL 中获取
+                host = request.url.hostname
+                port = request.url.port
+                if port:
+                    host = f"{host}:{port}"
+            scheme = request.url.scheme
+            base_url = f"{scheme}://{host}"
+            logger.info(f"Using request-based base_url: {base_url}")
+        
         # Detect document type
         doc_type = detect_document_type(file.filename)
         
@@ -349,7 +370,8 @@ async def upload_and_index_stream(
                 chunk_size,
                 chunk_overlap,
                 service,
-                bge_api_url
+                bge_api_url,
+                base_url
             ):
                 yield progress
         
@@ -383,6 +405,7 @@ async def upload_and_index_stream(
 
 @router.post("/upload")
 async def upload_and_index(
+    request: Request,
     file: UploadFile = File(...),
     collection_name: Optional[str] = Form(None),
     embedding_provider: Optional[str] = Form("qwen"),
@@ -402,6 +425,23 @@ async def upload_and_index(
     temp_path = None
     
     try:
+        # 从请求中获取 hostname 和端口，构建 base_url
+        # 如果配置中有 static_base_url，优先使用配置；否则从请求中获取
+        base_url = settings.static_base_url
+        if not base_url:
+            # 从请求中获取 hostname 和端口
+            # Host header 通常已经包含端口号（如果有非标准端口）
+            host = request.headers.get("host")
+            if not host:
+                # 如果 Host header 不存在，从 URL 中获取
+                host = request.url.hostname
+                port = request.url.port
+                if port:
+                    host = f"{host}:{port}"
+            scheme = request.url.scheme
+            base_url = f"{scheme}://{host}"
+            logger.info(f"Using request-based base_url: {base_url}")
+        
         # Detect document type
         doc_type = detect_document_type(file.filename)
         
@@ -421,6 +461,7 @@ async def upload_and_index(
                 "embedding_model": embedding_model,
                 "chunk_size": chunk_size,
                 "chunk_overlap": chunk_overlap,
+                "base_url": base_url,
                 "metadata": {"original_filename": file.filename}
             }
             if embedding_provider and embedding_provider.lower() == "bge" and bge_api_url:
@@ -470,6 +511,7 @@ async def upload_and_index(
 
 @router.post("/upload/batch")
 async def upload_batch(
+    request: Request,
     files: List[UploadFile] = File(...),
     collection_name: Optional[str] = Form(None),
     embedding_provider: Optional[str] = Form("qwen"),
@@ -480,6 +522,21 @@ async def upload_batch(
 ):
     """Upload and index multiple files."""
     settings = get_settings()
+    
+    # 从请求中获取 hostname 和端口，构建 base_url
+    # 如果配置中有 static_base_url，优先使用配置；否则从请求中获取
+    base_url = settings.static_base_url
+    if not base_url:
+        # 从请求中获取 hostname 和端口
+        host = request.headers.get("host") or request.url.hostname
+        scheme = request.url.scheme
+        port = request.url.port
+        if port:
+            base_url = f"{scheme}://{host}:{port}"
+        else:
+            base_url = f"{scheme}://{host}"
+        logger.info(f"Using request-based base_url: {base_url}")
+    
     results = []
     temp_paths = []
     
@@ -500,6 +557,7 @@ async def upload_batch(
                         "doc_type": doc_type,
                         "collection_name": collection_name or settings.default_collection_name,
                         "embedding_provider": embedding_provider or settings.default_embedding_provider,
+                        "base_url": base_url,
                         "metadata": {"original_filename": file.filename}
                     }
                     if embedding_model:

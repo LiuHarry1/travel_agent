@@ -104,6 +104,11 @@ class MilvusVectorStore(BaseVectorStore):
                     dtype=DataType.VARCHAR,
                     max_length=2048
                 ),
+                FieldSchema(
+                    name="metadata",
+                    dtype=DataType.VARCHAR,
+                    max_length=4096  # JSON string for location and other metadata
+                ),
             ]
             
             schema = CollectionSchema(
@@ -175,6 +180,7 @@ class MilvusVectorStore(BaseVectorStore):
             
             has_document_id = any(field.name == "document_id" for field in schema.fields)
             has_file_path = any(field.name == "file_path" for field in schema.fields)
+            has_metadata = any(field.name == "metadata" for field in schema.fields)
             
             if not has_document_id:
                 logger.warning(
@@ -235,11 +241,26 @@ class MilvusVectorStore(BaseVectorStore):
             collection.load()
             
             # Prepare data
-            # Note: id field is auto_id=True, so we need to provide text, embedding, document_id, and file_path
+            # Note: id field is auto_id=True, so we need to provide text, embedding, document_id, file_path, and metadata
+            import json
             texts = [chunk.text for chunk in chunks]
             embeddings = [list(chunk.embedding) for chunk in chunks]
             document_ids = [chunk.document_id for chunk in chunks]
             file_paths = [chunk.file_path or "" for chunk in chunks]
+            
+            # Serialize metadata (including location information)
+            metadata_list = []
+            for chunk in chunks:
+                metadata_dict = {
+                    **chunk.metadata,
+                }
+                # Add location information to metadata
+                if chunk.location:
+                    metadata_dict["location"] = chunk.location.to_dict()
+                metadata_list.append(json.dumps(metadata_dict, ensure_ascii=False))
+            
+            # Check if collection has metadata field (for backward compatibility)
+            has_metadata = any(field.name == "metadata" for field in schema.fields)
             
             # Insert data in batches to avoid memory issues
             batch_size = 1000
@@ -249,8 +270,15 @@ class MilvusVectorStore(BaseVectorStore):
                 batch_embeddings = embeddings[i:i + batch_size]
                 batch_document_ids = document_ids[i:i + batch_size]
                 batch_file_paths = file_paths[i:i + batch_size]
-                logger.debug(f"Inserting batch {i // batch_size + 1}/{(len(texts) + batch_size - 1) // batch_size}")
-                collection.insert([batch_texts, batch_embeddings, batch_document_ids, batch_file_paths])
+                
+                if has_metadata:
+                    batch_metadata = metadata_list[i:i + batch_size]
+                    logger.debug(f"Inserting batch {i // batch_size + 1}/{(len(texts) + batch_size - 1) // batch_size} with metadata")
+                    collection.insert([batch_texts, batch_embeddings, batch_document_ids, batch_file_paths, batch_metadata])
+                else:
+                    # Backward compatibility: insert without metadata field
+                    logger.debug(f"Inserting batch {i // batch_size + 1}/{(len(texts) + batch_size - 1) // batch_size} without metadata (old schema)")
+                    collection.insert([batch_texts, batch_embeddings, batch_document_ids, batch_file_paths])
             
             # Flush to ensure data is written
             collection.flush()
@@ -357,9 +385,16 @@ class MilvusVectorStore(BaseVectorStore):
             expr = f'document_id == "{escaped_doc_id}"'
             
             # Get all results first (Milvus doesn't support offset in query)
+            # Include metadata field if available
+            output_fields = ["id", "text", "document_id"]
+            schema = collection.schema
+            has_metadata = any(field.name == "metadata" for field in schema.fields)
+            if has_metadata:
+                output_fields.append("metadata")
+            
             all_results = collection.query(
                 expr=expr,
-                output_fields=["id", "text", "document_id"],
+                output_fields=output_fields,
                 limit=16384  # Milvus max limit
             )
             
@@ -369,15 +404,31 @@ class MilvusVectorStore(BaseVectorStore):
             offset = (page - 1) * page_size
             paginated_results = all_results[offset:offset + page_size]
             
-            chunks = [
-                {
+            # Parse metadata and location information
+            import json
+            chunks = []
+            for idx, result in enumerate(paginated_results):
+                chunk_data = {
                     "id": result.get("id"),
                     "text": result.get("text", ""),
                     "document_id": result.get("document_id", ""),
                     "index": idx + offset
                 }
-                for idx, result in enumerate(paginated_results)
-            ]
+                
+                # Parse metadata if available
+                if has_metadata and "metadata" in result:
+                    try:
+                        metadata_str = result.get("metadata", "{}")
+                        if metadata_str:
+                            metadata_dict = json.loads(metadata_str)
+                            chunk_data["metadata"] = metadata_dict
+                            # Extract location if available
+                            if "location" in metadata_dict:
+                                chunk_data["location"] = metadata_dict["location"]
+                    except json.JSONDecodeError:
+                        logger.warning(f"Failed to parse metadata for chunk {result.get('id')}")
+                
+                chunks.append(chunk_data)
             
             return {
                 "chunks": chunks,
