@@ -10,10 +10,10 @@ function ResultsDisplay({ results }: ResultsDisplayProps) {
   const [expandedSection, setExpandedSection] = useState<string | null>('final')
 
   const sections = [
-    { key: 'model_results', title: '各模型搜索结果', data: results.debug.model_results },
-    { key: 'deduplicated', title: '去重后结果', data: results.debug.deduplicated },
-    { key: 'reranked', title: '重排序后结果', data: results.debug.reranked },
-    { key: 'final', title: '最终结果（LLM过滤后）', data: results.debug.final },
+    { key: 'model_results', title: 'Model Search Results', data: results.debug.model_results },
+    { key: 'deduplicated', title: 'Deduplicated Results', data: results.debug.deduplicated },
+    { key: 'reranked', title: 'Re-ranked Results', data: results.debug.reranked },
+    { key: 'final', title: 'Final Results (LLM Filtered)', data: results.debug.final },
   ]
 
   const toggleSection = (key: string) => {
@@ -25,7 +25,7 @@ function ResultsDisplay({ results }: ResultsDisplayProps) {
       return (
         <div className="chunks-list">
           {chunks.length === 0 ? (
-            <p className="empty-message">未找到结果</p>
+            <p className="empty-message">No results found</p>
           ) : (
               chunks.map((chunk, index) => (
                 <ChunkCard key={chunk.chunk_id || index} chunk={chunk} />
@@ -42,10 +42,10 @@ function ResultsDisplay({ results }: ResultsDisplayProps) {
               <h4 className="model-name">{embedder}</h4>
               <div className="chunks-list">
                 {chunksList.length === 0 ? (
-                  <p className="empty-message">未找到结果</p>
+                  <p className="empty-message">No results found</p>
                 ) : (
                   chunksList.map((chunk, index) => (
-                    <ChunkCard key={chunk.chunk_id || index} chunk={chunk} index={index} />
+                    <ChunkCard key={chunk.chunk_id || index} chunk={chunk} />
                   ))
                 )}
               </div>
@@ -59,9 +59,9 @@ function ResultsDisplay({ results }: ResultsDisplayProps) {
   return (
     <div className="results-display">
       <div className="query-display">
-        <h2>查询: "{results.query}"</h2>
+        <h2>Query: "{results.query}"</h2>
         <p className="summary">
-          找到 {results.results.length} 个最终结果
+          Found {results.results.length} final result{results.results.length !== 1 ? 's' : ''}
         </p>
       </div>
 
@@ -110,11 +110,11 @@ function ChunkCard({ chunk }: ChunkCardProps) {
           <span className="chunk-embedder">{chunk.embedder}</span>
         )}
         {chunk.score !== undefined && (
-          <span className="chunk-score">分数: {chunk.score.toFixed(4)}</span>
+          <span className="chunk-score">Score: {chunk.score.toFixed(4)}</span>
         )}
         {chunk.rerank_score !== undefined && (
           <span className="chunk-rerank-score">
-            重排序分数: {chunk.rerank_score.toFixed(4)}
+            Rerank Score: {chunk.rerank_score.toFixed(4)}
           </span>
         )}
       </div>

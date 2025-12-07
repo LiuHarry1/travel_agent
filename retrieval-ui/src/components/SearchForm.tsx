@@ -22,7 +22,7 @@ function SearchForm({ onSearch, loading }: SearchFormProps) {
         <input
           type="text"
           className="search-input"
-          placeholder="请输入您的问题..."
+          placeholder="Enter your question..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           disabled={loading}
@@ -32,7 +32,7 @@ function SearchForm({ onSearch, loading }: SearchFormProps) {
           className="search-button"
           disabled={loading || !query.trim()}
         >
-          {loading ? '搜索中...' : '搜索'}
+          {loading ? 'Searching...' : 'Search'}
         </button>
       </div>
     </form>

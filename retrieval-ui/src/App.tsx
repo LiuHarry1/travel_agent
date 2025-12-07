@@ -12,7 +12,7 @@ function App() {
 
   const handleSearch = async (query: string) => {
     if (!query.trim()) {
-      setError('请输入查询内容')
+      setError('Please enter a query')
       return
     }
 
@@ -33,8 +33,8 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>检索系统</h1>
-        <p>多模型检索、重排序与LLM过滤</p>
+        <h1>Retrieval System</h1>
+        <p>Multi-model retrieval, re-ranking, and LLM filtering</p>
       </header>
 
       <main className="app-main">
@@ -42,7 +42,7 @@ function App() {
 
         {error && (
           <div className="error-message">
-            <strong>错误:</strong> {error}
+            <strong>Error:</strong> {error}
           </div>
         )}
 

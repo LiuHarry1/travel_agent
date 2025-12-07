@@ -64,21 +64,21 @@ class QwenLLMFilter:
                 for i, chunk in enumerate(chunks)
             ])
             
-            prompt = f"""你是一个文档检索助手。用户提出了一个问题，下面是一些检索到的文档片段。
+            prompt = f"""You are a document retrieval assistant. A user has asked a question, and below are some retrieved document chunks.
 
-用户问题：{query}
+User Question: {query}
 
-文档片段：
+Document Chunks:
 {chunks_text}
 
-请根据用户问题，从上述文档片段中选择最相关的 {top_k} 个片段。只返回这些片段的ID，用逗号分隔，格式如：1,3,5,7
+Please select the {top_k} most relevant chunks based on the user's question. Return only the IDs of these chunks, separated by commas, in the format: 1,3,5,7
 
-只返回ID列表，不要其他内容。"""
+Return only the ID list, nothing else."""
 
             response = client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "你是一个专业的文档检索助手，能够准确判断文档片段与问题的相关性。"},
+                    {"role": "system", "content": "You are a professional document retrieval assistant capable of accurately judging the relevance of document chunks to questions."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,

@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     final_top_k: int = 10  # Final number of results after LLM filtering
     
     # CORS
-    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:5173"]
+    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"]
     
     class Config:
         env_file = ".env"

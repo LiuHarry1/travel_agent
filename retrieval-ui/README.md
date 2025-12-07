@@ -20,10 +20,10 @@ React frontend for the retrieval system debug interface.
 npm install
 ```
 
-2. Configure API URL (optional, defaults to http://localhost:8000):
+2. Configure API URL (optional, defaults to http://localhost:8003):
 Create `.env` file:
 ```env
-VITE_API_BASE_URL=http://localhost:8000
+VITE_API_BASE_URL=http://localhost:8003
 ```
 
 3. Run development server:
