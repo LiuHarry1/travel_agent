@@ -41,44 +41,58 @@ function App() {
     <div className="app">
       <aside className="app-sidebar">
         <div className="sidebar-header">
-          <h1 className="sidebar-logo">Retrieval</h1>
-          <p className="sidebar-subtitle">RAG System</p>
+          <div className="sidebar-logo-container">
+            <div className="sidebar-logo-icon">🔍</div>
+            <div>
+              <h1 className="sidebar-logo">Retrieval</h1>
+              <p className="sidebar-subtitle">RAG System</p>
+            </div>
+          </div>
         </div>
         <nav className="sidebar-nav">
           <button
             className={`nav-item ${activeTab === 'search' ? 'active' : ''}`}
             onClick={() => setActiveTab('search')}
+            aria-label="Search"
           >
             <span className="nav-icon">🔍</span>
             <span className="nav-label">Search</span>
+            {activeTab === 'search' && <span className="nav-indicator"></span>}
           </button>
           <button
             className={`nav-item ${activeTab === 'config' ? 'active' : ''}`}
             onClick={() => setActiveTab('config')}
+            aria-label="Configuration"
           >
             <span className="nav-icon">⚙️</span>
             <span className="nav-label">Configuration</span>
+            {activeTab === 'config' && <span className="nav-indicator"></span>}
           </button>
         </nav>
+        <div className="sidebar-footer">
+          <p className="sidebar-footer-text">Retrieval UI v1.0</p>
+        </div>
       </aside>
 
-      <main className="app-main">
-        {activeTab === 'search' && (
-          <>
-            <SearchForm onSearch={handleSearch} loading={loading} />
+      <div className="app-content-wrapper">
+        <main className="app-main">
+          {activeTab === 'search' && (
+            <>
+              <SearchForm onSearch={handleSearch} loading={loading} />
 
-            {error && (
-              <div className="error-message">
-                <strong>Error:</strong> {error}
-              </div>
-            )}
+              {error && (
+                <div className="error-message">
+                  <strong>Error:</strong> {error}
+                </div>
+              )}
 
-            {results && <ResultsDisplay results={results} />}
-          </>
-        )}
+              {results && <ResultsDisplay results={results} />}
+            </>
+          )}
 
-        {activeTab === 'config' && <ConfigManager />}
-      </main>
+          {activeTab === 'config' && <ConfigManager />}
+        </main>
+      </div>
     </div>
   )
 }

@@ -19,23 +19,3 @@ export function parseYaml(yamlString: string): ParsedPipelineConfig {
   }
 }
 
-/**
- * 将配置对象转换为 YAML 字符串
- * @param config - 配置对象
- * @returns YAML 字符串
- */
-export function stringifyYaml(config: ParsedPipelineConfig): string {
-  try {
-    return yaml.dump(config, {
-      indent: 2,
-      lineWidth: -1,
-      noRefs: true,
-    })
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to stringify YAML: ${error.message}`)
-    }
-    throw new Error('Failed to stringify YAML: Unknown error')
-  }
-}
-
