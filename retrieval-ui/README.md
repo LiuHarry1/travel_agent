@@ -20,11 +20,20 @@ React frontend for the retrieval system debug interface.
 npm install
 ```
 
-2. Configure API URL (optional, defaults to http://localhost:8003):
-Create `.env` file:
-```env
-VITE_API_BASE_URL=http://localhost:8003
-```
+2. Configure API URL (optional):
+   
+   **开发模式（推荐）**：不设置环境变量，使用 Vite 代理（默认代理到 `http://localhost:8003`）
+   
+   **自定义后端 URL**：创建 `.env` 文件（参考 `.env.example`）：
+   ```env
+   VITE_API_BASE_URL=http://your-backend-url:8003
+   ```
+   
+   **生产模式**：
+   - 如果不设置 `VITE_API_BASE_URL`，将使用相对路径（与前端同域名）
+   - 如果设置了 `VITE_API_BASE_URL`，将使用该 URL
+   
+   注意：开发模式下的代理配置在 `vite.config.ts` 中，也可以通过环境变量 `VITE_API_BASE_URL` 覆盖。
 
 3. Run development server:
 ```bash

@@ -1,5 +1,4 @@
-// Use proxy in development, or direct URL if VITE_API_BASE_URL is set
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '' : 'http://localhost:8003')
+import { API_BASE_URL } from './apiConfig'
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
