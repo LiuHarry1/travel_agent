@@ -75,7 +75,7 @@ class EmbeddingModelConfig(BaseModel):
         elif len(parts) == 2:
             # Could be "provider:model" or "model:collection"
             # Try to determine: if first part is a known provider, treat as provider:model
-            known_providers = ["qwen", "bge", "openai"]
+            known_providers = ["qwen", "bge", "bge-en", "bge-zh", "openai", "nemotron", "nvidia", "snowflake"]
             if parts[0] in known_providers:
                 return cls(model=value, collection=default_collection)
             else:

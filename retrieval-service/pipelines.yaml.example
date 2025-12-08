@@ -27,14 +27,29 @@ pipelines:
     #   - Object format:
     #     - model: "qwen"
     #       collection: "memory_doc_db"
+    # Available providers:
+    #   - qwen: Qwen embedding models
+    #   - bge-en: BAAI/bge-large-en-v1.5 (English, API: http://10.150.115.110:6000)
+    #   - bge-zh: BAAI/bge-large-zh-v1.5 (Chinese, API: http://10.150.115.110:6001)
+    #   - nemotron: nvidia/llama-nemotron-embed-1b-v2 (API: http://10.150.115.110:6002)
+    #   - snowflake: Snowflake/snowflake-arctic-embed-l (API: http://10.150.115.110:6003)
+    #   - bge: Generic BGE (uses default API URL)
+    #   - openai: OpenAI embedding models
     embedding_models:
       - qwen  # Uses default collection: memory_doc_db
+      # - bge-en  # BAAI/bge-large-en-v1.5 (English)
+      # - bge-zh  # BAAI/bge-large-zh-v1.5 (Chinese)
+      # - nemotron  # nvidia/llama-nemotron-embed-1b-v2
+      # - snowflake  # Snowflake/snowflake-arctic-embed-l
       # - qwen:text-embedding-v2  # Explicit model name, uses default collection
       # - qwen:memory_doc_db  # qwen model -> memory_doc_db collection
       # - qwen:text-embedding-v2:memory_doc_db  # Full format
-      # - model: "bge"
-      #   collection: "bge_collection"  # Object format for different collection
-      # - bge:BAAI/bge-large-en-v1.5:bge_collection  # BGE model with specific collection
+      # - model: "bge-en"
+      #   collection: "bge_en_collection"  # Object format for different collection
+      # - bge-en:BAAI/bge-large-en-v1.5:bge_collection  # BGE English model with specific collection
+      # - bge-zh:BAAI/bge-large-zh-v1.5:bge_zh_collection  # BGE Chinese model with specific collection
+      # - nemotron:nvidia/llama-nemotron-embed-1b-v2:nemotron_collection  # Nemotron model
+      # - snowflake:Snowflake/snowflake-arctic-embed-l:snowflake_collection  # Snowflake model
       # - openai:text-embedding-3-small:openai_collection  # OpenAI model with specific collection
 
     # Rerank service configuration

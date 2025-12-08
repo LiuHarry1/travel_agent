@@ -22,7 +22,18 @@ class BGEEmbedder(BaseEmbedder):
             raise ImportError("requests package is required")
         
         self.model = model
-        self.api_url = api_url or os.getenv("BGE_API_URL", "http://localhost:8001")
+        # Support different API URLs for different BGE models
+        if api_url:
+            self.api_url = api_url
+        else:
+            # Default API URLs based on model
+            model_lower = model.lower()
+            if "bge-large-en" in model_lower or "bge-base-en" in model_lower or "bge-small-en" in model_lower:
+                self.api_url = os.getenv("BGE_EN_API_URL", "http://10.150.115.110:6000")
+            elif "bge-large-zh" in model_lower or "bge-base-zh" in model_lower or "bge-small-zh" in model_lower:
+                self.api_url = os.getenv("BGE_ZH_API_URL", "http://10.150.115.110:6001")
+            else:
+                self.api_url = os.getenv("BGE_API_URL", "http://localhost:8001")
         self._dimension = None
     
     def _get_endpoint(self) -> str:

@@ -37,8 +37,14 @@ class Settings(BaseSettings):
         if env_models:
             self.embedding_models = [s.strip() for s in env_models.split(",") if s.strip()]
     
-    # BGE API URL (if using BGE via API)
+    # BGE API URLs (if using BGE via API)
     bge_api_url: str = "http://localhost:8001"
+    bge_en_api_url: str = "http://10.150.115.110:6000"
+    bge_zh_api_url: str = "http://10.150.115.110:6001"
+    
+    # Other embedding model API URLs
+    nemotron_api_url: str = "http://10.150.115.110:6002/embed"
+    snowflake_api_url: str = "http://10.150.115.110:6003/embed"
     
     # Qwen LLM settings
     qwen_api_key: str = ""
