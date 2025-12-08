@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { FileText, File, BookOpen, Globe, FileCode, X, Book, ChevronDown, ChevronUp } from 'lucide-react';
 import { FileWithPreview, FileType } from '../types/file';
 import type { AppConfig } from '../types/config';
