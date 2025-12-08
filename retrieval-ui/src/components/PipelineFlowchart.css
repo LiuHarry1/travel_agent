@@ -46,7 +46,7 @@
 
 .flowchart-steps {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0;
   min-width: fit-content;
   width: 100%;
@@ -57,31 +57,49 @@
   display: flex;
   align-items: center;
   gap: 0;
+  position: relative;
+  flex-shrink: 0;
 }
 
 .step-connector {
   display: flex;
   align-items: center;
+  justify-content: center;
   padding: 0 12px;
   min-width: 60px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  height: 100%;
+}
+
+.connector-line {
+  flex: 1;
+  height: 2px;
+  min-width: 30px;
+  display: block;
 }
 
 .step-connector.enabled .connector-line {
-  flex: 1;
-  height: 2px;
   background: #4A90E2;
 }
 
 .step-connector.disabled .connector-line {
-  flex: 1;
-  height: 2px;
   background: #D1D5DB;
 }
 
 .connector-arrow {
-  color: #4A90E2;
   font-size: 1.25rem;
   margin-left: 4px;
+  flex-shrink: 0;
+  display: inline-block;
+  line-height: 1;
+  width: auto;
+}
+
+.step-connector.enabled .connector-arrow {
+  color: #4A90E2;
 }
 
 .step-connector.disabled .connector-arrow {
@@ -97,6 +115,8 @@
   border: 2px solid;
   transition: all 0.2s ease-out;
   flex-shrink: 0;
+  position: relative;
+  z-index: 2;
 }
 
 .step-node.enabled {

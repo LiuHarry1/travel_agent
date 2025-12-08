@@ -1,0 +1,35 @@
+.validation-result {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.validation-result.valid {
+  background: #D4EDDA;
+  border: 1px solid #C3E6CB;
+  color: #155724;
+}
+
+.validation-result.invalid {
+  background: #F8D7DA;
+  border: 1px solid #F5C6CB;
+  color: #721C24;
+}
+
+.validation-result pre {
+  margin: 0.5rem 0 0 0;
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.85rem;
+}
+
+.valid-text {
+  color: #155724;
+}
+
+.invalid-text {
+  color: #721c24;
+}
+

@@ -1,5 +1,6 @@
-import { useState, FormEvent, useEffect, useRef } from 'react'
-import { getPipelines } from '../api/config'
+import { useState, FormEvent, useEffect, useRef, useCallback, memo } from 'react'
+import { usePipelines } from '../hooks/usePipelines'
+import { UI_TEXT } from '../constants'
 import './SearchForm.css'
 
 interface SearchFormProps {
@@ -9,14 +10,15 @@ interface SearchFormProps {
 
 function SearchForm({ onSearch, loading }: SearchFormProps) {
   const [query, setQuery] = useState('')
-  const [pipelines, setPipelines] = useState<string[]>([])
-  const [defaultPipeline, setDefaultPipeline] = useState<string>('')
   const [selectedPipeline, setSelectedPipeline] = useState<string>('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const { pipelines } = usePipelines()
 
   useEffect(() => {
-    loadPipelines()
-  }, [])
+    if (pipelines.pipelines.length > 0 && !selectedPipeline) {
+      setSelectedPipeline(pipelines.default || pipelines.pipelines[0])
+    }
+  }, [pipelines, selectedPipeline])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -29,38 +31,36 @@ function SearchForm({ onSearch, loading }: SearchFormProps) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  const loadPipelines = async () => {
-    try {
-      const data = await getPipelines()
-      setPipelines(data.pipelines)
-      setDefaultPipeline(data.default || '')
-      setSelectedPipeline(data.default || '')
-    } catch (err) {
-      console.error('Failed to load pipelines:', err)
-    }
-  }
+  const handleSubmit = useCallback(
+    (e: FormEvent) => {
+      e.preventDefault()
+      if (!loading && query.trim()) {
+        onSearch(query, selectedPipeline || undefined)
+      }
+    },
+    [loading, query, selectedPipeline, onSearch]
+  )
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault()
-    if (!loading && query.trim()) {
-      onSearch(query, selectedPipeline || undefined)
-    }
-  }
+  const handleClear = useCallback(() => {
+    setQuery('')
+    inputRef.current?.focus()
+  }, [])
 
   return (
     <form className="search-form" onSubmit={handleSubmit}>
       <div className="search-input-container">
-        {pipelines.length > 0 && (
+        {pipelines.pipelines.length > 0 && (
           <div className="pipeline-selector-wrapper">
             <select
               className="pipeline-selector"
               value={selectedPipeline}
               onChange={(e) => setSelectedPipeline(e.target.value)}
               disabled={loading}
+              aria-label="Select pipeline"
             >
-              {pipelines.map((pipeline) => (
+              {pipelines.pipelines.map((pipeline) => (
                 <option key={pipeline} value={pipeline}>
-                  {pipeline} {pipeline === defaultPipeline ? '(default)' : ''}
+                  {pipeline} {pipeline === pipelines.default ? UI_TEXT.PIPELINE.DEFAULT : ''}
                 </option>
               ))}
             </select>
@@ -72,7 +72,7 @@ function SearchForm({ onSearch, loading }: SearchFormProps) {
             ref={inputRef}
             type="text"
             className="search-input"
-            placeholder="Enter your question..."
+            placeholder={UI_TEXT.SEARCH.PLACEHOLDER}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             disabled={loading}
@@ -81,8 +81,8 @@ function SearchForm({ onSearch, loading }: SearchFormProps) {
             <button
               type="button"
               className="clear-button"
-              onClick={() => setQuery('')}
-              aria-label="Clear"
+              onClick={handleClear}
+              aria-label={UI_TEXT.SEARCH.CLEAR}
             >
               ✕
             </button>
@@ -96,10 +96,10 @@ function SearchForm({ onSearch, loading }: SearchFormProps) {
           {loading ? (
             <>
               <span className="loading-spinner"></span>
-              <span>Searching...</span>
+              <span>{UI_TEXT.SEARCH.BUTTON_LOADING}</span>
             </>
           ) : (
-            'Search'
+            UI_TEXT.SEARCH.BUTTON
           )}
         </button>
       </div>
@@ -107,5 +107,5 @@ function SearchForm({ onSearch, loading }: SearchFormProps) {
   )
 }
 
-export default SearchForm
+export default memo(SearchForm)
 

@@ -1,0 +1,32 @@
+.yaml-editor {
+  flex: 1;
+  width: 100%;
+  min-height: 400px;
+  padding: 16px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  border: 1px solid #E5E5E5;
+  border-radius: 8px;
+  resize: none;
+  outline: none;
+  transition: all 0.2s ease-out;
+  background: white;
+  color: #2C3E50;
+}
+
+.yaml-editor:hover {
+  border-color: #D1D5DB;
+}
+
+.yaml-editor:focus {
+  border-color: #4A90E2;
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+.yaml-editor:disabled {
+  background-color: #F5F5F5;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+

@@ -92,15 +92,6 @@
 }
 
 .error-message {
-  background-color: #fee;
-  color: #c33;
-  padding: 1rem;
-  border-radius: 8px;
-  margin: 1rem 0;
-  border: 1px solid #fcc;
-}
-
-.error-message {
   background-color: #FEE;
   color: #C33;
   padding: 16px;

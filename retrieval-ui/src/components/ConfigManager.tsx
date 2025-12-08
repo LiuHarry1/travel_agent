@@ -1,306 +1,154 @@
-import { useState, useEffect } from 'react'
-import {
-  getPipelines,
-  getPipeline,
-  createPipeline,
-  updatePipeline,
-  deletePipeline,
-  validatePipeline,
-  setDefaultPipeline,
-  type PipelineList,
-  type ValidationResult,
-} from '../api/config'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { usePipelines } from '../hooks/usePipelines'
+import { usePipelineConfig } from '../hooks/usePipelineConfig'
 import PipelineFlowchart from './PipelineFlowchart'
+import PipelineList from './config/PipelineList'
+import YamlEditor from './config/YamlEditor'
+import ValidationDisplay from './config/ValidationDisplay'
+import { UI_TEXT, DEFAULT_PIPELINE_TEMPLATE } from '../constants'
+import { parseYaml } from '../utils/yamlParser'
+import type { ParsedPipelineConfig } from '../api/config'
 import './ConfigManager.css'
 
 function ConfigManager() {
-  const [pipelines, setPipelines] = useState<PipelineList>({ default: null, pipelines: [] })
+  const { pipelines, loading: pipelinesLoading, error: pipelinesError, refresh, setDefault } = usePipelines()
+  const {
+    config,
+    loading: configLoading,
+    saving,
+    validating,
+    error: configError,
+    validationResult,
+    load,
+    save,
+    create,
+    remove,
+    validate,
+    clear,
+  } = usePipelineConfig()
+
   const [selectedPipeline, setSelectedPipeline] = useState<string>('')
   const [yamlContent, setYamlContent] = useState<string>('')
-  const [parsedConfig, setParsedConfig] = useState<any>(null)
-  const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [validating, setValidating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
 
+  // Initialize selected pipeline
   useEffect(() => {
-    loadPipelines()
-  }, [])
+    if (pipelines.pipelines.length > 0 && !selectedPipeline) {
+      setSelectedPipeline(pipelines.default || pipelines.pipelines[0])
+    }
+  }, [pipelines, selectedPipeline])
 
+  // Load pipeline when selection changes
   useEffect(() => {
     if (selectedPipeline) {
-      loadPipeline(selectedPipeline)
+      load(selectedPipeline)
     } else {
+      clear()
       setYamlContent('')
-      setValidationResult(null)
     }
-  }, [selectedPipeline])
+  }, [selectedPipeline, load, clear])
 
-  const loadPipelines = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const data = await getPipelines()
-      console.log('Loaded pipelines:', data)
-      setPipelines(data)
-      if (data.pipelines.length > 0 && !selectedPipeline) {
-        setSelectedPipeline(data.default || data.pipelines[0])
-      }
-    } catch (err) {
-      console.error('Error loading pipelines:', err)
-      setError(err instanceof Error ? err.message : 'Failed to load pipelines')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const parseYaml = (yaml: string) => {
-    try {
-      // Simple YAML parser for basic structure
-      // For production, consider using a proper YAML parser library
-      const lines = yaml.split('\n')
-      const config: any = {}
-      let currentSection: string | null = null
-      let indentLevel = 0
-      
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i]
-        const trimmed = line.trim()
-        if (!trimmed || trimmed.startsWith('#')) continue
-        
-        // Calculate indentation
-        const currentIndent = line.length - line.trimStart().length
-        
-        // Section header (e.g., "milvus:" or "embedding_models:")
-        if (trimmed.endsWith(':') && !trimmed.startsWith('-')) {
-          const sectionName = trimmed.slice(0, -1).trim()
-          currentSection = sectionName
-          indentLevel = currentIndent
-          
-          // Check if next line is an array item
-          if (i + 1 < lines.length) {
-            const nextLine = lines[i + 1]
-            const nextTrimmed = nextLine.trim()
-            const nextIndent = nextLine.length - nextLine.trimStart().length
-            
-            if (nextTrimmed.startsWith('-') && nextIndent > indentLevel) {
-              // This section is an array
-              config[currentSection] = []
-            } else {
-              // This section is an object
-              config[currentSection] = {}
-            }
-          } else {
-            config[currentSection] = {}
-          }
-        }
-        // Array item (e.g., "  - qwen")
-        else if (trimmed.startsWith('-') && currentSection) {
-          const itemValue = trimmed.slice(1).trim()
-          if (itemValue) {
-            if (!Array.isArray(config[currentSection])) {
-              config[currentSection] = []
-            }
-            config[currentSection].push(itemValue)
-          }
-        }
-        // Key-value pair (e.g., "  host: localhost")
-        else if (trimmed.includes(':') && currentSection && !trimmed.startsWith('-')) {
-          const [key, ...valueParts] = trimmed.split(':')
-          const keyTrimmed = key.trim()
-          let value = valueParts.join(':').trim()
-          
-          // Remove quotes if present
-          if ((value.startsWith("'") && value.endsWith("'")) || 
-              (value.startsWith('"') && value.endsWith('"'))) {
-            value = value.slice(1, -1)
-          }
-          
-          if (typeof config[currentSection] === 'object' && !Array.isArray(config[currentSection])) {
-            config[currentSection][keyTrimmed] = value
-          }
-        }
-      }
-      
-      return config
-    } catch (err) {
-      console.error('Failed to parse YAML:', err)
-      return null
-    }
-  }
-
-  const loadPipeline = async (pipelineName: string) => {
-    try {
-      setLoading(true)
-      setError(null)
-      const data = await getPipeline(pipelineName)
-      setYamlContent(data.yaml)
-      setParsedConfig(parseYaml(data.yaml))
-      setValidationResult(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load pipeline')
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  // Update YAML content when config loads
   useEffect(() => {
-    if (yamlContent) {
-      setParsedConfig(parseYaml(yamlContent))
+    if (config) {
+      setYamlContent(config.yaml)
+    }
+  }, [config])
+
+  // Parse YAML for flowchart
+  const parsedConfig = useMemo((): ParsedPipelineConfig | null => {
+    if (!yamlContent) return null
+    try {
+      return parseYaml(yamlContent)
+    } catch {
+      return null
     }
   }, [yamlContent])
 
-  const handleSave = async () => {
-    if (!selectedPipeline || !yamlContent.trim()) {
-      setError('Please select a pipeline and provide configuration')
-      return
-    }
-
-    try {
-      setSaving(true)
-      setError(null)
-      setSuccess(null)
-
-      // Validate before saving
-      const validation = await validatePipeline(selectedPipeline, yamlContent)
-      setValidationResult(validation)
-
-      if (!validation.valid) {
-        setError('Configuration validation failed. Please fix the errors before saving.')
-        return
-      }
-
-      // Save configuration
-      await updatePipeline(selectedPipeline, yamlContent)
-      setSuccess('Configuration saved successfully!')
-      
-      // Reload pipelines to refresh list
-      await loadPipelines()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save configuration')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleCreate = async () => {
-    const pipelineName = prompt('Enter pipeline name:')
+  const handleCreate = useCallback(async () => {
+    const pipelineName = prompt(UI_TEXT.CONFIG.CREATE_PROMPT)
     if (!pipelineName) return
 
     if (pipelines.pipelines.includes(pipelineName)) {
-      setError(`Pipeline '${pipelineName}' already exists`)
+      setSuccess(null)
       return
     }
 
     try {
-      setSaving(true)
-      setError(null)
-      setSuccess(null)
-
-      // Use a template configuration
-      const templateYaml = `milvus:
-  host: localhost
-  port: 19530
-  user: ""
-  password: ""
-  database: default
-  collection: memory_doc_db
-
-embedding_models:
-  - qwen
-
-rerank:
-  api_url: ""
-  model: ""
-  timeout: 30
-
-llm_filter:
-  api_key: env:DASHSCOPE_API_KEY
-  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-  model: qwen-plus
-
-retrieval:
-  top_k_per_model: 10
-  rerank_top_k: 20
-  final_top_k: 10
-
-chunk_sizes:
-  initial_search: 100
-  rerank_input: 50
-  llm_filter_input: 20
-`
-
-      await createPipeline(pipelineName, templateYaml)
-      setSuccess(`Pipeline '${pipelineName}' created successfully!`)
-      
-      // Reload and select new pipeline
-      await loadPipelines()
+      await create(pipelineName, DEFAULT_PIPELINE_TEMPLATE)
+      setSuccess(`Pipeline '${pipelineName}' ${UI_TEXT.SUCCESS.CREATED.toLowerCase()}`)
+      await refresh()
       setSelectedPipeline(pipelineName)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create pipeline')
-    } finally {
-      setSaving(false)
+    } catch {
+      // Error is handled by hook
     }
-  }
+  }, [pipelines.pipelines, create, refresh])
 
-  const handleDelete = async () => {
+  const handleSave = useCallback(async () => {
+    if (!selectedPipeline || !yamlContent.trim()) {
+      setSuccess(null)
+      return
+    }
+
+    try {
+      await save(selectedPipeline, yamlContent)
+      setSuccess(UI_TEXT.SUCCESS.SAVED)
+      await refresh()
+    } catch {
+      // Error is handled by hook
+    }
+  }, [selectedPipeline, yamlContent, save, refresh])
+
+  const handleDelete = useCallback(async () => {
     if (!selectedPipeline) return
 
-    if (!confirm(`Are you sure you want to delete pipeline '${selectedPipeline}'?`)) {
+    if (!confirm(`${UI_TEXT.CONFIG.DELETE_CONFIRM} '${selectedPipeline}'?`)) {
       return
     }
 
     try {
-      setSaving(true)
-      setError(null)
-      await deletePipeline(selectedPipeline)
-      setSuccess(`Pipeline '${selectedPipeline}' deleted successfully!`)
-      
-      // Reload pipelines and clear selection
-      await loadPipelines()
+      await remove(selectedPipeline)
+      setSuccess(`Pipeline '${selectedPipeline}' ${UI_TEXT.SUCCESS.DELETED.toLowerCase()}`)
+      await refresh()
       setSelectedPipeline('')
       setYamlContent('')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete pipeline')
-    } finally {
-      setSaving(false)
+    } catch {
+      // Error is handled by hook
     }
-  }
+  }, [selectedPipeline, remove, refresh])
 
-  const handleValidate = async () => {
+  const handleValidate = useCallback(async () => {
     if (!selectedPipeline || !yamlContent.trim()) {
-      setError('Please select a pipeline and provide configuration')
+      setSuccess(null)
       return
     }
 
     try {
-      setValidating(true)
-      setError(null)
-      const result = await validatePipeline(selectedPipeline, yamlContent)
-      setValidationResult(result)
+      const result = await validate(selectedPipeline, yamlContent)
       if (result.valid) {
-        setSuccess('Configuration is valid!')
+        setSuccess(UI_TEXT.SUCCESS.VALID)
       } else {
-        setError('Configuration validation failed')
+        setSuccess(null)
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to validate configuration')
-    } finally {
-      setValidating(false)
+    } catch {
+      // Error is handled by hook
     }
-  }
+  }, [selectedPipeline, yamlContent, validate])
 
-  const handleSetDefault = async (pipelineName: string) => {
-    try {
-      await setDefaultPipeline(pipelineName)
-      setSuccess(`Pipeline '${pipelineName}' set as default`)
-      await loadPipelines()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to set default pipeline')
-    }
-  }
+  const handleSetDefault = useCallback(
+    async (pipelineName: string) => {
+      try {
+        await setDefault(pipelineName)
+        setSuccess(`Pipeline '${pipelineName}' ${UI_TEXT.SUCCESS.DEFAULT_SET.toLowerCase()}`)
+        await refresh()
+      } catch {
+        // Error is handled by hook
+      }
+    },
+    [setDefault, refresh]
+  )
+
+  const error = pipelinesError || configError
 
   return (
     <div className="config-manager">
@@ -311,6 +159,7 @@ chunk_sizes:
             className="btn btn-primary"
             onClick={handleCreate}
             disabled={saving}
+            aria-label="Create new pipeline"
           >
             Create Pipeline
           </button>
@@ -318,61 +167,19 @@ chunk_sizes:
       </div>
 
       <div className="config-content">
-        <div className="config-sidebar">
-          <div className="sidebar-header-section">
-            <h3>Pipelines</h3>
-            <button
-              className="btn btn-primary btn-small"
-              onClick={handleCreate}
-              disabled={saving}
-            >
-              + New
-            </button>
-          </div>
-          {loading && !pipelines.pipelines.length ? (
-            <div className="loading">Loading pipelines...</div>
-          ) : (
-            <ul className="pipeline-list">
-              {pipelines.pipelines.map((pipeline) => (
-                <li key={pipeline}>
-                  <div
-                    className={`pipeline-item ${selectedPipeline === pipeline ? 'active' : ''}`}
-                    onClick={() => setSelectedPipeline(pipeline)}
-                  >
-                    <span className="pipeline-name">{pipeline}</span>
-                    {pipeline === pipelines.default && (
-                      <span className="default-badge">default</span>
-                    )}
-                    {pipeline === pipelines.default ? (
-                      <span
-                        className="set-default-btn disabled"
-                        title="Already default"
-                      >
-                        ★
-                      </span>
-                    ) : (
-                      <span
-                        className="set-default-btn"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleSetDefault(pipeline)
-                        }}
-                        title="Set as default"
-                      >
-                        ☆
-                      </span>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <PipelineList
+          pipelines={pipelines}
+          selectedPipeline={selectedPipeline}
+          onSelect={setSelectedPipeline}
+          onSetDefault={handleSetDefault}
+          onCreate={handleCreate}
+          loading={pipelinesLoading}
+        />
 
         <div className="config-editor">
           {selectedPipeline ? (
             <>
-              {loading ? (
+              {configLoading ? (
                 <div className="loading">Loading configuration...</div>
               ) : (
                 <>
@@ -384,6 +191,7 @@ chunk_sizes:
                         className="btn btn-secondary btn-small"
                         onClick={handleValidate}
                         disabled={validating || !yamlContent.trim()}
+                        aria-label="Validate configuration"
                       >
                         {validating ? 'Validating...' : 'Validate'}
                       </button>
@@ -391,6 +199,7 @@ chunk_sizes:
                         className="btn btn-primary btn-small"
                         onClick={handleSave}
                         disabled={saving || !yamlContent.trim()}
+                        aria-label="Save configuration"
                       >
                         {saving ? 'Saving...' : 'Save'}
                       </button>
@@ -398,37 +207,24 @@ chunk_sizes:
                         className="btn btn-danger btn-small"
                         onClick={handleDelete}
                         disabled={saving}
+                        aria-label="Delete pipeline"
                       >
                         Delete
                       </button>
                     </div>
                   </div>
-                  <textarea
-                    className="yaml-editor"
+                  <YamlEditor
                     value={yamlContent}
-                    onChange={(e) => setYamlContent(e.target.value)}
-                    placeholder="Enter YAML configuration..."
-                    spellCheck={false}
+                    onChange={setYamlContent}
+                    disabled={saving || configLoading}
                   />
-                  {validationResult && (
-                    <div className={`validation-result ${validationResult.valid ? 'valid' : 'invalid'}`}>
-                      <strong>Validation:</strong>{' '}
-                      {validationResult.valid ? (
-                        <span className="valid-text">✓ Configuration is valid</span>
-                      ) : (
-                        <div className="invalid-text">
-                          <span>✗ Configuration has errors:</span>
-                          <pre>{JSON.stringify(validationResult.errors, null, 2)}</pre>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <ValidationDisplay validationResult={validationResult} />
                 </>
               )}
             </>
           ) : (
             <div className="no-selection">
-              <p>Select a pipeline from the list to edit its configuration, or create a new pipeline.</p>
+              <p>{UI_TEXT.CONFIG.NO_SELECTION}</p>
             </div>
           )}
         </div>
@@ -450,4 +246,3 @@ chunk_sizes:
 }
 
 export default ConfigManager
-

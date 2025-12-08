@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import './App.css'
 import SearchForm from './components/SearchForm'
 import ResultsDisplay from './components/ResultsDisplay'
 import ConfigManager from './components/ConfigManager'
 import { searchWithDebug } from './api/retrieval'
+import { handleApiError } from './utils/errorHandler'
+import { UI_TEXT } from './constants'
 import type { DebugRetrievalResponse } from './types'
 
 type Tab = 'search' | 'config'
@@ -14,9 +16,9 @@ function App() {
   const [results, setResults] = useState<DebugRetrievalResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const handleSearch = async (query: string, pipelineName?: string) => {
+  const handleSearch = useCallback(async (query: string, pipelineName?: string) => {
     if (!query.trim()) {
-      setError('Please enter a query')
+      setError(UI_TEXT.ERRORS.EMPTY_QUERY)
       return
     }
 
@@ -28,11 +30,12 @@ function App() {
       const data = await searchWithDebug(query, pipelineName)
       setResults(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      const errorMessage = handleApiError('Search failed', err)
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   return (
     <div className="app">

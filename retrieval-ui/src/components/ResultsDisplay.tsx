@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo, memo } from 'react'
 import type { DebugRetrievalResponse, DebugChunkResult } from '../types'
+import ChunkCard from './ChunkCard'
+import { TIME_FORMAT } from '../constants'
 import './ResultsDisplay.css'
 
 interface ResultsDisplayProps {
@@ -9,12 +11,15 @@ interface ResultsDisplayProps {
 function ResultsDisplay({ results }: ResultsDisplayProps) {
   const [expandedSection, setExpandedSection] = useState<string | null>('final')
 
-  const sections = [
-    { key: 'model_results', title: 'Model Search Results', data: results.debug.model_results },
-    { key: 'deduplicated', title: 'Deduplicated Results', data: results.debug.deduplicated },
-    { key: 'reranked', title: 'Re-ranked Results', data: results.debug.reranked },
-    { key: 'final', title: 'Final Results (LLM Filtered)', data: results.debug.final },
-  ]
+  const sections = useMemo(
+    () => [
+      { key: 'model_results', title: 'Model Search Results', data: results.debug.model_results },
+      { key: 'deduplicated', title: 'Deduplicated Results', data: results.debug.deduplicated },
+      { key: 'reranked', title: 'Re-ranked Results', data: results.debug.reranked },
+      { key: 'final', title: 'Final Results (LLM Filtered)', data: results.debug.final },
+    ],
+    [results.debug]
+  )
 
   const toggleSection = (key: string) => {
     setExpandedSection(expandedSection === key ? null : key)
@@ -28,8 +33,8 @@ function ResultsDisplay({ results }: ResultsDisplayProps) {
             <p className="empty-message">No results found</p>
           ) : (
               chunks.map((chunk, index) => (
-                <ChunkCard 
-                  key={`chunk-${chunk.chunk_id}-${index}-${chunk.embedder || ''}`} 
+                <ChunkCard
+                  key={`chunk-${chunk.chunk_id}-${index}-${chunk.embedder || ''}`}
                   chunk={chunk}
                   defaultExpanded={false}
                 />
@@ -49,8 +54,8 @@ function ResultsDisplay({ results }: ResultsDisplayProps) {
                   <p className="empty-message">No results found</p>
                 ) : (
                   chunksList.map((chunk, index) => (
-                    <ChunkCard 
-                      key={`chunk-${embedder}-${chunk.chunk_id}-${index}`} 
+                    <ChunkCard
+                      key={`chunk-${embedder}-${chunk.chunk_id}-${index}`}
                       chunk={chunk}
                       defaultExpanded={false}
                     />
@@ -65,11 +70,12 @@ function ResultsDisplay({ results }: ResultsDisplayProps) {
   }
 
   const timing = results.debug?.timing
-  const formatTime = (ms?: number) => {
+  
+  const formatTime = (ms?: number): string => {
     if (ms === undefined) return 'N/A'
-    if (ms < 1) return `${(ms * 1000).toFixed(2)}μs`
-    if (ms < 1000) return `${ms.toFixed(2)}ms`
-    return `${(ms / 1000).toFixed(2)}s`
+    if (ms < 1) return `${(ms * 1000).toFixed(2)}${TIME_FORMAT.MICROSECONDS}`
+    if (ms < 1000) return `${ms.toFixed(2)}${TIME_FORMAT.MILLISECONDS}`
+    return `${(ms / 1000).toFixed(2)}${TIME_FORMAT.SECONDS}`
   }
 
   return (
@@ -104,11 +110,16 @@ function ResultsDisplay({ results }: ResultsDisplayProps) {
             } else if (section.key === 'deduplicated') {
               sectionTime = timing.deduplication
             } else if (section.key === 'reranked') {
-              sectionTime = timing.rerank
+              // Backend returns 'reranking' not 'rerank'
+              sectionTime = timing.reranking ?? timing.rerank
             } else if (section.key === 'final') {
-              sectionTime = timing.llm_filter
+              // Backend returns 'llm_filtering' not 'llm_filter'
+              sectionTime = timing.llm_filtering ?? timing.llm_filter
             }
           }
+
+          // Show time badge if timing exists (including 0, but not undefined or null)
+          const showTime = sectionTime !== undefined && sectionTime !== null
 
           return (
             <div key={section.key} className="section-wrapper">
@@ -121,7 +132,7 @@ function ResultsDisplay({ results }: ResultsDisplayProps) {
                   <span className="section-title">
                     <span className="section-name">{section.title}</span>
                     <span className="count-badge">{count}</span>
-                    {sectionTime !== undefined && (
+                    {showTime && (
                       <span className="time-badge">{formatTime(sectionTime)}</span>
                     )}
                   </span>
@@ -142,85 +153,5 @@ function ResultsDisplay({ results }: ResultsDisplayProps) {
   )
 }
 
-interface ChunkCardProps {
-  chunk: DebugChunkResult
-  defaultExpanded?: boolean
-}
-
-function ChunkCard({ chunk, defaultExpanded = false }: ChunkCardProps) {
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded)
-
-  const handleToggle = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsExpanded(prev => !prev)
-  }
-
-  const hasText = chunk.text && chunk.text.trim().length > 0
-  const textPreview = hasText ? chunk.text.substring(0, 150) + (chunk.text.length > 150 ? '...' : '') : ''
-
-  // Score color coding: lower is better for distance scores
-  const getScoreColor = (score: number) => {
-    if (score < 0.5) return '#10B981' // green - very good
-    if (score < 1.0) return '#3B82F6' // blue - good
-    if (score < 2.0) return '#F59E0B' // orange - moderate
-    return '#EF4444' // red - poor
-  }
-
-  return (
-    <div className={`chunk-card ${isExpanded ? 'expanded' : ''}`}>
-      <div className="chunk-header" onClick={handleToggle}>
-        <div className="chunk-meta">
-          <span className="chunk-id">ID: {chunk.chunk_id}</span>
-          {chunk.embedder && (
-            <span className="chunk-embedder">{chunk.embedder}</span>
-          )}
-        </div>
-        <div className="chunk-scores">
-          {chunk.score !== undefined && (
-            <span 
-              className="chunk-score" 
-              style={{ color: getScoreColor(chunk.score) }}
-              title="Similarity score (lower is better)"
-            >
-              Score: {chunk.score.toFixed(4)}
-            </span>
-          )}
-          {chunk.rerank_score !== undefined && (
-            <span 
-              className="chunk-rerank-score"
-              title="Re-ranking score"
-            >
-              Rerank: {chunk.rerank_score.toFixed(4)}
-            </span>
-          )}
-        </div>
-        <span 
-          className="expand-toggle" 
-          onClick={handleToggle}
-          title={isExpanded ? 'Click to collapse' : 'Click to expand'}
-        >
-          {isExpanded ? '▼' : '▶'}
-        </span>
-      </div>
-      {isExpanded ? (
-        <div className="chunk-text" onClick={handleToggle}>
-          {hasText ? (
-            chunk.text
-          ) : (
-            <em className="empty-text">No text content available</em>
-          )}
-        </div>
-      ) : (
-        hasText && (
-          <div className="chunk-preview" onClick={handleToggle}>
-            {textPreview}
-          </div>
-        )
-      )}
-    </div>
-  )
-}
-
-export default ResultsDisplay
+export default memo(ResultsDisplay)
 

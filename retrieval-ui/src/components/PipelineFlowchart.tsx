@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo, memo, Fragment } from 'react'
 import type { ParsedPipelineConfig } from '../api/config'
 import './PipelineFlowchart.css'
 
@@ -9,32 +9,35 @@ interface PipelineFlowchartProps {
 function PipelineFlowchart({ config }: PipelineFlowchartProps) {
   const [isExpanded, setIsExpanded] = useState(true)
 
-  if (!config) {
-    return null
-  }
-
   // Parse embedding models - ensure it's an array
-  let embeddingModels: any[] = []
-  if (config.embedding_models) {
+  const embeddingModels = useMemo(() => {
+    if (!config?.embedding_models) return []
     if (Array.isArray(config.embedding_models)) {
-      embeddingModels = config.embedding_models
-    } else if (typeof config.embedding_models === 'string') {
-      // Handle case where it's a single string
-      embeddingModels = [config.embedding_models]
-    } else if (typeof config.embedding_models === 'object' && config.embedding_models !== null) {
-      // Handle case where it's an object (shouldn't happen, but be safe)
-      embeddingModels = [config.embedding_models]
+      return config.embedding_models
     }
-  }
-  
-  // Ensure embeddingModels is always an array
-  if (!Array.isArray(embeddingModels)) {
-    embeddingModels = []
-  }
-  
-  const hasRerank = config.rerank?.api_url && typeof config.rerank.api_url === 'string' && config.rerank.api_url.trim() !== ''
+    if (typeof config.embedding_models === 'string') {
+      return [config.embedding_models]
+    }
+    if (typeof config.embedding_models === 'object' && config.embedding_models !== null) {
+      return [config.embedding_models]
+    }
+    return []
+  }, [config?.embedding_models])
 
-  const steps = [
+  const hasRerank = useMemo(
+    () =>
+      Boolean(
+        config?.rerank?.api_url &&
+          typeof config.rerank.api_url === 'string' &&
+          config.rerank.api_url.trim() !== ''
+      ),
+    [config?.rerank?.api_url]
+  )
+
+  const steps = useMemo(() => {
+    if (!config) return []
+    
+    return [
     {
       id: 'query',
       name: 'Query Input',
@@ -46,16 +49,19 @@ function PipelineFlowchart({ config }: PipelineFlowchartProps) {
       name: 'Embedding Models',
       type: 'parallel',
       enabled: true,
-      models: embeddingModels.map((model: any) => {
+      models: embeddingModels.map((model: string | Record<string, unknown>) => {
         let modelName = 'unknown'
         if (typeof model === 'string') {
           // Parse model string like "qwen" or "qwen:text-embedding-v2" or "qwen:collection"
           const parts = model.split(':')
           modelName = parts[0] || model
         } else if (typeof model === 'object' && model !== null) {
-          modelName = model.model || model.name || 'unknown'
+          modelName =
+            (typeof model.model === 'string' ? model.model : null) ||
+            (typeof model.name === 'string' ? model.name : null) ||
+            'unknown'
         }
-        
+
         let collection = config.milvus?.collection || 'default'
         if (typeof model === 'string') {
           // Check if model string has collection: "qwen:collection" or "qwen:model:collection"
@@ -66,10 +72,10 @@ function PipelineFlowchart({ config }: PipelineFlowchartProps) {
           } else if (parts.length === 3) {
             collection = parts[2]
           }
-        } else if (typeof model === 'object' && model !== null && model.collection) {
+        } else if (typeof model === 'object' && model !== null && typeof model.collection === 'string') {
           collection = model.collection
         }
-        
+
         return {
           name: modelName,
           collection: collection,
@@ -120,7 +126,12 @@ function PipelineFlowchart({ config }: PipelineFlowchartProps) {
       type: 'output',
       enabled: true,
     },
-  ]
+    ]
+  }, [embeddingModels, hasRerank, config])
+
+  if (!config) {
+    return null
+  }
 
   return (
     <div className="pipeline-flowchart">
@@ -135,15 +146,22 @@ function PipelineFlowchart({ config }: PipelineFlowchartProps) {
       {isExpanded && (
         <div className="flowchart-content">
           <div className="flowchart-steps">
-            {steps.map((step, index) => (
-              <div key={step.id} className="step-wrapper">
-                {index > 0 && (
-                  <div className={`step-connector ${step.enabled ? 'enabled' : 'disabled'}`}>
-                    <div className="connector-line"></div>
-                    <div className="connector-arrow">→</div>
-                  </div>
-                )}
-                <div className={`step-node step-${step.type} ${step.enabled ? 'enabled' : 'disabled'}`}>
+            {steps.map((step, index) => {
+              const prevStep = index > 0 ? steps[index - 1] : null
+              // 连接器应该总是显示，根据前后步骤的 enabled 状态决定样式
+              // 如果前一个步骤或当前步骤被禁用，连接器显示为 disabled
+              const connectorEnabled = prevStep ? (prevStep.enabled && step.enabled) : true
+              
+              return (
+                <Fragment key={step.id}>
+                  {index > 0 && (
+                    <div className={`step-connector ${connectorEnabled ? 'enabled' : 'disabled'}`}>
+                      <div className="connector-line"></div>
+                      <div className="connector-arrow">→</div>
+                    </div>
+                  )}
+                  <div className="step-wrapper">
+                    <div className={`step-node step-${step.type} ${step.enabled ? 'enabled' : 'disabled'}`}>
                   <div className="step-header">
                     <span className="step-name">{step.name}</span>
                     {!step.enabled && <span className="step-badge disabled-badge">Not Enabled</span>}
@@ -210,9 +228,11 @@ function PipelineFlowchart({ config }: PipelineFlowchartProps) {
                       )}
                     </div>
                   )}
-                </div>
-              </div>
-            ))}
+                    </div>
+                  </div>
+                </Fragment>
+              )
+            })}
           </div>
         </div>
       )}
@@ -220,5 +240,5 @@ function PipelineFlowchart({ config }: PipelineFlowchartProps) {
   )
 }
 
-export default PipelineFlowchart
+export default memo(PipelineFlowchart)
 

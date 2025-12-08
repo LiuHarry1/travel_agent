@@ -52,3 +52,29 @@ pipelines:
       initial_search: 100
       rerank_input: 50
       llm_filter_input: 20
+  test1:
+    milvus:
+      host: localhost
+      port: 19530
+      user: ''
+      password: ''
+      database: default
+      collection: memory_doc_db
+    embedding_models:
+    - qwen
+    rerank:
+      api_url: http://localhost:8009/api/v1/rerank
+      model: ''
+      timeout: 30
+    llm_filter:
+      api_key: sk-f256c03643e9491fb1ebc278dd958c2d
+      base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      model: qwen-plus
+    retrieval:
+      top_k_per_model: 10
+      rerank_top_k: 20
+      final_top_k: 10
+    chunk_sizes:
+      initial_search: 100
+      rerank_input: 50
+      llm_filter_input: 20

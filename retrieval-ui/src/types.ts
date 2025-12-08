@@ -14,20 +14,24 @@ export interface RetrievalResponse {
   results: ChunkResult[]
 }
 
+export interface DebugTiming {
+  embedding_total?: number
+  deduplication?: number
+  rerank?: number
+  reranking?: number
+  llm_filter?: number
+  llm_filtering?: number
+  total?: number
+  [key: string]: number | undefined
+}
+
 export interface DebugRetrievalResponse extends RetrievalResponse {
   debug: {
     model_results: Record<string, DebugChunkResult[]>
     deduplicated: DebugChunkResult[]
     reranked: DebugChunkResult[]
     final: DebugChunkResult[]
-    timing?: {
-      embedding_total?: number
-      [key: string]: number | undefined
-      deduplication?: number
-      rerank?: number
-      llm_filter?: number
-      total?: number
-    }
+    timing?: DebugTiming
   }
 }
 

@@ -1,41 +1,31 @@
 import type { RetrievalResponse, DebugRetrievalResponse } from '../types'
 import { API_BASE_URL } from './apiConfig'
-
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const detail = await response.text()
-    throw new Error(detail || `Request failed with status ${response.status}`)
-  }
-  return response.json() as Promise<T>
-}
+import { handleResponse, createRequestConfig } from '../utils/api'
 
 export async function search(query: string, pipelineName?: string): Promise<RetrievalResponse> {
-  const body: any = { query }
+  const body: { query: string; pipeline_name?: string } = { query }
   if (pipelineName) {
     body.pipeline_name = pipelineName
   }
-  const response = await fetch(`${API_BASE_URL}/api/v1/retrieval/search`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  })
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/retrieval/search`,
+    createRequestConfig('POST', body)
+  )
   return handleResponse<RetrievalResponse>(response)
 }
 
-export async function searchWithDebug(query: string, pipelineName?: string): Promise<DebugRetrievalResponse> {
-  const body: any = { query }
+export async function searchWithDebug(
+  query: string,
+  pipelineName?: string
+): Promise<DebugRetrievalResponse> {
+  const body: { query: string; pipeline_name?: string } = { query }
   if (pipelineName) {
     body.pipeline_name = pipelineName
   }
-  const response = await fetch(`${API_BASE_URL}/api/v1/retrieval/search/debug`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  })
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/retrieval/search/debug`,
+    createRequestConfig('POST', body)
+  )
   return handleResponse<DebugRetrievalResponse>(response)
 }
 
