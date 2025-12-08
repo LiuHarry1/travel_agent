@@ -40,10 +40,6 @@ pipelines:
       api_url: http://localhost:8009/api/v1/rerank
       model: ''
       timeout: 30
-    llm_filter:
-      api_key: sk-f256c03643e9491fb1ebc278dd958c2d
-      base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      model: qwen-plus
     retrieval:
       top_k_per_model: 10
       rerank_top_k: 20
@@ -62,14 +58,6 @@ pipelines:
       collection: memory_doc_db
     embedding_models:
     - qwen
-    rerank:
-      api_url: http://localhost:8009/api/v1/rerank
-      model: ''
-      timeout: 30
-    llm_filter:
-      api_key: sk-f256c03643e9491fb1ebc278dd958c2d
-      base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      model: qwen-plus
     retrieval:
       top_k_per_model: 10
       rerank_top_k: 20

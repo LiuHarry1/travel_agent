@@ -40,8 +40,10 @@ async def get_pipeline(pipeline_name: str):
     """Get pipeline configuration in YAML format."""
     try:
         pipeline_config = pipeline_config_manager.get_pipeline(pipeline_name)
-        # Convert to dict and then to YAML
-        config_dict = pipeline_config.dict()
+        # Convert to dict and then to YAML, excluding None values
+        config_dict = pipeline_config.dict(exclude_none=True)
+        # Also remove None values from nested dicts
+        config_dict = {k: v for k, v in config_dict.items() if v is not None}
         yaml_str = yaml.safe_dump(config_dict, sort_keys=False, allow_unicode=True)
         return {
             "pipeline_name": pipeline_name,
@@ -78,7 +80,9 @@ async def create_pipeline(request: PipelineConfigRequest):
         
         # Return created configuration
         pipeline_config = pipeline_config_manager.get_pipeline(request.pipeline_name)
-        config_dict = pipeline_config.dict()
+        config_dict = pipeline_config.dict(exclude_none=True)
+        # Also remove None values from nested dicts
+        config_dict = {k: v for k, v in config_dict.items() if v is not None}
         yaml_str = yaml.safe_dump(config_dict, sort_keys=False, allow_unicode=True)
         
         logger.info(f"Created pipeline: {request.pipeline_name}")
@@ -123,7 +127,9 @@ async def update_pipeline(pipeline_name: str, request: UpdatePipelineRequest):
         
         # Return updated configuration
         pipeline_config = pipeline_config_manager.get_pipeline(pipeline_name)
-        config_dict = pipeline_config.dict()
+        config_dict = pipeline_config.dict(exclude_none=True)
+        # Also remove None values from nested dicts
+        config_dict = {k: v for k, v in config_dict.items() if v is not None}
         yaml_str = yaml.safe_dump(config_dict, sort_keys=False, allow_unicode=True)
         
         logger.info(f"Updated pipeline: {pipeline_name}")

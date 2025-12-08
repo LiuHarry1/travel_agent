@@ -70,13 +70,17 @@ class ConfigValidator:
         if not milvus_ok:
             errors["milvus"] = milvus_err
 
-        rerank_ok, rerank_err = self._test_rerank(pipeline.rerank)
-        if not rerank_ok:
-            errors["rerank"] = rerank_err
+        # rerank is optional - only validate if configured
+        if pipeline.rerank is not None:
+            rerank_ok, rerank_err = self._test_rerank(pipeline.rerank)
+            if not rerank_ok:
+                errors["rerank"] = rerank_err
 
-        llm_ok, llm_err = self._test_llm(pipeline.llm_filter)
-        if not llm_ok:
-            errors["llm_filter"] = llm_err
+        # llm_filter is optional - only validate if configured
+        if pipeline.llm_filter is not None:
+            llm_ok, llm_err = self._test_llm(pipeline.llm_filter)
+            if not llm_ok:
+                errors["llm_filter"] = llm_err
 
         # Validate retrieval params
         retrieval_errors = self._validate_retrieval(pipeline.retrieval, pipeline.chunk_sizes)
@@ -117,8 +121,9 @@ class ConfigValidator:
 
     def _test_rerank(self, config: RerankConfig) -> Tuple[bool, str]:
         """Simple health check for rerank service."""
-        if not config.api_url:
-            return False, "rerank.api_url is required"
+        # If api_url is empty, rerank is disabled - this is valid
+        if not config.api_url or not config.api_url.strip():
+            return True, ""
         if not HAS_REQUESTS:
             return False, "requests not installed"
 
@@ -132,8 +137,12 @@ class ConfigValidator:
 
     def _test_llm(self, config: LLMFilterConfig) -> Tuple[bool, str]:
         """Check LLM filter configuration (lightweight)."""
-        if not config.base_url:
-            return False, "llm_filter.base_url is required"
+        # If base_url and model are empty, llm_filter is disabled - this is valid
+        if not config.base_url or not config.base_url.strip():
+            if not config.model or not config.model.strip():
+                return True, ""
+            # If model is set but base_url is not, that's an error
+            return False, "llm_filter.base_url is required when model is specified"
         # If API key is empty, warn but allow (may rely on env)
         if not config.api_key:
             return True, "LLM API key is empty; ensure environment provides it"

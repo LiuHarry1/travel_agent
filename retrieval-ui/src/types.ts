@@ -29,7 +29,7 @@ export interface DebugRetrievalResponse extends RetrievalResponse {
   debug: {
     model_results: Record<string, DebugChunkResult[]>
     deduplicated: DebugChunkResult[]
-    reranked: DebugChunkResult[]
+    reranked?: DebugChunkResult[]  // Optional - only present if rerank is enabled
     final: DebugChunkResult[]
     timing?: DebugTiming
   }

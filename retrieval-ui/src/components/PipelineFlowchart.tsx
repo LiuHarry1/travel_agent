@@ -34,6 +34,15 @@ function PipelineFlowchart({ config }: PipelineFlowchartProps) {
     [config?.rerank?.api_url]
   )
 
+  const hasLLMFilter = useMemo(
+    () =>
+      Boolean(
+        config?.llm_filter &&
+          (config.llm_filter.api_key || config.llm_filter.base_url || config.llm_filter.model)
+      ),
+    [config?.llm_filter]
+  )
+
   const steps = useMemo(() => {
     if (!config) return []
     
@@ -113,12 +122,12 @@ function PipelineFlowchart({ config }: PipelineFlowchartProps) {
       id: 'llm_filter',
       name: 'LLM Filter',
       type: 'process',
-      enabled: true,
-      params: {
+      enabled: hasLLMFilter,
+      params: hasLLMFilter ? {
         model: config.llm_filter?.model || 'unknown',
         final_top_k: config.retrieval?.final_top_k || 10,
         llm_filter_input: config.chunk_sizes?.llm_filter_input || 20,
-      },
+      } : undefined,
     },
     {
       id: 'results',
@@ -127,7 +136,7 @@ function PipelineFlowchart({ config }: PipelineFlowchartProps) {
       enabled: true,
     },
     ]
-  }, [embeddingModels, hasRerank, config])
+  }, [embeddingModels, hasRerank, hasLLMFilter, config])
 
   if (!config) {
     return null

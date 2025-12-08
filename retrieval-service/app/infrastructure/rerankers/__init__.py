@@ -1,4 +1,5 @@
 """Reranker implementations."""
+from typing import Optional
 from app.infrastructure.rerankers.base import BaseReranker
 from app.infrastructure.rerankers.api_reranker import APIReranker
 from app.infrastructure.rerankers.mock_reranker import MockReranker
@@ -12,17 +13,20 @@ __all__ = [
 ]
 
 
-def create_reranker(config: RerankConfig) -> BaseReranker:
+def create_reranker(config: Optional[RerankConfig]) -> BaseReranker:
     """
     Create reranker instance based on configuration.
     
     Args:
-        config: Rerank configuration
+        config: Rerank configuration (None if not configured)
     
     Returns:
         Reranker instance
     """
-    if config.api_url:
+    if config is None:
+        return MockReranker()
+    
+    if config.api_url and config.api_url.strip():
         try:
             return APIReranker(config)
         except Exception as e:

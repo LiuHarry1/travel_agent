@@ -293,6 +293,24 @@ class RetrievalService:
         
         return result
     
+    def _is_rerank_enabled(self) -> bool:
+        """Check if rerank is enabled (has valid api_url)."""
+        return (
+            self.config.rerank is not None and
+            self.config.rerank.api_url and
+            self.config.rerank.api_url.strip() != ""
+        )
+    
+    def _is_llm_filter_enabled(self) -> bool:
+        """Check if LLM filter is enabled (has valid base_url or model)."""
+        return (
+            self.config.llm_filter is not None and
+            (
+                (self.config.llm_filter.base_url and self.config.llm_filter.base_url.strip() != "") or
+                (self.config.llm_filter.model and self.config.llm_filter.model.strip() != "")
+            )
+        )
+    
     def retrieve(
         self,
         query: str,
@@ -319,8 +337,20 @@ class RetrievalService:
         deduplicated = self._deduplicate_by_chunk_id(combined_results)
         self._debug_timing["deduplication"] = (time.perf_counter() - start_dedup) * self.MS_TO_SECONDS
         
-        reranked = self._rerank_chunks(query, deduplicated)
-        final_chunks = self._filter_with_llm(query, reranked)
+        # Conditionally execute rerank
+        reranked = deduplicated
+        if self._is_rerank_enabled():
+            reranked = self._rerank_chunks(query, deduplicated)
+        else:
+            logger.info("Rerank is disabled, skipping rerank step")
+        
+        # Conditionally execute LLM filter
+        if self._is_llm_filter_enabled():
+            final_chunks = self._filter_with_llm(query, reranked)
+        else:
+            logger.info("LLM filter is disabled, using reranked results as final")
+            final_chunks = reranked
+        
         final_results = self._format_final_results(final_chunks)
         
         # Record total time
@@ -331,9 +361,23 @@ class RetrievalService:
             f"(Total time: {self._debug_timing['total']:.2f} ms)"
         )
         
-        return self._build_response(query, final_results, return_debug, {
+        # Build debug data conditionally
+        debug_data: Dict[str, Any] = {
             "model_results": model_results,
             "deduplicated": deduplicated,
-            "reranked": reranked,
-            "final": final_chunks
-        })
+        }
+        
+        if self._is_rerank_enabled():
+            debug_data["reranked"] = reranked
+        
+        # Always include final results, but only mark as llm_filtered if enabled
+        debug_data["final"] = final_chunks
+        # Add a flag to indicate if LLM filter was used
+        if not self._is_llm_filter_enabled():
+            # Remove llm_filtering timing if not enabled
+            if "llm_filtering" in self._debug_timing:
+                del self._debug_timing["llm_filtering"]
+            if "llm_filter" in self._debug_timing:
+                del self._debug_timing["llm_filter"]
+        
+        return self._build_response(query, final_results, return_debug, debug_data)

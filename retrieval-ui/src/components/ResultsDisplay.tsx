@@ -12,12 +12,29 @@ function ResultsDisplay({ results }: ResultsDisplayProps) {
   const [expandedSection, setExpandedSection] = useState<string | null>('final')
 
   const sections = useMemo(
-    () => [
-      { key: 'model_results', title: 'Model Search Results', data: results.debug.model_results },
-      { key: 'deduplicated', title: 'Deduplicated Results', data: results.debug.deduplicated },
-      { key: 'reranked', title: 'Re-ranked Results', data: results.debug.reranked },
-      { key: 'final', title: 'Final Results (LLM Filtered)', data: results.debug.final },
-    ],
+    () => {
+      const sectionsList = [
+        { key: 'model_results', title: 'Model Search Results', data: results.debug.model_results },
+        { key: 'deduplicated', title: 'Deduplicated Results', data: results.debug.deduplicated },
+      ]
+      
+      // Only include reranked section if it exists in debug results
+      if (results.debug.reranked !== undefined) {
+        sectionsList.push({ key: 'reranked', title: 'Re-ranked Results', data: results.debug.reranked })
+      }
+      
+      // Determine final section title based on whether LLM filter was used
+      const hasLLMFiltering = results.debug.timing?.llm_filtering !== undefined || 
+                              results.debug.timing?.llm_filter !== undefined
+      const finalTitle = hasLLMFiltering 
+        ? 'Final Results (LLM Filtered)' 
+        : 'Final Results'
+      
+      // Always include final section
+      sectionsList.push({ key: 'final', title: finalTitle, data: results.debug.final })
+      
+      return sectionsList
+    },
     [results.debug]
   )
 

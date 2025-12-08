@@ -31,7 +31,7 @@ class MilvusConfig(BaseModel):
 class RerankConfig(BaseModel):
     """Rerank service configuration."""
 
-    api_url: str
+    api_url: str = ""
     model: str = ""
     timeout: int = 30
 
@@ -40,8 +40,8 @@ class LLMFilterConfig(BaseModel):
     """LLM filter configuration."""
 
     api_key: str = ""
-    base_url: str
-    model: str
+    base_url: str = ""
+    model: str = ""
 
 
 class RetrievalParams(BaseModel):
@@ -94,8 +94,8 @@ class PipelineConfig(BaseModel):
 
     milvus: MilvusConfig
     embedding_models: List[Any] = Field(default_factory=lambda: ["qwen"])  # Can be string or EmbeddingModelConfig dict
-    rerank: RerankConfig
-    llm_filter: LLMFilterConfig
+    rerank: Optional[RerankConfig] = None
+    llm_filter: Optional[LLMFilterConfig] = None
     retrieval: RetrievalParams = RetrievalParams()
     chunk_sizes: ChunkSizes = ChunkSizes()
 
@@ -108,6 +108,20 @@ class PipelineConfig(BaseModel):
         values.setdefault("retrieval", {})
         values.setdefault("chunk_sizes", {})
         # Don't convert embedding_models here - keep as-is for Pydantic to handle
+        # rerank and llm_filter are optional - only include if provided and not empty
+        # If rerank is provided but api_url is empty, treat as None
+        if "rerank" in values:
+            rerank = values.get("rerank", {})
+            if isinstance(rerank, dict) and (not rerank.get("api_url") or not rerank.get("api_url", "").strip()):
+                values.pop("rerank", None)
+        # If llm_filter is provided but base_url and model are empty, treat as None
+        if "llm_filter" in values:
+            llm_filter = values.get("llm_filter", {})
+            if isinstance(llm_filter, dict):
+                base_url = llm_filter.get("base_url", "")
+                model = llm_filter.get("model", "")
+                if (not base_url or not base_url.strip()) and (not model or not model.strip()):
+                    values.pop("llm_filter", None)
         return values
     
     def get_embedding_model_configs(self) -> List[EmbeddingModelConfig]:
@@ -273,7 +287,15 @@ class PipelineConfigManager:
 
     def _write_pipelines(self, pipelines_file: PipelinesFile) -> None:
         """Write pipelines YAML."""
-        data = pipelines_file.dict()
+        data = pipelines_file.dict(exclude_none=True)
+        # Also remove None values from nested pipeline configs
+        if "pipelines" in data:
+            for pipeline_name, pipeline_data in data["pipelines"].items():
+                if isinstance(pipeline_data, dict):
+                    # Remove None values from pipeline config
+                    data["pipelines"][pipeline_name] = {
+                        k: v for k, v in pipeline_data.items() if v is not None
+                    }
         with self.path.open("w", encoding="utf-8") as f:
             yaml.safe_dump(data, f, sort_keys=False, allow_unicode=False)
         self._last_mtime = self._get_mtime()
@@ -300,16 +322,7 @@ class PipelineConfigManager:
                 "collection": "memory_doc_db"
             },
             "embedding_models": ["qwen"],
-            "rerank": {
-                "api_url": "",
-                "model": "",
-                "timeout": 30
-            },
-            "llm_filter": {
-                "api_key": "env:DASHSCOPE_API_KEY",
-                "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-                "model": "qwen-plus"
-            },
+            # rerank and llm_filter are optional - not included by default
             "retrieval": {
                 "top_k_per_model": 10,
                 "rerank_top_k": 20,

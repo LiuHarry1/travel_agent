@@ -73,15 +73,17 @@ export const DEFAULT_PIPELINE_TEMPLATE = `milvus:
 embedding_models:
   - qwen
 
-rerank:
-  api_url: ""
-  model: ""
-  timeout: 30
+# Rerank is optional - leave empty or remove to disable
+# rerank:
+#   api_url: ""
+#   model: ""
+#   timeout: 30
 
-llm_filter:
-  api_key: env:DASHSCOPE_API_KEY
-  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-  model: qwen-plus
+# LLM Filter is optional - leave empty or remove to disable
+# llm_filter:
+#   api_key: env:DASHSCOPE_API_KEY
+#   base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+#   model: qwen-plus
 
 retrieval:
   top_k_per_model: 10
