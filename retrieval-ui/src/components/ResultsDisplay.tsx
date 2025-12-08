@@ -95,7 +95,6 @@ function ResultsDisplay({ results }: ResultsDisplayProps) {
           const isExpanded = expandedSection === section.key
           const data = section.data
           const count = Array.isArray(data) ? data.length : Object.values(data).flat().length
-          const isLast = index === sections.length - 1
           
           // Get timing for this section
           let sectionTime: number | undefined

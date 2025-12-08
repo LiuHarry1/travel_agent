@@ -19,6 +19,35 @@ export interface PipelineConfig {
   yaml: string
 }
 
+export interface ParsedPipelineConfig {
+  embedding_models?: string[] | string | object
+  milvus?: {
+    collection?: string
+    [key: string]: any
+  }
+  rerank?: {
+    api_url?: string
+    [key: string]: any
+  }
+  retrieval?: {
+    top_k_per_model?: number
+    rerank_top_k?: number
+    final_top_k?: number
+    [key: string]: any
+  }
+  chunk_sizes?: {
+    initial_search?: number
+    rerank_input?: number
+    llm_filter_input?: number
+    [key: string]: any
+  }
+  llm_filter?: {
+    model?: string
+    [key: string]: any
+  }
+  [key: string]: any
+}
+
 export interface ValidationResult {
   valid: boolean
   errors: Record<string, any>

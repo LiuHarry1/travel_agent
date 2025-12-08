@@ -8,7 +8,6 @@ import {
   validatePipeline,
   setDefaultPipeline,
   type PipelineList,
-  type PipelineConfig,
   type ValidationResult,
 } from '../api/config'
 import PipelineFlowchart from './PipelineFlowchart'

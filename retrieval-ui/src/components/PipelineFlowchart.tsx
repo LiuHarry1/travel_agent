@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import type { PipelineConfig } from '../api/config'
+import type { ParsedPipelineConfig } from '../api/config'
 import './PipelineFlowchart.css'
 
 interface PipelineFlowchartProps {
-  config: PipelineConfig | null
+  config: ParsedPipelineConfig | null
 }
 
 function PipelineFlowchart({ config }: PipelineFlowchartProps) {
