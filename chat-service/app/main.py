@@ -25,7 +25,9 @@ from fastapi.staticfiles import StaticFiles
 # Use absolute imports for consistency
 from app.api import admin_router, chat_router, common_router
 from app.core.container import get_container
+from app.core.exceptions import ServiceError
 from app.logger import setup_logging
+from app.utils.exceptions import format_error_message
 
 # Configure logging to output to both console and file
 # Use DEBUG level in development if LOG_LEVEL env var is set to DEBUG
@@ -70,6 +72,34 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Chat Service", version="1.0.0", lifespan=lifespan)
+
+# Global exception handlers
+from fastapi import Request, status
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(ServiceError)
+async def service_error_handler(request: Request, exc: ServiceError):
+    """Handle ServiceError exceptions."""
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "error": exc.message,
+            "code": exc.code,
+            "details": exc.details
+        }
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle general exceptions."""
+    error_msg = format_error_message(exc, "An unexpected error occurred")
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "error": error_msg,
+            "code": "INTERNAL_ERROR"
+        }
+    )
 
 # CORS configuration
 # Allow origins from environment variable, or default to allow all origins

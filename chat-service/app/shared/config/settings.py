@@ -179,6 +179,11 @@ class Settings(BaseModel):
         existing_config["llm"]["model"] = self.llm.model
         existing_config["llm"]["timeout"] = self.llm.timeout
         existing_config["llm"]["system_prompt_template"] = self.llm.system_prompt_template
+        if self.llm.openai_model:
+            existing_config["llm"]["openai_model"] = self.llm.openai_model
+        # Preserve openai_base_url if exists
+        if "openai_base_url" in existing_config.get("llm", {}):
+            existing_config["llm"]["openai_base_url"] = existing_config["llm"]["openai_base_url"]
         
         # Update checklist
         existing_config["default_checklist"] = [

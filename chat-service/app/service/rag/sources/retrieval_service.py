@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 
 import httpx
 
+from ....core.exceptions import RAGError
 from .base import BaseRetrievalSource, RetrievalResult
 
 logger = logging.getLogger(__name__)
@@ -88,11 +89,20 @@ class RetrievalServiceSource(BaseRetrievalSource):
                 
         except httpx.RequestError as e:
             logger.error(f"Retrieval service request error: {e}")
-            return []
+            raise RAGError(
+                message=f"Failed to connect to retrieval service: {str(e)}",
+                details={"url": url, "query": query[:100]}
+            ) from e
         except httpx.HTTPStatusError as e:
             logger.error(f"Retrieval service HTTP error: {e.response.status_code}")
-            return []
+            raise RAGError(
+                message=f"Retrieval service returned error: {e.response.status_code}",
+                details={"url": url, "status_code": e.response.status_code, "query": query[:100]}
+            ) from e
         except Exception as e:
             logger.error(f"Retrieval service error: {e}", exc_info=True)
-            return []
+            raise RAGError(
+                message=f"Unexpected error in retrieval service: {str(e)}",
+                details={"url": url, "query": query[:100]}
+            ) from e
 

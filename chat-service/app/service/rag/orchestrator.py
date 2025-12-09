@@ -4,15 +4,13 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
+from ...core.exceptions import RAGError
 from ...llm import LLMClient
 from .config import RAGConfig
+from .factories import SourceFactory, StrategyFactory
 from .query_rewriter import QueryRewriter
 from .sources.base import BaseRetrievalSource, RetrievalResult
-from .sources.retrieval_service import RetrievalServiceSource
 from .strategies.base import BaseRetrievalStrategy
-from .strategies.single_round import SingleRoundStrategy
-from .strategies.multi_round import MultiRoundStrategy
-from .strategies.parallel import ParallelStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -48,36 +46,46 @@ class RAGOrchestrator:
         self.strategy = self._initialize_strategy()
     
     def _initialize_sources(self) -> List[BaseRetrievalSource]:
-        """Initialize retrieval sources from config."""
+        """Initialize retrieval sources from config using factory."""
         sources = []
         
         for source_config in self.config.sources:
             if not source_config.enabled:
                 continue
             
-            if source_config.type == "retrieval_service":
-                source = RetrievalServiceSource({
-                    "url": source_config.url,
-                    "pipeline_name": source_config.pipeline_name,
-                    **source_config.config
-                })
+            try:
+                source = SourceFactory.create(
+                    source_config.type,
+                    {
+                        "url": source_config.url,
+                        "pipeline_name": source_config.pipeline_name,
+                        **source_config.config
+                    }
+                )
                 sources.append(source)
                 logger.info(f"Initialized retrieval source: {source_config.type}")
-            else:
-                logger.warning(f"Unknown retrieval source type: {source_config.type}")
+            except ValueError as e:
+                logger.error(f"Failed to create source {source_config.type}: {e}")
+                # Continue with other sources instead of failing completely
         
         if not sources:
             # Fallback: create default retrieval service source
             logger.warning("No enabled sources found, creating default retrieval service source")
-            sources.append(RetrievalServiceSource({
-                "url": "http://localhost:8001",
-                "pipeline_name": "default"
-            }))
+            try:
+                sources.append(SourceFactory.create(
+                    "retrieval_service",
+                    {
+                        "url": "http://localhost:8001",
+                        "pipeline_name": "default"
+                    }
+                ))
+            except ValueError as e:
+                logger.error(f"Failed to create fallback source: {e}")
         
         return sources
     
     def _initialize_strategy(self) -> BaseRetrievalStrategy:
-        """Initialize retrieval strategy from config."""
+        """Initialize retrieval strategy from config using factory."""
         strategy_config = {
             "pipeline_name": self.config.sources[0].pipeline_name if self.config.sources else "default",
             "top_k": 10,
@@ -86,15 +94,16 @@ class RAGOrchestrator:
             "num_variants": 3
         }
         
-        if self.config.strategy == "single_round":
-            return SingleRoundStrategy(self.sources, strategy_config)
-        elif self.config.strategy == "multi_round":
-            return MultiRoundStrategy(self.sources, strategy_config)
-        elif self.config.strategy == "parallel":
-            return ParallelStrategy(self.sources, strategy_config)
-        else:
-            logger.warning(f"Unknown strategy: {self.config.strategy}, using multi_round")
-            return MultiRoundStrategy(self.sources, strategy_config)
+        try:
+            return StrategyFactory.create(
+                self.config.strategy,
+                self.sources,
+                strategy_config
+            )
+        except ValueError as e:
+            logger.warning(f"Unknown strategy: {self.config.strategy}, using multi_round. Error: {e}")
+            # Fallback to multi_round
+            return StrategyFactory.create("multi_round", self.sources, strategy_config)
     
     async def retrieve(
         self,
@@ -145,12 +154,13 @@ class RAGOrchestrator:
                 "strategy": self.config.strategy
             }
             
+        except RAGError:
+            # Re-raise RAG errors
+            raise
         except Exception as e:
             logger.error(f"RAG retrieval failed: {e}", exc_info=True)
-            return {
-                "query": query,
-                "results": [],
-                "error": str(e),
-                "source": "rag_system"
-            }
+            raise RAGError(
+                message=f"RAG retrieval failed: {str(e)}",
+                details={"query": query[:100], "strategy": self.config.strategy}
+            ) from e
 

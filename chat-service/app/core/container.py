@@ -4,9 +4,13 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from ..config import get_config
+from ..core.config_service import get_config_service
 from ..llm import LLMClient
 from ..service.chat import ChatService
+from ..service.message_processing import MessageProcessingService
+from ..service.tool_execution import ToolExecutionService
+from ..service.tool_result_formatter import format_tool_result_for_llm
+from ..service.rag import RAGOrchestrator, RAGConfig
 from ..tools import FunctionRegistry, get_function_registry
 
 logger = logging.getLogger(__name__)
@@ -22,10 +26,21 @@ class Container:
     
     def __init__(self):
         """Initialize container with lazy service creation."""
+        self._config_service = None
         self._llm_client: Optional[LLMClient] = None
         self._function_registry: Optional[FunctionRegistry] = None
+        self._message_processor: Optional[MessageProcessingService] = None
+        self._tool_executor: Optional[ToolExecutionService] = None
+        self._rag_orchestrator: Optional[RAGOrchestrator] = None
         self._chat_service: Optional[ChatService] = None
         self._initialized = False
+    
+    @property
+    def config_service(self):
+        """Get configuration service instance."""
+        if self._config_service is None:
+            self._config_service = get_config_service()
+        return self._config_service
     
     @property
     def llm_client(self) -> LLMClient:
@@ -42,6 +57,86 @@ class Container:
             logger.info("Creating function registry...")
             self._function_registry = get_function_registry()
         return self._function_registry
+    
+    @property
+    def message_processor(self) -> MessageProcessingService:
+        """Get or create message processing service instance."""
+        if self._message_processor is None:
+            logger.info("Creating message processor...")
+            config_service = self.config_service
+            self._message_processor = MessageProcessingService(lambda: config_service)
+            self._message_processor.set_function_registry(self.function_registry)
+        return self._message_processor
+    
+    @property
+    def tool_executor(self) -> ToolExecutionService:
+        """Get or create tool execution service instance."""
+        if self._tool_executor is None:
+            logger.info("Creating tool executor...")
+            self._tool_executor = ToolExecutionService(
+                self.function_registry,
+                format_tool_result_for_llm
+            )
+        return self._tool_executor
+    
+    @property
+    def rag_orchestrator(self) -> RAGOrchestrator:
+        """Get or create RAG orchestrator instance."""
+        if self._rag_orchestrator is None:
+            logger.info("Creating RAG orchestrator...")
+            try:
+                from ..service.rag.config import QueryRewriterConfig, RetrievalSourceConfig, RAGConfig
+                config_service = self.config_service
+                rag_settings = config_service.get_settings().rag
+                
+                query_rewriter_config = QueryRewriterConfig(
+                    enabled=rag_settings.query_rewriter.enabled,
+                    model=rag_settings.query_rewriter.model
+                )
+                
+                sources_config = [
+                    RetrievalSourceConfig(
+                        type=src.type,
+                        enabled=src.enabled,
+                        url=src.url,
+                        pipeline_name=src.pipeline_name,
+                        config=src.config
+                    )
+                    for src in rag_settings.sources
+                ]
+                
+                rag_config = RAGConfig(
+                    enabled=rag_settings.enabled,
+                    strategy=rag_settings.strategy,
+                    max_rounds=rag_settings.max_rounds,
+                    query_rewriter=query_rewriter_config,
+                    sources=sources_config
+                )
+                
+                self._rag_orchestrator = RAGOrchestrator(
+                    config=rag_config,
+                    llm_client=self.llm_client
+                )
+                logger.info(f"RAG orchestrator initialized with strategy: {rag_config.strategy}")
+            except Exception as e:
+                logger.error(f"Failed to initialize RAG orchestrator: {e}", exc_info=True)
+                # Create fallback config
+                from ..service.rag.config import QueryRewriterConfig, RetrievalSourceConfig, RAGConfig
+                fallback_config = RAGConfig(
+                    enabled=True,
+                    strategy="multi_round",
+                    max_rounds=3,
+                    query_rewriter=QueryRewriterConfig(enabled=True),
+                    sources=[RetrievalSourceConfig(
+                        type="retrieval_service",
+                        enabled=True,
+                        url="http://localhost:8001",
+                        pipeline_name="default"
+                    )]
+                )
+                self._rag_orchestrator = RAGOrchestrator(config=fallback_config, llm_client=self.llm_client)
+                logger.warning("Using fallback RAG config")
+        return self._rag_orchestrator
 
     @property
     def chat_service(self) -> ChatService:
@@ -50,7 +145,9 @@ class Container:
             logger.info("Creating chat service...")
             self._chat_service = ChatService(
                 llm_client=self.llm_client,
-                function_registry=self.function_registry
+                function_registry=self.function_registry,
+                message_processor=self.message_processor,
+                tool_executor=self.tool_executor
             )
         return self._chat_service
     
@@ -71,8 +168,8 @@ class Container:
             registry = self.function_registry
             logger.info(
                 f"Function registry initialized. "
-                f"Loaded {len(registry._functions)} functions, "
-                f"{len(registry._enabled_functions)} enabled."
+                f"Loaded {len(registry.functions)} functions, "
+                f"{len(registry.get_enabled_functions())} enabled."
             )
         except Exception as e:
             logger.warning(f"Failed to initialize function registry: {e}", exc_info=True)

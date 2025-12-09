@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
+from ...core.exceptions import RAGError
 from ...llm import LLMClient
 from ...service.rag import RAGOrchestrator, RAGConfig
 from ...shared.config import get_settings
@@ -105,13 +106,24 @@ async def rag_retrieve(
                 if content:
                     formatted_history.append({"role": role, "content": content})
     
-    result = await orchestrator.retrieve(query, formatted_history)
-    
-    # Ensure pipeline_name is included in result for compatibility
-    if "pipeline_name" not in result:
-        result["pipeline_name"] = pipeline_name
-    
-    return result
+    try:
+        result = await orchestrator.retrieve(query, formatted_history)
+        
+        # Ensure pipeline_name is included in result for compatibility
+        if "pipeline_name" not in result:
+            result["pipeline_name"] = pipeline_name
+        
+        return result
+    except RAGError as e:
+        # Convert RAGError to dict format for function return
+        logger.error(f"RAG retrieval error: {e.message}")
+        return {
+            "query": query,
+            "results": [],
+            "error": e.message,
+            "source": "rag_system",
+            "code": e.code
+        }
 
 
 # For backward compatibility, keep the old function name

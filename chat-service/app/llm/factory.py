@@ -26,13 +26,13 @@ class LLMClientFactory:
         Raises:
             ValueError: If provider is not supported or configuration is invalid
         """
-        from ..config import get_config
+        from ..core.config_service import get_config_service
 
-        config = get_config()
+        config_service = get_config_service()
 
         # Get provider from config if not specified
         if provider is None:
-            provider_name = config._config.get("llm", {}).get("provider", "qwen")
+            provider_name = config_service.llm_provider
             try:
                 provider = LLMProvider(provider_name.lower())
             except ValueError:
@@ -43,9 +43,9 @@ class LLMClientFactory:
 
         # Create client based on provider
         if provider == LLMProvider.QWEN:
-            return QwenClient(api_key=api_key, config=config)
+            return QwenClient(api_key=api_key, config=config_service)
         elif provider == LLMProvider.OPENAI:
-            return OpenAIClient(api_key=api_key, config=config)
+            return OpenAIClient(api_key=api_key, config=config_service)
         else:
             raise ValueError(f"Unsupported provider: {provider}")
 

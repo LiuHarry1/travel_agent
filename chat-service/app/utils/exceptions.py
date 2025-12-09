@@ -2,20 +2,27 @@
 
 from typing import Optional
 
+# Re-export core exceptions for backward compatibility
+from ..core.exceptions import (
+    ServiceError,
+    ConfigurationError,
+    RAGError,
+    LLMError,
+    ToolExecutionError,
+    ValidationError
+)
 
-class TravelAgentError(Exception):
-    """Base exception for Chat Service application."""
-    pass
+# Legacy exceptions (kept for backward compatibility)
+class TravelAgentError(ServiceError):
+    """Base exception for Chat Service application (legacy)."""
+    def __init__(self, message: str):
+        super().__init__(message, code="TRAVEL_AGENT_ERROR")
 
 
-class FileProcessingError(TravelAgentError):
+class FileProcessingError(ServiceError):
     """Exception raised when file processing fails."""
-    pass
-
-
-class ConfigurationError(TravelAgentError):
-    """Exception raised when configuration is invalid."""
-    pass
+    def __init__(self, message: str, details: Optional[dict] = None):
+        super().__init__(message, code="FILE_PROCESSING_ERROR", details=details)
 
 
 def format_error_message(error: Exception, default_message: str = "An error occurred") -> str:

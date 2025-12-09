@@ -32,7 +32,11 @@ class MessageProcessingService:
         """
         try:
             config = self._get_config()
-            template = config.system_prompt_template
+            if hasattr(config, 'system_prompt_template'):
+                template = config.system_prompt_template
+            else:
+                # Support ConfigurationService
+                template = config.get_settings().llm.system_prompt_template
         except (ValueError, FileNotFoundError) as e:
             logger.warning(f"Could not load system prompt from config: {e}. Using default prompt.")
             template = "You are a helpful travel agent assistant. Your goal is to help users with travel-related questions and planning."

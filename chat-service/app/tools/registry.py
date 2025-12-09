@@ -1,6 +1,7 @@
 """Function Registry - 统一管理所有函数"""
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import os
@@ -9,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from app.utils.constants import BACKEND_ROOT
+from .config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +40,7 @@ class FunctionRegistry:
         if config_path is None:
             config_path = str(BACKEND_ROOT / "config" / "functions.yaml")
         self.config_path = Path(config_path)
+        self._config_manager = ConfigManager(self.config_path)
         self._functions: Dict[str, FunctionDefinition] = {}
         self._enabled_functions: set[str] = set()
     
@@ -51,7 +54,21 @@ class FunctionRegistry:
         enabled: bool = True,
         config: Optional[Dict[str, Any]] = None
     ):
-        """注册函数"""
+        """
+        注册函数
+        
+        Args:
+            name: 函数名
+            func: 函数实现
+            schema: JSON Schema
+            description: 函数描述
+            type: 函数类型 ("local" or "external_api")
+            enabled: 是否默认启用
+            config: 函数配置
+        """
+        # Validate function signature matches schema
+        self._validate_function_signature(func, schema)
+        
         self._functions[name] = FunctionDefinition(
             name=name,
             description=description,
@@ -64,6 +81,39 @@ class FunctionRegistry:
         if enabled:
             self._enabled_functions.add(name)
         logger.info(f"Registered function: {name} (type: {type}, enabled: {enabled})")
+    
+    def _validate_function_signature(self, func: Callable, schema: Dict[str, Any]) -> None:
+        """
+        验证函数签名与 schema 是否匹配
+        
+        Args:
+            func: 函数实现
+            schema: JSON Schema
+            
+        Raises:
+            ValueError: 如果签名不匹配
+        """
+        try:
+            sig = inspect.signature(func)
+            schema_properties = schema.get("properties", {})
+            schema_required = schema.get("required", [])
+            
+            # Check required parameters
+            param_names = set(sig.parameters.keys())
+            # Remove 'self' or 'cls' for methods
+            param_names.discard("self")
+            param_names.discard("cls")
+            
+            # Check if all required schema params exist in function signature
+            missing_params = set(schema_required) - param_names
+            if missing_params:
+                logger.warning(
+                    f"Function {func.__name__} missing required parameters from schema: {missing_params}"
+                )
+                # Don't raise error, just warn - some functions might have optional params
+        except Exception as e:
+            logger.warning(f"Failed to validate function signature for {func.__name__}: {e}")
+            # Don't raise - validation is best effort
     
     def enable_function(self, name: str):
         """启用函数"""
@@ -145,64 +195,40 @@ class FunctionRegistry:
             })
         return functions
     
+    @property
+    def functions(self) -> Dict[str, FunctionDefinition]:
+        """获取所有函数（只读）"""
+        return self._functions.copy()
+    
     def save_config(self) -> None:
         """保存配置到文件"""
-        try:
-            import yaml
-            
-            config = {
-                "functions": {
-                    "enabled": list(self._enabled_functions),
-                    "configs": {}
-                }
-            }
-            
-            # 保存每个函数的配置
-            for name, func_def in self._functions.items():
-                if func_def.config:
-                    config["functions"]["configs"][name] = func_def.config
-            
-            # 确保目录存在
-            self.config_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            with open(self.config_path, "w", encoding="utf-8") as f:
-                yaml.dump(config, f, allow_unicode=True, default_flow_style=False)
-            
-            logger.info(f"Saved function registry config to {self.config_path}")
-        except Exception as e:
-            logger.error(f"Failed to save function registry config: {e}", exc_info=True)
+        function_configs = {
+            name: func_def.config
+            for name, func_def in self._functions.items()
+            if func_def.config
+        }
+        self._config_manager.save(
+            enabled_functions=list(self._enabled_functions),
+            function_configs=function_configs
+        )
     
     def load_config(self) -> None:
         """从文件加载配置"""
-        if not self.config_path.exists():
-            logger.warning(f"Function config file not found: {self.config_path}")
-            return
+        enabled, configs = self._config_manager.load()
         
-        try:
-            import yaml
-            
-            with open(self.config_path, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f) or {}
-            
-            # 加载启用的函数
-            enabled = config.get("functions", {}).get("enabled", [])
-            for name in enabled:
-                if name in self._functions:
-                    self.enable_function(name)
-                else:
-                    logger.warning(f"Function {name} not found in registry, skipping")
-            
-            # 加载函数配置
-            configs = config.get("functions", {}).get("configs", {})
-            for name, func_config in configs.items():
-                if name in self._functions:
-                    if self._functions[name].config is None:
-                        self._functions[name].config = {}
-                    self._functions[name].config.update(func_config)
-            
-            logger.info(f"Loaded function registry config from {self.config_path}")
-        except Exception as e:
-            logger.error(f"Failed to load function registry config: {e}", exc_info=True)
+        # Load enabled functions
+        for name in enabled:
+            if name in self._functions:
+                self.enable_function(name)
+            else:
+                logger.warning(f"Function {name} not found in registry, skipping")
+        
+        # Load function configs
+        for name, func_config in configs.items():
+            if name in self._functions:
+                if self._functions[name].config is None:
+                    self._functions[name].config = {}
+                self._functions[name].config.update(func_config)
 
 
 # 全局函数注册表实例

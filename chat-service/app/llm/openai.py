@@ -35,9 +35,14 @@ class OpenAIClient(BaseLLMClient):
         """
         if self._http_client is None:
             # Configure timeout
+            if hasattr(self._config, 'llm_timeout'):
+                timeout_value = self._config.llm_timeout
+            else:
+                # Support ConfigurationService
+                timeout_value = self._config.get_settings().llm.timeout
             timeout = httpx.Timeout(
                 connect=30.0,
-                read=self._config.llm_timeout,
+                read=timeout_value,
                 write=30.0,
                 pool=30.0
             )
@@ -74,11 +79,18 @@ class OpenAIClient(BaseLLMClient):
             # Get shared HTTP client with connection pooling
             http_client = self._get_http_client()
             
+            # Get timeout value
+            if hasattr(self._config, 'llm_timeout'):
+                client_timeout = self._config.llm_timeout
+            else:
+                # Support ConfigurationService
+                client_timeout = self._config.get_settings().llm.timeout
+            
             self._openai_client = AsyncOpenAI(
                 api_key=api_key,
                 base_url=base_url,
                 http_client=http_client,  # Inject custom httpx client with connection pool
-                timeout=self._config.llm_timeout,
+                timeout=client_timeout,
             )
         return self._openai_client
     

@@ -25,7 +25,11 @@ class QwenClient(OpenAIClient):
 
     def _get_model_name(self) -> str:
         """Get model name from config."""
-        return self._config.llm_model
+        if hasattr(self._config, 'llm_model'):
+            return self._config.llm_model
+        else:
+            # Support ConfigurationService
+            return self._config.get_settings().llm.model
 
     def _normalize_payload(self, messages, model=None):
         """Normalize payload - same as OpenAI format since we're using OpenAI-compatible API."""

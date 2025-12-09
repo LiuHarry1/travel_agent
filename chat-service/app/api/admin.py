@@ -10,7 +10,7 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from ..config import get_config, reload_config
+from ..core.config_service import get_config_service
 from ..llm.provider import LLMProvider
 from ..utils.exceptions import format_error_message
 
@@ -66,19 +66,20 @@ def get_providers() -> ProvidersResponse:
 def get_llm_config() -> LLMConfigResponse:
     """Get current LLM configuration."""
     try:
-        config = get_config()
-        provider = config.llm_provider
+        config_service = get_config_service()
+        provider = config_service.llm_provider
         
         # Get model based on provider
+        settings = config_service.get_settings()
         if provider == "openai":
-            model = config._config.get("llm", {}).get("openai_model", "gpt-4")
+            model = settings.llm.openai_model or "gpt-4"
         else:
-            model = config.llm_model
+            model = config_service.llm_model
         
         # Get provider-specific URLs
         openai_base_url = None
         if provider == "openai":
-            openai_base_url = os.getenv("OPENAI_BASE_URL") or config._config.get("llm", {}).get("openai_base_url")
+            openai_base_url = os.getenv("OPENAI_BASE_URL") or config_service._config.get("llm", {}).get("openai_base_url")
         
         return LLMConfigResponse(
             provider=provider, 
@@ -103,23 +104,29 @@ def update_llm_config(request: LLMConfigUpdateRequest) -> Dict[str, Any]:
                 detail=f"Unsupported provider: {request.provider}. Supported providers: {[p.value for p in LLMProvider]}"
             )
         
+        config_service = get_config_service()
+        
         # Update provider-specific URLs
         if request.provider.lower() == "openai" and request.openai_base_url:
             # Update environment variable
             os.environ["OPENAI_BASE_URL"] = request.openai_base_url.rstrip("/")
             # Also update config file
-            config = get_config()
-            llm_config = config._config.get("llm", {})
+            settings = config_service.get_settings()
+            raw_config = config_service._config
+            llm_config = raw_config.get("llm", {})
             llm_config["openai_base_url"] = request.openai_base_url.rstrip("/")
-            config._config["llm"] = llm_config
-            config._save_config()
+            raw_config["llm"] = llm_config
+            # Save to file
+            import yaml
+            from pathlib import Path
+            config_file = Path(settings.config_path)
+            with open(config_file, "w", encoding="utf-8") as f:
+                yaml.dump(raw_config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+            # Reload config
+            config_service.reload()
         
         # Save configuration
-        config = get_config()
-        config.save_llm_config(request.provider.lower(), request.model)
-        
-        # Reload config to ensure changes take effect
-        reload_config()
+        config_service.save_llm_config(request.provider.lower(), request.model)
         
         return {
             "status": "success",
@@ -138,11 +145,11 @@ def update_llm_config(request: LLMConfigUpdateRequest) -> Dict[str, Any]:
 def get_available_models(provider: Optional[str] = None) -> ModelsResponse:
     """Get available models for a provider."""
     try:
-        config = get_config()
+        config_service = get_config_service()
         
         # Use provided provider or get from config
         if provider is None:
-            provider = config.llm_provider
+            provider = config_service.llm_provider
         else:
             # Validate provider
             try:
@@ -254,10 +261,10 @@ def update_function_calls(request: Dict[str, Any]) -> Dict[str, Any]:
 def get_system_prompt() -> Dict[str, Any]:
     """获取系统提示词"""
     try:
-        config = get_config()
+        config_service = get_config_service()
         return {
-            "prompt": config.system_prompt_template,
-            "template": config.system_prompt_template
+            "prompt": config_service.system_prompt_template,
+            "template": config_service.system_prompt_template
         }
     except Exception as exc:
         error_msg = format_error_message(exc, "Failed to get system prompt")
@@ -275,11 +282,8 @@ def update_system_prompt(request: Dict[str, str]) -> Dict[str, Any]:
                 detail="'prompt' or 'template' field is required"
             )
         
-        config = get_config()
-        config.save_system_prompt_template(prompt)
-        
-        # 重新加载配置
-        reload_config()
+        config_service = get_config_service()
+        config_service.save_system_prompt_template(prompt)
         
         return {
             "status": "success",

@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
-from ..config import get_config
+from ..core.config_service import get_config_service
 
 
 class LLMProvider(str, Enum):
@@ -33,7 +33,7 @@ class BaseLLMClient(ABC):
     def __init__(self, api_key: Optional[str] = None, config=None):
         """Initialize LLM client."""
         self.api_key = api_key or self._get_api_key()
-        self._config = config or get_config()
+        self._config = config or get_config_service()
     
     async def close(self):
         """

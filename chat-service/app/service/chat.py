@@ -6,14 +6,17 @@ import logging
 import time
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
-from ..config import get_config
+from ..core.config_service import get_config_service
 from ..llm import LLMClient, LLMError
 from ..llm.openai import OpenAIClient
 from ..models import ChatRequest
 from ..tools import FunctionRegistry, get_function_registry
 from ..utils.exceptions import format_error_message
+from .conversation_manager import ConversationManager
 from .message_processing import MessageProcessingService
+from .response_generator import ResponseGenerator
 from .tool_execution import ToolExecutionService
+from .tool_orchestrator import ToolOrchestrator
 from .tool_result_formatter import (
     check_tools_used_but_no_info,
     format_tool_result_for_llm,
@@ -30,19 +33,42 @@ class ChatService:
         self,
         llm_client: Optional[LLMClient] = None,
         function_registry: Optional[FunctionRegistry] = None,
+        message_processor: Optional[MessageProcessingService] = None,
+        tool_executor: Optional[ToolExecutionService] = None,
     ):
-        """Initialize chat service."""
+        """
+        Initialize chat service.
+        
+        Args:
+            llm_client: LLM client instance
+            function_registry: Function registry instance
+            message_processor: Message processing service instance
+            tool_executor: Tool execution service instance
+        """
         self.llm_client = llm_client or LLMClient()
         self.function_registry = function_registry or get_function_registry()
         self.max_tool_iterations = 4
         self.max_search_iterations = 3  # RAG 最多检索次数
 
+        # Use injected services or create defaults
+        if message_processor is not None:
+            self.message_processor = message_processor
+        else:
+            config_service = get_config_service()
+            self.message_processor = MessageProcessingService(lambda: config_service)
+            self.message_processor.set_function_registry(self.function_registry)
+        
+        if tool_executor is not None:
+            self.tool_executor = tool_executor
+        else:
+            self.tool_executor = ToolExecutionService(
+                self.function_registry, format_tool_result_for_llm
+            )
+        
         # Initialize sub-services
-        self.message_processor = MessageProcessingService(get_config)
-        self.message_processor.set_function_registry(self.function_registry)
-        self.tool_executor = ToolExecutionService(
-            self.function_registry, format_tool_result_for_llm
-        )
+        self.conversation_manager = ConversationManager(self.message_processor)
+        self.tool_orchestrator = ToolOrchestrator(self.function_registry, self.tool_executor)
+        self.response_generator = ResponseGenerator(self.llm_client, self.function_registry)
 
     async def chat_stream(
         self, request: ChatRequest
@@ -60,34 +86,23 @@ class ChatService:
         """
         chat_start_time = time.time()
         try:
-            # Prepare messages from request
+            # Prepare conversation using ConversationManager
             prep_start = time.time()
-            messages = self.message_processor.prepare_messages(request)
+            conversation = self.conversation_manager.prepare_conversation(request)
             prep_time = time.time() - prep_start
-            logger.info(f"[PERF] Message preparation took {prep_time:.3f}s")
+            logger.info(f"[PERF] Conversation preparation took {prep_time:.3f}s")
 
-            # Build system prompt
-            prompt_start = time.time()
-            system_prompt = self.message_processor.build_agent_system_prompt()
-            prompt_time = time.time() - prompt_start
-            logger.info(f"[PERF] System prompt building took {prompt_time:.3f}s")
+            messages = conversation["messages"]
+            system_prompt = conversation["system_prompt"]
+            functions = conversation["functions"]
 
             # Handle empty conversation
-            if not messages:
+            if not conversation["has_messages"]:
                 yield {
                     "type": "chunk",
                     "content": "你好！我是您的旅行助手。我可以帮助您规划旅行、回答旅行相关问题、查找目的地信息等。请告诉我您需要什么帮助？",
                 }
                 return
-
-            # Get function definitions for tool calling
-            func_start = time.time()
-            functions = self.function_registry.get_function_definitions_for_llm()
-            func_time = time.time() - func_start
-            logger.info(
-                f"[PERF] Function definitions loading took {func_time:.3f}s, "
-                f"found {len(functions)} functions"
-            )
 
             # Main chat loop - similar to backend_new agent.py
             iteration = 0
