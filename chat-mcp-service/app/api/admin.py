@@ -1,0 +1,416 @@
+"""Admin API routes for managing LLM configuration."""
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import httpx
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+
+from ..config import get_config, reload_config
+from ..llm.provider import LLMProvider
+from ..mcp_tools.config import load_mcp_config
+from ..utils.exceptions import format_error_message
+
+router = APIRouter()
+
+
+class ProviderInfo(BaseModel):
+    """Provider information."""
+    value: str = Field(..., description="Provider identifier")
+    label: str = Field(..., description="Provider display name")
+
+
+class ProvidersResponse(BaseModel):
+    """Response model for available providers."""
+    providers: List[ProviderInfo]
+
+
+class LLMConfigResponse(BaseModel):
+    """Response model for LLM configuration."""
+    provider: str = Field(..., description="Current LLM provider")
+    model: str = Field(..., description="Current model name")
+    ollama_url: Optional[str] = Field(None, description="Ollama base URL (if provider is ollama)")
+    openai_base_url: Optional[str] = Field(None, description="OpenAI base URL (if provider is openai)")
+
+
+class LLMConfigUpdateRequest(BaseModel):
+    """Request model for updating LLM configuration."""
+    provider: str = Field(..., description="LLM provider (qwen, ollama, openai)")
+    model: str = Field(..., description="Model name")
+    ollama_url: Optional[str] = Field(None, description="Ollama base URL (optional, for fetching models)")
+    openai_base_url: Optional[str] = Field(None, description="OpenAI base URL (optional, for OpenAI provider)")
+
+
+class OllamaModelInfo(BaseModel):
+    """Ollama model information."""
+    name: str
+    size: Optional[int] = None
+    modified_at: Optional[str] = None
+
+
+class ModelsResponse(BaseModel):
+    """Response model for available models."""
+    provider: str
+    models: List[str]
+    ollama_models: Optional[List[OllamaModelInfo]] = None
+
+
+@router.get("/providers", response_model=ProvidersResponse)
+def get_providers() -> ProvidersResponse:
+    """Get list of available LLM providers."""
+    providers = [
+        ProviderInfo(value="qwen", label="Qwen (Alibaba DashScope)"),
+        ProviderInfo(value="ollama", label="Ollama"),
+        ProviderInfo(value="openai", label="OpenAI API"),
+    ]
+    return ProvidersResponse(providers=providers)
+
+
+@router.get("/config", response_model=LLMConfigResponse)
+def get_llm_config() -> LLMConfigResponse:
+    """Get current LLM configuration."""
+    try:
+        config = get_config()
+        provider = config.llm_provider
+        
+        # Get model based on provider
+        if provider == "ollama":
+            model = config.llm_ollama_model
+        elif provider == "openai":
+            model = config._config.get("llm", {}).get("openai_model", "gpt-4")
+        else:
+            model = config.llm_model
+        
+        # Get provider-specific URLs
+        ollama_url = None
+        openai_base_url = None
+        if provider == "ollama":
+            ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        elif provider == "openai":
+            openai_base_url = os.getenv("OPENAI_BASE_URL") or config._config.get("llm", {}).get("openai_base_url")
+        
+        return LLMConfigResponse(
+            provider=provider, 
+            model=model, 
+            ollama_url=ollama_url,
+            openai_base_url=openai_base_url
+        )
+    except Exception as exc:
+        error_msg = format_error_message(exc, "Failed to get LLM configuration")
+        raise HTTPException(status_code=500, detail=error_msg) from exc
+
+
+@router.post("/config", response_model=Dict[str, Any])
+def update_llm_config(request: LLMConfigUpdateRequest) -> Dict[str, Any]:
+    """Update LLM configuration."""
+    try:
+        # Validate provider
+        try:
+            LLMProvider(request.provider.lower())
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported provider: {request.provider}. Supported providers: {[p.value for p in LLMProvider]}"
+            )
+        
+        # Update provider-specific URLs
+        if request.provider.lower() == "ollama" and request.ollama_url:
+            os.environ["OLLAMA_BASE_URL"] = request.ollama_url.rstrip("/")
+        
+        if request.provider.lower() == "openai" and request.openai_base_url:
+            # Update environment variable
+            os.environ["OPENAI_BASE_URL"] = request.openai_base_url.rstrip("/")
+            # Also update config file
+            config = get_config()
+            llm_config = config._config.get("llm", {})
+            llm_config["openai_base_url"] = request.openai_base_url.rstrip("/")
+            config._config["llm"] = llm_config
+            config._save_config()
+        
+        # Save configuration
+        config = get_config()
+        config.save_llm_config(request.provider.lower(), request.model)
+        
+        # Reload config to ensure changes take effect
+        reload_config()
+        
+        return {
+            "status": "success",
+            "message": "LLM configuration updated successfully",
+            "provider": request.provider.lower(),
+            "model": request.model
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        error_msg = format_error_message(exc, "Failed to update LLM configuration")
+        raise HTTPException(status_code=500, detail=error_msg) from exc
+
+
+@router.get("/models", response_model=ModelsResponse)
+def get_available_models(provider: Optional[str] = None, ollama_url: Optional[str] = None) -> ModelsResponse:
+    """Get available models for a provider."""
+    try:
+        config = get_config()
+        
+        # Use provided provider or get from config
+        if provider is None:
+            provider = config.llm_provider
+        else:
+            # Validate provider
+            try:
+                LLMProvider(provider.lower())
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unsupported provider: {provider}. Supported providers: {[p.value for p in LLMProvider]}"
+                )
+        
+        provider_lower = provider.lower()
+        
+        if provider_lower == "ollama":
+            # Fetch models from Ollama API
+            base_url = ollama_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+            base_url = base_url.rstrip("/")
+            
+            try:
+                # Call Ollama API to get available models
+                url = f"{base_url}/api/tags"
+                timeout = httpx.Timeout(connect=5.0, read=10.0, write=5.0, pool=5.0)
+                
+                with httpx.Client(timeout=timeout) as client:
+                    response = client.get(url)
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    # Extract model names from Ollama response
+                    models = []
+                    ollama_models = []
+                    if "models" in data:
+                        for model_info in data["models"]:
+                            model_name = model_info.get("name", "")
+                            if model_name:
+                                models.append(model_name)
+                                ollama_models.append(OllamaModelInfo(
+                                    name=model_name,
+                                    size=model_info.get("size"),
+                                    modified_at=model_info.get("modified_at")
+                                ))
+                    
+                    return ModelsResponse(
+                        provider=provider_lower,
+                        models=models,
+                        ollama_models=ollama_models
+                    )
+            except httpx.ConnectError:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"无法连接到Ollama服务 ({base_url})。请确保Ollama服务正在运行。"
+                )
+            except httpx.TimeoutException:
+                raise HTTPException(
+                    status_code=504,
+                    detail=f"连接Ollama服务超时 ({base_url})。"
+                )
+            except httpx.HTTPStatusError as exc:
+                raise HTTPException(
+                    status_code=exc.response.status_code,
+                    detail=f"Ollama API错误: {exc.response.text[:200]}"
+                )
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"获取Ollama模型列表失败: {str(exc)}"
+                )
+        
+        elif provider_lower == "qwen":
+            # Qwen models (common models)
+            models = [
+                "qwen-plus",
+                "qwen-max",
+                "qwen-turbo",
+                "qwen-max-longcontext",
+                "qwen-plus-longcontext"
+            ]
+            return ModelsResponse(provider=provider_lower, models=models)
+        
+        elif provider_lower == "openai":
+            # OpenAI models (common models)
+            models = [
+                "gpt-4",
+                "gpt-4-turbo",
+                "gpt-4-32k",
+                "gpt-3.5-turbo",
+                "gpt-3.5-turbo-16k",
+            ]
+            return ModelsResponse(provider=provider_lower, models=models)
+        
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Provider {provider_lower} does not support model listing"
+            )
+    
+    except HTTPException:
+        raise
+    except Exception as exc:
+        error_msg = format_error_message(exc, "Failed to get available models")
+        raise HTTPException(status_code=500, detail=error_msg) from exc
+
+
+class MCPConfigResponse(BaseModel):
+    """Response model for MCP configuration."""
+    config: Dict[str, Any] = Field(..., description="MCP configuration (mcpServers)")
+    server_count: int = Field(..., description="Number of configured MCP servers")
+    tool_count: int = Field(..., description="Total number of tools from all servers")
+
+
+class MCPConfigUpdateRequest(BaseModel):
+    """Request model for updating MCP configuration."""
+    config: Dict[str, Any] = Field(..., description="MCP configuration (mcpServers)")
+
+
+@router.get("/mcp-config", response_model=MCPConfigResponse)
+def get_mcp_config() -> MCPConfigResponse:
+    """Get current MCP configuration."""
+    try:
+        config = load_mcp_config()
+        
+        # Support both old format (mcpServers) and new format (servers)
+        mcp_servers = {}
+        if "mcpServers" in config:
+            # Old format: {"mcpServers": {"server_id": {...}}}
+            mcp_servers = config.get("mcpServers", {})
+        elif "servers" in config:
+            # New format: {"servers": [{"id": "...", ...}]}
+            # Convert to old format for API compatibility
+            servers = config.get("servers", [])
+            mcp_servers = {server.get("id"): server for server in servers if server.get("id")}
+        
+        # Count tools from MCP manager
+        from ..core.container import get_container
+        try:
+            container = get_container()
+            chat_service = container.chat_service
+            tool_count = len(chat_service.mcp_registry.list_tools())
+        except Exception:
+            # If manager not available, return 0
+            tool_count = 0
+        
+        return MCPConfigResponse(
+            config={"mcpServers": mcp_servers},
+            server_count=len(mcp_servers),
+            tool_count=tool_count
+        )
+    except Exception as exc:
+        error_msg = format_error_message(exc, "Failed to get MCP configuration")
+        raise HTTPException(status_code=500, detail=error_msg) from exc
+
+
+@router.post("/mcp-config", response_model=Dict[str, Any])
+def update_mcp_config(request: MCPConfigUpdateRequest) -> Dict[str, Any]:
+    """Update MCP configuration."""
+    try:
+        # Validate JSON structure - support both old format (mcpServers) and new format (servers)
+        if "mcpServers" not in request.config and "servers" not in request.config:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid MCP configuration: 'mcpServers' or 'servers' key is required"
+            )
+        
+        # Get config file path
+        from app.utils.constants import BACKEND_ROOT
+        config_path = BACKEND_ROOT / "mcp.json"
+        
+        # Validate JSON by trying to serialize it
+        try:
+            json.dumps(request.config)
+        except (TypeError, ValueError) as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid JSON configuration: {str(e)}"
+            )
+        
+        # Convert old format (mcpServers) to new format (servers) before saving
+        mcp_servers = request.config.get("mcpServers", {})
+        if mcp_servers:
+            # Convert to new format
+            servers = []
+            for server_id, server_conf in mcp_servers.items():
+                server_conf_with_id = dict(server_conf)
+                server_conf_with_id["id"] = server_id
+                servers.append(server_conf_with_id)
+            config_to_save = {"servers": servers}
+            server_count = len(mcp_servers)
+        elif "servers" in request.config:
+            # Already in new format
+            config_to_save = request.config
+            server_count = len(request.config.get("servers", []))
+        else:
+            # Empty config
+            config_to_save = {"servers": []}
+            server_count = 0
+        
+        # Write to file
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config_to_save, f, indent=2, ensure_ascii=False)
+        
+        # Reload MCP manager (gracefully closes old connections, reinitializes everything)
+        from ..core.container import get_container
+        import asyncio
+        try:
+            container = get_container()
+            chat_service = container.chat_service
+            mcp_manager = chat_service.mcp_registry
+            
+            # Close existing connections and reload
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            # Close old connections and reload
+            loop.run_until_complete(mcp_manager.close())
+            
+            # Update config path and reload
+            mcp_manager.config_path = str(config_path)
+            loop.run_until_complete(mcp_manager.load())
+            
+            # Get updated server info
+            server_info = [
+                {
+                    "name": server_id,
+                    "type": mcp_manager.server_types.get(server_id, "unknown"),
+                    "transport": mcp_manager.server_transports.get(server_id, "unknown"),
+                    "tools": [tool for tool, sid in mcp_manager.tool_index.items() if sid == server_id]
+                }
+                for server_id in set(mcp_manager.server_types.keys()) | set(mcp_manager.server_transports.keys())
+            ]
+            
+            return {
+                "status": "success",
+                "message": "MCP configuration updated and reloaded successfully",
+                "server_count": server_count,
+                "tool_count": len(mcp_manager.list_tools()),
+                "servers": server_info
+            }
+        except Exception as e:
+            # Log error and fail the request
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to reload MCP registry: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Configuration saved but failed to reload: {str(e)}"
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        error_msg = format_error_message(exc, "Failed to update MCP configuration")
+        raise HTTPException(status_code=500, detail=error_msg) from exc
+

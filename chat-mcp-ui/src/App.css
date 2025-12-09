@@ -1,0 +1,8 @@
+/* Import all style modules */
+@import './styles/variables.css';
+@import './styles/layout.css';
+@import './styles/sidebar.css';
+@import './styles/components.css';
+@import './styles/chat.css';
+@import './styles/admin.css';
+@import './styles/utilities.css';
