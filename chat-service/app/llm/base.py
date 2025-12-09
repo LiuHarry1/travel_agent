@@ -13,7 +13,6 @@ from ..config import get_config
 class LLMProvider(str, Enum):
     """Supported LLM providers."""
     QWEN = "qwen"  # Alibaba DashScope
-    OLLAMA = "ollama"  # Ollama (supports any model)
     OPENAI = "openai"  # OpenAI API or OpenAI-compatible API
 
 

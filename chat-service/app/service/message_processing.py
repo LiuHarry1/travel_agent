@@ -17,15 +17,15 @@ class MessageProcessingService:
     def __init__(self, config_getter):
         """Initialize message processing service."""
         self._get_config = config_getter
-        self._mcp_registry = None
+        self._function_registry = None
 
-    def set_mcp_registry(self, mcp_registry):
-        """Set MCP registry for tool information."""
-        self._mcp_registry = mcp_registry
+    def set_function_registry(self, function_registry):
+        """Set function registry for tool information."""
+        self._function_registry = function_registry
 
     def build_agent_system_prompt(self) -> str:
         """
-        Build system prompt for travel agent.
+        Build system prompt for travel agent with RAG optimization support.
         Uses configurable template from config.yaml with {tools} placeholder.
         If {tools} placeholder is present, it will be replaced with available tools list.
         If not present, tools will be appended at the end automatically.
@@ -39,18 +39,16 @@ class MessageProcessingService:
         
         # Build tool list if tools are available
         tool_list = ""
-        if self._mcp_registry:
-            tools = self._mcp_registry.list_tools()
-            if tools:
+        enabled_functions = []
+        
+        if self._function_registry:
+            functions = self._function_registry.get_all_functions()
+            enabled_functions = [f.name for f in functions if f.enabled]
+            if functions:
                 tool_descriptions = []
-                for tool in tools:
-                    if isinstance(tool, dict):
-                        tool_name = tool.get("name", "")
-                        tool_desc = tool.get("description", "")
-                    else:
-                        tool_name = getattr(tool, 'name', '')
-                        tool_desc = getattr(tool, 'description', '') or ""
-                    tool_descriptions.append(f"- {tool_name}: {tool_desc}")
+                for func_def in functions:
+                    if func_def.enabled:
+                        tool_descriptions.append(f"- {func_def.name}: {func_def.description}")
                 tool_list = "\n".join(tool_descriptions)
         
         # Replace {tools} placeholder if present, otherwise append tools at the end
@@ -61,6 +59,59 @@ class MessageProcessingService:
             prompt = f"{template}\n\nAvailable Tools:\n{tool_list}"
         else:
             prompt = template
+        
+        # 如果启用了 retrieval_service_search，添加 RAG 优化指导
+        if self._function_registry and "retrieval_service_search" in enabled_functions:
+            rag_guidance = """
+
+**RAG 检索优化策略：**
+
+1. **理解上下文**：
+   - 仔细分析当前用户问题
+   - 回顾历史对话，提取相关信息（地点、时间、主题、实体等）
+   - 识别问题的核心意图
+
+2. **生成优化查询**：
+   - 将用户问题转换为更易检索的查询
+   - 结合历史对话中的上下文信息
+   - 如果问题模糊，先检索广泛信息，再根据结果深入检索
+   - 查询应该具体、包含关键实体（2-10 个词）
+
+3. **多轮检索策略**：
+   - 第一次检索：基于用户问题和历史上下文生成查询
+   - 如果检索结果不够充分，可以：
+     a) 从不同角度再次检索（补充关键词、细化查询）
+     b) 检索更具体的信息（如特定步骤、详细要求）
+     c) 检索相关的背景信息（如相关主题、前置条件）
+   - 最多可以检索 2-3 次，确保信息充分
+   - 每次检索后，评估结果是否足够回答问题
+
+4. **使用检索结果**：
+   - 综合所有检索结果
+   - 基于文档内容回答问题
+   - 引用文档来源（chunk_id）
+   - 如果文档中没有相关信息，明确告知用户
+   - 不要编造信息，只基于检索到的文档回答
+
+**示例场景：**
+
+场景 1：简单问题
+- 用户："日本签证需要什么材料？"
+- 查询："日本签证申请材料要求"
+- 检索 1 次即可
+
+场景 2：需要上下文
+- 历史："我想去日本旅游"
+- 用户："需要什么材料？"
+- 查询："日本旅游签证申请材料"（结合历史上下文）
+
+场景 3：复杂问题，需要多轮检索
+- 用户："日本签证办理流程和材料"
+- 第一次查询："日本签证办理流程"
+- 如果结果不够，第二次查询："日本签证申请材料清单"
+- 综合两次结果回答
+"""
+            prompt = f"{prompt}\n{rag_guidance}"
         
         logger.info(f"Generated system prompt (length: {len(prompt)} chars)")
         return prompt
@@ -111,8 +162,9 @@ class MessageProcessingService:
         
         # Filter out tool messages and tool_calls - only keep user and assistant messages
         # Also remove tool_calls from assistant messages
+        # 保留足够的历史对话用于上下文感知（最多 10 轮）
         filtered_messages = []
-        for msg in messages:
+        for msg in messages[-10:]:  # 保留最近 10 轮对话用于上下文感知
             role = msg.get("role", "")
             # Only include user and assistant messages
             if role in ("user", "assistant"):

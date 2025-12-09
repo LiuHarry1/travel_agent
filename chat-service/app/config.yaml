@@ -1,11 +1,24 @@
 llm:
-  provider: openai
+  provider: qwen
   model: qwen-plus
-  ollama_model: llama3.1:8b
   openai_model: gpt-4
-  openai_base_url: 'https://api.gptsapi.net/v1'
+  openai_base_url: https://api.gptsapi.net/v1
   timeout: 60.0
-  system_prompt_template: |
-    You are a chat bot designed to answer questions about the company and the products and services they offer.
+  system_prompt_template: 'You are a chat bot designed to answer questions about the
+    company and the products and services they offer.
 
+    '
 default_checklist: []
+
+rag:
+  enabled: true
+  strategy: multi_round
+  max_rounds: 3
+  query_rewriter:
+    enabled: true
+    model: null  # Uses default LLM from config
+  sources:
+    - type: retrieval_service
+      enabled: true
+      url: http://localhost:8001
+      pipeline_name: default

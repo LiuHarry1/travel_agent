@@ -1,2 +1,0 @@
-"""FAQ MCP server package."""
-

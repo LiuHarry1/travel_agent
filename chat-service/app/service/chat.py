@@ -1,4 +1,4 @@
-"""Chat service for conversational travel agent with MCP tool calling."""
+"""Chat service for conversational travel agent with function calling."""
 from __future__ import annotations
 
 import json
@@ -9,8 +9,8 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 from ..config import get_config
 from ..llm import LLMClient, LLMError
 from ..llm.openai import OpenAIClient
-from ..mcp_tools import MCPManager
 from ..models import ChatRequest
+from ..tools import FunctionRegistry, get_function_registry
 from ..utils.exceptions import format_error_message
 from .message_processing import MessageProcessingService
 from .tool_execution import ToolExecutionService
@@ -24,23 +24,24 @@ logger = logging.getLogger(__name__)
 
 
 class ChatService:
-    """Service for conversational travel agent with MCP tool calling."""
+    """Service for conversational travel agent with function calling."""
 
     def __init__(
         self,
         llm_client: Optional[LLMClient] = None,
-        mcp_registry: Optional[MCPManager] = None,
+        function_registry: Optional[FunctionRegistry] = None,
     ):
         """Initialize chat service."""
         self.llm_client = llm_client or LLMClient()
-        self.mcp_registry = mcp_registry or MCPManager()
+        self.function_registry = function_registry or get_function_registry()
         self.max_tool_iterations = 4
+        self.max_search_iterations = 3  # RAG 最多检索次数
 
         # Initialize sub-services
         self.message_processor = MessageProcessingService(get_config)
-        self.message_processor.set_mcp_registry(self.mcp_registry)
+        self.message_processor.set_function_registry(self.function_registry)
         self.tool_executor = ToolExecutionService(
-            self.mcp_registry, format_tool_result_for_llm
+            self.function_registry, format_tool_result_for_llm
         )
 
     async def chat_stream(
@@ -79,9 +80,9 @@ class ChatService:
                 }
                 return
 
-            # Get function definitions for tool calling (async)
+            # Get function definitions for tool calling
             func_start = time.time()
-            functions = await self.mcp_registry.get_tool_function_definitions()
+            functions = self.function_registry.get_function_definitions_for_llm()
             func_time = time.time() - func_start
             logger.info(
                 f"[PERF] Function definitions loading took {func_time:.3f}s, "

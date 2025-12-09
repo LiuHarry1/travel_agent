@@ -23,7 +23,7 @@ def format_tool_result_for_llm(tool_result: Any, tool_name: str) -> str:
         logger.debug(f"Tool {tool_name} returned string result (length: {len(tool_result)})")
         return tool_result
     elif isinstance(tool_result, dict):
-        # If it's a dict, check if it has a 'text' key (from MCPClient fallback)
+        # If it's a dict, check if it has a 'text' key
         if "text" in tool_result:
             logger.debug(f"Tool {tool_name} returned dict with 'text' key (length: {len(tool_result['text'])})")
             return tool_result["text"]
@@ -72,6 +72,12 @@ def format_tool_result_for_llm(tool_result: Any, tool_name: str) -> str:
 3. 如果还有其他工具可用，可以建议尝试其他工具
 4. 如果所有工具都没有找到有用信息，提醒用户联系Harry获取更具体的帮助"""
                 logger.info(f"Tool {tool_name} found no results, formatted for LLM")
+                return formatted
+            
+            # Special formatting for RAG retrieval results (with chunk_id references)
+            if tool_name == "retrieval_service_search":
+                formatted = _format_retrieval_result(tool_result)
+                logger.info(f"Tool {tool_name} found {len(results)} results, formatted for LLM with references")
                 return formatted
             
             # If results are found, format them with instructions
@@ -131,6 +137,37 @@ def check_tools_used_but_no_info(messages: list[dict[str, str]]) -> bool:
             return True
     
     return False
+
+
+def _format_retrieval_result(result: dict) -> str:
+    """
+    格式化 RAG 检索结果为 LLM 可理解的文本
+    
+    包含：
+    - 文档内容
+    - 来源引用（chunk_id）
+    - 相关性信息
+    """
+    results = result.get("results", [])
+    if not results:
+        return "检索到的文档：未找到相关文档。"
+    
+    formatted = "检索到的文档：\n\n"
+    for i, doc in enumerate(results, 1):
+        chunk_id = doc.get("chunk_id", "unknown")
+        text = doc.get("text", "")
+        formatted += f"[文档 {i} - ID: {chunk_id}]\n{text}\n\n"
+    
+    formatted += f"共检索到 {len(results)} 个相关文档片段。\n\n"
+    formatted += """【重要提示】这是检索服务返回的文档片段。你必须：
+1. 严格基于上述文档内容回答问题
+2. 引用文档来源（使用 chunk_id）
+3. 不要添加文档中没有的信息
+4. 不要编造或猜测任何细节
+5. 如果文档不足以完整回答问题，明确说明哪些信息缺失
+6. 综合所有文档片段的信息，生成完整、准确的回答"""
+    
+    return formatted
 
 
 def response_suggests_contact_harry(content: str) -> bool:

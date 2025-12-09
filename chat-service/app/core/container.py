@@ -6,8 +6,8 @@ from typing import Optional
 
 from ..config import get_config
 from ..llm import LLMClient
-from ..mcp_tools import MCPManager
 from ..service.chat import ChatService
+from ..tools import FunctionRegistry, get_function_registry
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ class Container:
     def __init__(self):
         """Initialize container with lazy service creation."""
         self._llm_client: Optional[LLMClient] = None
-        self._mcp_manager: Optional[MCPManager] = None
+        self._function_registry: Optional[FunctionRegistry] = None
         self._chat_service: Optional[ChatService] = None
         self._initialized = False
     
@@ -34,20 +34,15 @@ class Container:
             logger.info("Creating LLM client...")
             self._llm_client = LLMClient()
         return self._llm_client
-    
+
     @property
-    def mcp_manager(self) -> MCPManager:
-        """Get or create MCP manager instance."""
-        if self._mcp_manager is None:
-            logger.info("Creating MCP manager...")
-            self._mcp_manager = MCPManager()
-        return self._mcp_manager
-    
-    @property
-    def mcp_registry(self) -> MCPManager:
-        """Alias for mcp_manager (backward compatibility)."""
-        return self.mcp_manager
-    
+    def function_registry(self) -> FunctionRegistry:
+        """Get or create function registry instance."""
+        if self._function_registry is None:
+            logger.info("Creating function registry...")
+            self._function_registry = get_function_registry()
+        return self._function_registry
+
     @property
     def chat_service(self) -> ChatService:
         """Get or create chat service instance."""
@@ -55,7 +50,7 @@ class Container:
             logger.info("Creating chat service...")
             self._chat_service = ChatService(
                 llm_client=self.llm_client,
-                mcp_registry=self.mcp_manager
+                function_registry=self.function_registry
             )
         return self._chat_service
     
@@ -71,15 +66,16 @@ class Container:
         
         logger.info("Initializing container services...")
         
-        # Initialize MCP servers
+        # Initialize function registry (already initialized when accessed)
         try:
-            await self.mcp_manager.load()
+            registry = self.function_registry
             logger.info(
-                f"MCP servers initialized. "
-                f"Loaded {len(self.mcp_manager.tool_index)} tools."
+                f"Function registry initialized. "
+                f"Loaded {len(registry._functions)} functions, "
+                f"{len(registry._enabled_functions)} enabled."
             )
         except Exception as e:
-            logger.warning(f"Failed to initialize MCP servers: {e}", exc_info=True)
+            logger.warning(f"Failed to initialize function registry: {e}", exc_info=True)
         
         # Warm up LLM client connection pool to reduce first request latency
         try:
@@ -101,13 +97,6 @@ class Container:
         This should be called during application shutdown.
         """
         logger.info("Shutting down container...")
-        
-        if self._mcp_manager:
-            try:
-                await self._mcp_manager.close()
-                logger.info("MCP connections closed")
-            except Exception as e:
-                logger.error(f"Error closing MCP connections: {e}", exc_info=True)
         
         self._initialized = False
         logger.info("Container shutdown complete")

@@ -12,7 +12,6 @@ from .base import LLMProvider, LLMError, BaseLLMClient
 
 # Re-export provider implementations
 from .qwen import QwenClient
-from .ollama import OllamaClient
 from .openai import OpenAIClient
 
 # For backward compatibility - all classes are available from this module
@@ -21,6 +20,5 @@ __all__ = [
     "LLMError",
     "BaseLLMClient",
     "QwenClient",
-    "OllamaClient",
     "OpenAIClient",
 ]

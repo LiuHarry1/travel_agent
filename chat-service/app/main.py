@@ -16,11 +16,6 @@ if str(_chat_service_dir) not in sys.path:
 # Now we can import from app modules
 from app.utils.constants import BACKEND_ROOT
 
-# Initialize platform-specific configuration early
-# This must be done before any other imports that might use asyncio
-from app.platform_config import initialize_platform
-initialize_platform()
-
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -58,15 +53,6 @@ async def lifespan(app: FastAPI):
     Handles startup and shutdown events.
     """
     logger = logging.getLogger(__name__)
-    
-    # Verify event loop policy is set correctly (in case uvicorn created a new process)
-    from app.platform_config import setup_event_loop_policy, check_event_loop_for_uvicorn
-    
-    # Re-set policy in case uvicorn created a new process
-    setup_event_loop_policy()
-    
-    # Check the actual running event loop and log platform-specific warnings
-    check_event_loop_for_uvicorn()
     
     # Startup
     try:
@@ -126,24 +112,18 @@ async def run_server():
     import asyncio
     from uvicorn import Config, Server
     
-    # Event loop policy is already set by initialize_platform() at module import
-    # and by setup_event_loop_policy() in main() function
-    # No need to set it again here
-    
-    # Verify the event loop is correct
-    loop = asyncio.get_running_loop()
-    loop_type = type(loop).__name__
     logger = logging.getLogger(__name__)
-    logger.info(f"Running server with event loop: {loop_type}")
     
     # Use DEBUG level if LOG_LEVEL env var is set to DEBUG
     uvicorn_log_level = "debug" if os.getenv("LOG_LEVEL", "INFO").upper() == "DEBUG" else "info"
     
     # Create uvicorn config and server
+    # Port can be overridden by PORT environment variable
+    port = int(os.getenv("PORT", "8001"))
     config = Config(
         app="app.main:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         log_level=uvicorn_log_level,
         reload=False,  # Disable reload to ensure proper event loop
     )
@@ -156,11 +136,6 @@ async def run_server():
 def main():
     """启动 FastAPI 应用"""
     import asyncio
-    from app.platform_config import setup_event_loop_policy
-    
-    # Re-set policy in case uvicorn or other code created a new process/thread
-    # This is especially important on Windows where ProactorEventLoop is required
-    setup_event_loop_policy()
     
     # Use asyncio.run() to ensure proper event loop is used
     try:

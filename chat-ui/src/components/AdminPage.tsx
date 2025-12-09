@@ -6,13 +6,16 @@ import {
   updateLLMConfig, 
   getDefaultConfig,
   saveConfig,
-  getMCPConfig,
-  updateMCPConfig,
-  type ProviderInfo 
+  getFunctionCalls,
+  updateFunctionCalls,
+  getSystemPrompt,
+  updateSystemPrompt,
+  type ProviderInfo,
+  type FunctionDefinition
 } from '../api/index'
 import { Alert } from './Alert'
 
-type TabType = 'llm' | 'prompt' | 'mcp'
+type TabType = 'llm' | 'prompt' | 'functions'
 
 export function AdminPage() {
   const [activeTab, setActiveTab] = useState<TabType>('llm')
@@ -33,12 +36,11 @@ export function AdminPage() {
   const [loadingPrompt, setLoadingPrompt] = useState(false)
   const [savingPrompt, setSavingPrompt] = useState(false)
   
-  // MCP Config state
-  const [mcpConfig, setMcpConfig] = useState<string>('')
-  const [mcpServerCount, setMcpServerCount] = useState<number>(0)
-  const [mcpToolCount, setMcpToolCount] = useState<number>(0)
-  const [loadingMcp, setLoadingMcp] = useState(false)
-  const [savingMcp, setSavingMcp] = useState(false)
+  // Function Calls state
+  const [functions, setFunctions] = useState<FunctionDefinition[]>([])
+  const [enabledFunctions, setEnabledFunctions] = useState<string[]>([])
+  const [loadingFunctions, setLoadingFunctions] = useState(false)
+  const [savingFunctions, setSavingFunctions] = useState(false)
   
   const [alert, setAlert] = useState<{ type: 'error' | 'success'; message: string } | null>(null)
 
@@ -47,7 +49,7 @@ export function AdminPage() {
     loadProviders()
     loadConfig()
     loadSystemPrompt()
-    loadMCPConfig()
+    loadFunctionCalls()
   }, [])
 
   // Load available models when provider changes
@@ -192,13 +194,22 @@ export function AdminPage() {
 
     try {
       setSavingPrompt(true)
-      await saveConfig({
-        system_prompt_template: systemPrompt,
-      })
-      setAlert({
-        type: 'success',
-        message: 'System prompt template updated successfully! The new template will be used for future conversations.',
-      })
+      // Try new API first, fallback to old API
+      try {
+        await updateSystemPrompt({ prompt: systemPrompt })
+        setAlert({
+          type: 'success',
+          message: 'System prompt updated successfully! The new prompt will be used for future conversations.',
+        })
+      } catch {
+        await saveConfig({
+          system_prompt_template: systemPrompt,
+        })
+        setAlert({
+          type: 'success',
+          message: 'System prompt template updated successfully! The new template will be used for future conversations.',
+        })
+      }
     } catch (error) {
       setAlert({
         type: 'error',
@@ -209,75 +220,50 @@ export function AdminPage() {
     }
   }
 
-  const loadMCPConfig = async () => {
+  const loadFunctionCalls = async () => {
     try {
-      setLoadingMcp(true)
-      const config = await getMCPConfig()
-      setMcpConfig(JSON.stringify(config.config, null, 2))
-      setMcpServerCount(config.server_count)
-      setMcpToolCount(config.tool_count)
+      setLoadingFunctions(true)
+      const response = await getFunctionCalls()
+      setFunctions(response.available_functions)
+      setEnabledFunctions(response.enabled_functions)
     } catch (error) {
       setAlert({
         type: 'error',
-        message: error instanceof Error ? error.message : 'Failed to load MCP configuration',
+        message: error instanceof Error ? error.message : 'Failed to load function calls',
       })
     } finally {
-      setLoadingMcp(false)
+      setLoadingFunctions(false)
     }
   }
 
-  const handleSaveMCPConfig = async () => {
-    if (!mcpConfig.trim()) {
-      setAlert({
-        type: 'error',
-        message: 'MCP configuration cannot be empty',
-      })
-      return
-    }
-
+  const handleSaveFunctionCalls = async () => {
     try {
-      // Validate JSON
-      const parsed = JSON.parse(mcpConfig)
-      if (!parsed.mcpServers || typeof parsed.mcpServers !== 'object') {
-        setAlert({
-          type: 'error',
-          message: 'Invalid MCP configuration: "mcpServers" key is required',
-        })
-        return
-      }
-
-      setSavingMcp(true)
-      await updateMCPConfig({
-        config: parsed,
+      setSavingFunctions(true)
+      await updateFunctionCalls({
+        enabled_functions: enabledFunctions,
+        configs: {}
       })
       setAlert({
         type: 'success',
-        message: 'MCP configuration updated successfully! The new tools will be available for future conversations.',
+        message: 'Function calls updated successfully! The new functions will be available for future conversations.',
       })
-      // Reload to get updated counts
-      await loadMCPConfig()
+      await loadFunctionCalls()
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        setAlert({
-          type: 'error',
-          message: 'Invalid JSON format. Please check your configuration.',
-        })
-      } else {
-        setAlert({
-          type: 'error',
-          message: error instanceof Error ? error.message : 'Failed to save MCP configuration',
-        })
-      }
+      setAlert({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to save function calls',
+      })
     } finally {
-      setSavingMcp(false)
+      setSavingFunctions(false)
     }
   }
+
 
   return (
     <section className="admin-container">
       <div className="admin-header">
         <h1>Admin Settings</h1>
-        <p className="admin-subtitle">Configure LLM, system prompt, and MCP tools</p>
+        <p className="admin-subtitle">Configure LLM, system prompt, and function calls</p>
       </div>
 
       {alert && (
@@ -306,10 +292,10 @@ export function AdminPage() {
         </button>
         <button
           type="button"
-          className={`admin-tab ${activeTab === 'mcp' ? 'active' : ''}`}
-          onClick={() => setActiveTab('mcp')}
+          className={`admin-tab ${activeTab === 'functions' ? 'active' : ''}`}
+          onClick={() => setActiveTab('functions')}
         >
-          MCP Tools
+          Function Calls
         </button>
       </div>
 
@@ -519,58 +505,113 @@ export function AdminPage() {
           </>
         )}
 
-        {/* MCP Tools Tab */}
-        {activeTab === 'mcp' && (
+        {/* Function Calls Tab */}
+        {activeTab === 'functions' && (
           <>
             <div className="admin-form" style={{ gridColumn: '1 / -1' }}>
-              <div className="form-group">
-                <label htmlFor="mcp-config">MCP Configuration (JSON)</label>
-                {loadingMcp ? (
-                  <div className="form-loading">Loading MCP configuration...</div>
-                ) : (
-                  <textarea
-                    id="mcp-config"
-                    value={mcpConfig}
-                    onChange={(e) => setMcpConfig(e.target.value)}
-                    disabled={savingMcp}
-                    className="form-textarea"
-                    rows={20}
-                    placeholder='{"mcpServers": {...}}'
-                    style={{ fontFamily: 'monospace', fontSize: '13px' }}
-                  />
-                )}
-                <small className="form-hint">
-                  Edit the MCP servers configuration in JSON format. Each server should have "command", "args", and optionally "env" fields.
-                </small>
+              <div className="function-calls-header">
+                <h3>Function Calls Management</h3>
+                <p className="function-calls-description">
+                  Select which functions are enabled for the agent. When <strong>retrieval_service_search</strong> is enabled, 
+                  the agent will automatically use <strong>RAG mode</strong> with context-aware query generation and multi-turn retrieval.
+                </p>
               </div>
+              
+              {loadingFunctions ? (
+                <div className="form-loading">Loading functions...</div>
+              ) : (
+                <div className="function-cards">
+                  {functions.map((func) => {
+                    const isEnabled = enabledFunctions.includes(func.name)
+                    const isRAGMode = func.name === 'retrieval_service_search' && isEnabled
+                    return (
+                      <div
+                        key={func.name}
+                        className={`function-card ${isEnabled ? 'function-card-enabled' : 'function-card-disabled'}`}
+                      >
+                        <div className="function-card-header">
+                          <label className="function-toggle">
+                            <input
+                              type="checkbox"
+                              checked={isEnabled}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setEnabledFunctions([...enabledFunctions, func.name])
+                                } else {
+                                  setEnabledFunctions(enabledFunctions.filter(f => f !== func.name))
+                                }
+                              }}
+                            />
+                            <span className="function-checkmark"></span>
+                          </label>
+                          <div className="function-title-section">
+                            <h4 className="function-name">{func.name}</h4>
+                            <div className="function-badges">
+                              <span className={`function-badge function-badge-${func.type === 'external_api' ? 'external' : 'local'}`}>
+                                {func.type === 'external_api' ? 'External API' : 'Local'}
+                              </span>
+                              {isRAGMode && (
+                                <span className="function-badge function-badge-rag">
+                                  <span className="rag-indicator">●</span> RAG Mode
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <p className="function-description">{func.description}</p>
+                        {func.config && Object.keys(func.config).length > 0 && (
+                          <details className="function-config">
+                            <summary className="function-config-summary">
+                              <span>Configuration</span>
+                              <span className="function-config-icon">▼</span>
+                            </summary>
+                            <div className="function-config-content">
+                              {Object.entries(func.config).map(([key, value]) => (
+                                <div key={key} className="function-config-item">
+                                  <span className="function-config-key">{key}:</span>
+                                  <span className="function-config-value">
+                                    {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
 
-              <div className="form-actions">
+              <div className="form-actions" style={{ marginTop: '24px' }}>
                 <button
                   type="button"
-                  onClick={handleSaveMCPConfig}
-                  disabled={savingMcp || loadingMcp || !mcpConfig.trim()}
+                  onClick={handleSaveFunctionCalls}
+                  disabled={savingFunctions || loadingFunctions}
                   className="btn btn-primary"
                 >
-                  {savingMcp ? 'Saving...' : 'Save MCP Configuration'}
+                  {savingFunctions ? 'Saving...' : 'Save Function Configuration'}
                 </button>
               </div>
             </div>
 
             <div className="admin-info" style={{ gridColumn: '1 / -1' }}>
-              <h3>Current MCP Configuration</h3>
+              <h3>Current Function Configuration</h3>
               <div className="info-card">
                 <div className="info-row">
-                  <span className="info-label">Servers:</span>
-                  <span className="info-value">{mcpServerCount}</span>
+                  <span className="info-label">Total Functions:</span>
+                  <span className="info-value">{functions.length}</span>
                 </div>
                 <div className="info-row">
-                  <span className="info-label">Tools:</span>
-                  <span className="info-value">{mcpToolCount}</span>
+                  <span className="info-label">Enabled Functions:</span>
+                  <span className="info-value">{enabledFunctions.length}</span>
                 </div>
               </div>
               <div className="info-note">
                 <p>
-                  <strong>Note:</strong> After updating the MCP configuration, the registry will be reloaded and new tools will be available for future conversations.
+                  <strong>Note:</strong> After updating the function configuration, the agent will use the new 
+                  function set for future conversations. If retrieval_service_search is enabled, the agent will 
+                  automatically use RAG mode with context-aware query generation.
                 </p>
               </div>
             </div>

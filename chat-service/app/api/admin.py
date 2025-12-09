@@ -12,8 +12,11 @@ from pydantic import BaseModel, Field
 
 from ..config import get_config, reload_config
 from ..llm.provider import LLMProvider
-from ..mcp_tools.config import load_mcp_config
 from ..utils.exceptions import format_error_message
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -33,30 +36,20 @@ class LLMConfigResponse(BaseModel):
     """Response model for LLM configuration."""
     provider: str = Field(..., description="Current LLM provider")
     model: str = Field(..., description="Current model name")
-    ollama_url: Optional[str] = Field(None, description="Ollama base URL (if provider is ollama)")
     openai_base_url: Optional[str] = Field(None, description="OpenAI base URL (if provider is openai)")
 
 
 class LLMConfigUpdateRequest(BaseModel):
     """Request model for updating LLM configuration."""
-    provider: str = Field(..., description="LLM provider (qwen, ollama, openai)")
+    provider: str = Field(..., description="LLM provider (qwen, openai)")
     model: str = Field(..., description="Model name")
-    ollama_url: Optional[str] = Field(None, description="Ollama base URL (optional, for fetching models)")
     openai_base_url: Optional[str] = Field(None, description="OpenAI base URL (optional, for OpenAI provider)")
-
-
-class OllamaModelInfo(BaseModel):
-    """Ollama model information."""
-    name: str
-    size: Optional[int] = None
-    modified_at: Optional[str] = None
 
 
 class ModelsResponse(BaseModel):
     """Response model for available models."""
     provider: str
     models: List[str]
-    ollama_models: Optional[List[OllamaModelInfo]] = None
 
 
 @router.get("/providers", response_model=ProvidersResponse)
@@ -64,7 +57,6 @@ def get_providers() -> ProvidersResponse:
     """Get list of available LLM providers."""
     providers = [
         ProviderInfo(value="qwen", label="Qwen (Alibaba DashScope)"),
-        ProviderInfo(value="ollama", label="Ollama"),
         ProviderInfo(value="openai", label="OpenAI API"),
     ]
     return ProvidersResponse(providers=providers)
@@ -78,25 +70,19 @@ def get_llm_config() -> LLMConfigResponse:
         provider = config.llm_provider
         
         # Get model based on provider
-        if provider == "ollama":
-            model = config.llm_ollama_model
-        elif provider == "openai":
+        if provider == "openai":
             model = config._config.get("llm", {}).get("openai_model", "gpt-4")
         else:
             model = config.llm_model
         
         # Get provider-specific URLs
-        ollama_url = None
         openai_base_url = None
-        if provider == "ollama":
-            ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-        elif provider == "openai":
+        if provider == "openai":
             openai_base_url = os.getenv("OPENAI_BASE_URL") or config._config.get("llm", {}).get("openai_base_url")
         
         return LLMConfigResponse(
             provider=provider, 
             model=model, 
-            ollama_url=ollama_url,
             openai_base_url=openai_base_url
         )
     except Exception as exc:
@@ -118,9 +104,6 @@ def update_llm_config(request: LLMConfigUpdateRequest) -> Dict[str, Any]:
             )
         
         # Update provider-specific URLs
-        if request.provider.lower() == "ollama" and request.ollama_url:
-            os.environ["OLLAMA_BASE_URL"] = request.ollama_url.rstrip("/")
-        
         if request.provider.lower() == "openai" and request.openai_base_url:
             # Update environment variable
             os.environ["OPENAI_BASE_URL"] = request.openai_base_url.rstrip("/")
@@ -152,7 +135,7 @@ def update_llm_config(request: LLMConfigUpdateRequest) -> Dict[str, Any]:
 
 
 @router.get("/models", response_model=ModelsResponse)
-def get_available_models(provider: Optional[str] = None, ollama_url: Optional[str] = None) -> ModelsResponse:
+def get_available_models(provider: Optional[str] = None) -> ModelsResponse:
     """Get available models for a provider."""
     try:
         config = get_config()
@@ -172,62 +155,7 @@ def get_available_models(provider: Optional[str] = None, ollama_url: Optional[st
         
         provider_lower = provider.lower()
         
-        if provider_lower == "ollama":
-            # Fetch models from Ollama API
-            base_url = ollama_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-            base_url = base_url.rstrip("/")
-            
-            try:
-                # Call Ollama API to get available models
-                url = f"{base_url}/api/tags"
-                timeout = httpx.Timeout(connect=5.0, read=10.0, write=5.0, pool=5.0)
-                
-                with httpx.Client(timeout=timeout) as client:
-                    response = client.get(url)
-                    response.raise_for_status()
-                    data = response.json()
-                    
-                    # Extract model names from Ollama response
-                    models = []
-                    ollama_models = []
-                    if "models" in data:
-                        for model_info in data["models"]:
-                            model_name = model_info.get("name", "")
-                            if model_name:
-                                models.append(model_name)
-                                ollama_models.append(OllamaModelInfo(
-                                    name=model_name,
-                                    size=model_info.get("size"),
-                                    modified_at=model_info.get("modified_at")
-                                ))
-                    
-                    return ModelsResponse(
-                        provider=provider_lower,
-                        models=models,
-                        ollama_models=ollama_models
-                    )
-            except httpx.ConnectError:
-                raise HTTPException(
-                    status_code=503,
-                    detail=f"无法连接到Ollama服务 ({base_url})。请确保Ollama服务正在运行。"
-                )
-            except httpx.TimeoutException:
-                raise HTTPException(
-                    status_code=504,
-                    detail=f"连接Ollama服务超时 ({base_url})。"
-                )
-            except httpx.HTTPStatusError as exc:
-                raise HTTPException(
-                    status_code=exc.response.status_code,
-                    detail=f"Ollama API错误: {exc.response.text[:200]}"
-                )
-            except Exception as exc:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"获取Ollama模型列表失败: {str(exc)}"
-                )
-        
-        elif provider_lower == "qwen":
+        if provider_lower == "qwen":
             # Qwen models (common models)
             models = [
                 "qwen-plus",
@@ -262,155 +190,105 @@ def get_available_models(provider: Optional[str] = None, ollama_url: Optional[st
         raise HTTPException(status_code=500, detail=error_msg) from exc
 
 
-class MCPConfigResponse(BaseModel):
-    """Response model for MCP configuration."""
-    config: Dict[str, Any] = Field(..., description="MCP configuration (mcpServers)")
-    server_count: int = Field(..., description="Number of configured MCP servers")
-    tool_count: int = Field(..., description="Total number of tools from all servers")
+@router.get("/function-calls", response_model=Dict[str, Any])
+def get_function_calls() -> Dict[str, Any]:
+    """获取所有可用函数和启用状态"""
+    from ..tools import get_function_registry
+    registry = get_function_registry()
+    
+    functions = []
+    for func_def in registry.get_all_functions():
+        functions.append({
+            "name": func_def.name,
+            "description": func_def.description,
+            "type": func_def.type,
+            "schema": func_def.schema,
+            "enabled": func_def.enabled,
+            "config": func_def.config or {}
+        })
+    
+    return {
+        "available_functions": functions,
+        "enabled_functions": registry.get_enabled_functions()
+    }
 
 
-class MCPConfigUpdateRequest(BaseModel):
-    """Request model for updating MCP configuration."""
-    config: Dict[str, Any] = Field(..., description="MCP configuration (mcpServers)")
-
-
-@router.get("/mcp-config", response_model=MCPConfigResponse)
-def get_mcp_config() -> MCPConfigResponse:
-    """Get current MCP configuration."""
-    try:
-        config = load_mcp_config()
-        
-        # Support both old format (mcpServers) and new format (servers)
-        mcp_servers = {}
-        if "mcpServers" in config:
-            # Old format: {"mcpServers": {"server_id": {...}}}
-            mcp_servers = config.get("mcpServers", {})
-        elif "servers" in config:
-            # New format: {"servers": [{"id": "...", ...}]}
-            # Convert to old format for API compatibility
-            servers = config.get("servers", [])
-            mcp_servers = {server.get("id"): server for server in servers if server.get("id")}
-        
-        # Count tools from MCP manager
-        from ..core.container import get_container
+@router.post("/function-calls", response_model=Dict[str, Any])
+def update_function_calls(request: Dict[str, Any]) -> Dict[str, Any]:
+    """更新启用的函数列表和配置"""
+    from ..tools import get_function_registry
+    registry = get_function_registry()
+    
+    enabled = request.get("enabled_functions", [])
+    configs = request.get("configs", {})
+    
+    # 先禁用所有函数
+    for func_def in registry.get_all_functions():
+        registry.disable_function(func_def.name)
+    
+    # 启用指定的函数
+    for name in enabled:
         try:
-            container = get_container()
-            chat_service = container.chat_service
-            tool_count = len(chat_service.mcp_registry.list_tools())
-        except Exception:
-            # If manager not available, return 0
-            tool_count = 0
-        
-        return MCPConfigResponse(
-            config={"mcpServers": mcp_servers},
-            server_count=len(mcp_servers),
-            tool_count=tool_count
-        )
+            registry.enable_function(name)
+            # 更新配置
+            if name in configs:
+                func_def = registry.get_function(name)
+                if func_def:
+                    if func_def.config is None:
+                        func_def.config = {}
+                    func_def.config.update(configs[name])
+        except ValueError as e:
+            logger.warning(f"Failed to enable function {name}: {e}")
+    
+    # 保存配置
+    registry.save_config()
+    
+    return {
+        "status": "success",
+        "message": "Function calls updated successfully",
+        "enabled_functions": registry.get_enabled_functions()
+    }
+
+
+@router.get("/system-prompt", response_model=Dict[str, Any])
+def get_system_prompt() -> Dict[str, Any]:
+    """获取系统提示词"""
+    try:
+        config = get_config()
+        return {
+            "prompt": config.system_prompt_template,
+            "template": config.system_prompt_template
+        }
     except Exception as exc:
-        error_msg = format_error_message(exc, "Failed to get MCP configuration")
+        error_msg = format_error_message(exc, "Failed to get system prompt")
         raise HTTPException(status_code=500, detail=error_msg) from exc
 
 
-@router.post("/mcp-config", response_model=Dict[str, Any])
-def update_mcp_config(request: MCPConfigUpdateRequest) -> Dict[str, Any]:
-    """Update MCP configuration."""
+@router.put("/system-prompt", response_model=Dict[str, Any])
+def update_system_prompt(request: Dict[str, str]) -> Dict[str, Any]:
+    """更新系统提示词（支持热重载）"""
     try:
-        # Validate JSON structure - support both old format (mcpServers) and new format (servers)
-        if "mcpServers" not in request.config and "servers" not in request.config:
+        prompt = request.get("prompt") or request.get("template")
+        if not prompt:
             raise HTTPException(
                 status_code=400,
-                detail="Invalid MCP configuration: 'mcpServers' or 'servers' key is required"
+                detail="'prompt' or 'template' field is required"
             )
         
-        # Get config file path
-        from app.utils.constants import BACKEND_ROOT
-        config_path = BACKEND_ROOT / "mcp.json"
+        config = get_config()
+        config.save_system_prompt_template(prompt)
         
-        # Validate JSON by trying to serialize it
-        try:
-            json.dumps(request.config)
-        except (TypeError, ValueError) as e:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid JSON configuration: {str(e)}"
-            )
+        # 重新加载配置
+        reload_config()
         
-        # Convert old format (mcpServers) to new format (servers) before saving
-        mcp_servers = request.config.get("mcpServers", {})
-        if mcp_servers:
-            # Convert to new format
-            servers = []
-            for server_id, server_conf in mcp_servers.items():
-                server_conf_with_id = dict(server_conf)
-                server_conf_with_id["id"] = server_id
-                servers.append(server_conf_with_id)
-            config_to_save = {"servers": servers}
-            server_count = len(mcp_servers)
-        elif "servers" in request.config:
-            # Already in new format
-            config_to_save = request.config
-            server_count = len(request.config.get("servers", []))
-        else:
-            # Empty config
-            config_to_save = {"servers": []}
-            server_count = 0
-        
-        # Write to file
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(config_to_save, f, indent=2, ensure_ascii=False)
-        
-        # Reload MCP manager (gracefully closes old connections, reinitializes everything)
-        from ..core.container import get_container
-        import asyncio
-        try:
-            container = get_container()
-            chat_service = container.chat_service
-            mcp_manager = chat_service.mcp_registry
-            
-            # Close existing connections and reload
-            try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-            
-            # Close old connections and reload
-            loop.run_until_complete(mcp_manager.close())
-            
-            # Update config path and reload
-            mcp_manager.config_path = str(config_path)
-            loop.run_until_complete(mcp_manager.load())
-            
-            # Get updated server info
-            server_info = [
-                {
-                    "name": server_id,
-                    "type": mcp_manager.server_types.get(server_id, "unknown"),
-                    "transport": mcp_manager.server_transports.get(server_id, "unknown"),
-                    "tools": [tool for tool, sid in mcp_manager.tool_index.items() if sid == server_id]
-                }
-                for server_id in set(mcp_manager.server_types.keys()) | set(mcp_manager.server_transports.keys())
-            ]
-            
-            return {
-                "status": "success",
-                "message": "MCP configuration updated and reloaded successfully",
-                "server_count": server_count,
-                "tool_count": len(mcp_manager.list_tools()),
-                "servers": server_info
-            }
-        except Exception as e:
-            # Log error and fail the request
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Failed to reload MCP registry: {e}", exc_info=True)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Configuration saved but failed to reload: {str(e)}"
-            )
+        return {
+            "status": "success",
+            "message": "System prompt updated successfully",
+            "prompt": prompt
+        }
     except HTTPException:
         raise
     except Exception as exc:
-        error_msg = format_error_message(exc, "Failed to update MCP configuration")
+        error_msg = format_error_message(exc, "Failed to update system prompt")
         raise HTTPException(status_code=500, detail=error_msg) from exc
 

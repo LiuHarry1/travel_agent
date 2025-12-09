@@ -6,8 +6,6 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).parent.parent.parent.resolve()
 # App root directory (chat-service/app/)
 APP_ROOT = Path(__file__).parent.parent.resolve()
-# MCP tools root directory (chat-service/app/mcp_tools/)
-MCP_TOOLS_ROOT = APP_ROOT / "mcp_tools"
 
 # File size limits
 MAX_FILE_CONTENT_SIZE = 50000  # Maximum content size per file (characters)

@@ -69,7 +69,6 @@ class OpenAIClient(BaseLLMClient):
         if self._openai_client is None:
             base_url = self._get_base_url()
             # Use API key if available, otherwise use placeholder
-            # Some providers (like Ollama) may not require a real key
             api_key = self.api_key or "not-set"
             
             # Get shared HTTP client with connection pooling

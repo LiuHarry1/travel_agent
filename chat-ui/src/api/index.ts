@@ -22,8 +22,10 @@ export {
   getLLMConfig,
   getAvailableModels,
   updateLLMConfig,
-  getMCPConfig,
-  updateMCPConfig,
+  getFunctionCalls,
+  updateFunctionCalls,
+  getSystemPrompt,
+  updateSystemPrompt,
 } from './admin'
 export type {
   ProviderInfo,
@@ -32,8 +34,10 @@ export type {
   ModelsResponse,
   UpdateLLMConfigRequest,
   UpdateLLMConfigResponse,
-  MCPConfigResponse,
-  MCPConfigUpdateRequest,
-  MCPConfigUpdateResponse,
+  FunctionDefinition,
+  FunctionCallsResponse,
+  FunctionCallsUpdateRequest,
+  SystemPromptResponse,
+  SystemPromptUpdateRequest,
 } from './admin'
 

@@ -97,47 +97,72 @@ export async function updateLLMConfig(
   return handleResponse<UpdateLLMConfigResponse>(response)
 }
 
-// MCP Config API
-export interface MCPConfigResponse {
-  config: {
-    mcpServers: Record<string, unknown>
-  }
-  server_count: number
-  tool_count: number
+// Function Calls API
+export interface FunctionDefinition {
+  name: string
+  description: string
+  type: 'local' | 'external_api'
+  schema: object
+  enabled: boolean
+  config?: object
 }
 
-export interface MCPConfigUpdateRequest {
-  config: {
-    mcpServers: Record<string, unknown>
-  }
+export interface FunctionCallsResponse {
+  available_functions: FunctionDefinition[]
+  enabled_functions: string[]
 }
 
-export interface MCPConfigUpdateResponse {
-  status: string
-  message: string
-  server_count: number
+export interface FunctionCallsUpdateRequest {
+  enabled_functions: string[]
+  configs?: Record<string, object>
 }
 
-export async function getMCPConfig(): Promise<MCPConfigResponse> {
-  const response = await fetch(getApiUrl('/api/admin/mcp-config'), {
+export async function getFunctionCalls(): Promise<FunctionCallsResponse> {
+  const response = await fetch(getApiUrl('/api/admin/function-calls'), {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' }
   })
-  return handleResponse<MCPConfigResponse>(response)
+  return handleResponse<FunctionCallsResponse>(response)
 }
 
-export async function updateMCPConfig(
-  payload: MCPConfigUpdateRequest
-): Promise<MCPConfigUpdateResponse> {
-  const response = await fetch(getApiUrl('/api/admin/mcp-config'), {
+export async function updateFunctionCalls(
+  payload: FunctionCallsUpdateRequest
+): Promise<{ status: string; message: string; enabled_functions: string[] }> {
+  const response = await fetch(getApiUrl('/api/admin/function-calls'), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
   })
-  return handleResponse<MCPConfigUpdateResponse>(response)
+  return handleResponse(response)
+}
+
+// System Prompt API
+export interface SystemPromptResponse {
+  prompt: string
+  template: string
+}
+
+export interface SystemPromptUpdateRequest {
+  prompt?: string
+  template?: string
+}
+
+export async function getSystemPrompt(): Promise<SystemPromptResponse> {
+  const response = await fetch(getApiUrl('/api/admin/system-prompt'), {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' }
+  })
+  return handleResponse<SystemPromptResponse>(response)
+}
+
+export async function updateSystemPrompt(
+  payload: SystemPromptUpdateRequest
+): Promise<{ status: string; message: string; prompt: string }> {
+  const response = await fetch(getApiUrl('/api/admin/system-prompt'), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  return handleResponse(response)
 }
 

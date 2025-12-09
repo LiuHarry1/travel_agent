@@ -81,10 +81,6 @@ class Config:
         """Get LLM provider name."""
         return self._settings.llm.provider
 
-    @property
-    def llm_ollama_model(self) -> str:
-        """Get Ollama model name."""
-        return self._settings.llm.ollama_model or "qwen2.5:32b"
 
 
 # Global configuration instance
