@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, Upload, Folder, File, Check, X } from 'lucide-react';
+import { Settings, Upload, Folder, File } from 'lucide-react';
 import { ConfigPanel } from './components/ConfigPanel';
 import { CollectionManager } from './components/CollectionManager';
 import { DatabaseManager } from './components/DatabaseManager';
