@@ -14,7 +14,6 @@ from ..tools import FunctionRegistry, get_function_registry
 from ..utils.exceptions import format_error_message
 from .conversation_manager import ConversationManager
 from .message_processing import MessageProcessingService
-from .response_generator import ResponseGenerator
 from .tool_execution import ToolExecutionService
 from .tool_orchestrator import ToolOrchestrator
 from .tool_result_formatter import (
@@ -68,7 +67,6 @@ class ChatService:
         # Initialize sub-services
         self.conversation_manager = ConversationManager(self.message_processor)
         self.tool_orchestrator = ToolOrchestrator(self.function_registry, self.tool_executor)
-        self.response_generator = ResponseGenerator(self.llm_client, self.function_registry)
 
     async def chat_stream(
         self, request: ChatRequest

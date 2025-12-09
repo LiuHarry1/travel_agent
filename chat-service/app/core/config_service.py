@@ -96,21 +96,10 @@ class ConfigurationService:
         settings.save_system_prompt_template(template)
         self.reload()
     
-    def save_config(self, system_prompt_template: str, checklist: list) -> None:
-        """Save system prompt template and checklist."""
+    def save_config(self, system_prompt_template: str) -> None:
+        """Save system prompt template."""
         settings = self.get_settings()
         settings.llm.system_prompt_template = system_prompt_template
-        # Convert ChecklistItem models to dict if needed
-        from ..shared.config.settings import ChecklistItem
-        checklist_items = []
-        for item in checklist:
-            if isinstance(item, ChecklistItem):
-                checklist_items.append(item)
-            elif isinstance(item, dict):
-                checklist_items.append(ChecklistItem(id=item.get("id", ""), description=item.get("description", "")))
-            else:
-                checklist_items.append(ChecklistItem(id=str(item.id), description=str(item.description)))
-        settings.default_checklist = checklist_items
         settings.save_to_yaml()
         self.reload()
     

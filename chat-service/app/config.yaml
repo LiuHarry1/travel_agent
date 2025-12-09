@@ -8,7 +8,6 @@ llm:
     company and the products and services they offer.
 
     '
-default_checklist: []
 
 rag:
   enabled: true

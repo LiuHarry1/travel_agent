@@ -31,12 +31,6 @@ class LLMSettings(BaseModel):
         return v
 
 
-class ChecklistItem(BaseModel):
-    """Checklist item model."""
-    id: str
-    description: str
-
-
 class RAGQueryRewriterConfig(BaseModel):
     """RAG query rewriter configuration."""
     enabled: bool = Field(default=True, description="Enable query rewriting")
@@ -64,7 +58,6 @@ class RAGSettings(BaseModel):
 class Settings(BaseModel):
     """Application settings."""
     llm: LLMSettings = Field(default_factory=LLMSettings)
-    default_checklist: List[ChecklistItem] = Field(default_factory=list)
     rag: RAGSettings = Field(default_factory=RAGSettings)
     config_path: str = Field(
         default_factory=lambda: str(BACKEND_ROOT / "app" / "config.yaml")
@@ -103,12 +96,6 @@ class Settings(BaseModel):
             system_prompt_template=llm_data.get("system_prompt_template", ""),
             openai_model=llm_data.get("openai_model")
         )
-        
-        checklist_data = config_data.get("default_checklist", [])
-        checklist = [
-            ChecklistItem(id=item["id"], description=item["description"])
-            for item in checklist_data
-        ]
         
         # Build RAG settings
         rag_data = config_data.get("rag", {})
@@ -149,7 +136,6 @@ class Settings(BaseModel):
         
         return cls(
             llm=llm_settings,
-            default_checklist=checklist,
             rag=rag_settings,
             config_path=str(config_path)
         )
@@ -184,12 +170,6 @@ class Settings(BaseModel):
         # Preserve openai_base_url if exists
         if "openai_base_url" in existing_config.get("llm", {}):
             existing_config["llm"]["openai_base_url"] = existing_config["llm"]["openai_base_url"]
-        
-        # Update checklist
-        existing_config["default_checklist"] = [
-            {"id": item.id, "description": item.description}
-            for item in self.default_checklist
-        ]
         
         # Write to file
         with open(config_file, "w", encoding="utf-8") as f:
