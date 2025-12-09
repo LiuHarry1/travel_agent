@@ -19,6 +19,15 @@ class EmbedderFactory:
         """Create embedder by provider name."""
         provider = provider.lower()
         
+        # Get timeout from settings if not provided in kwargs
+        if "timeout" not in kwargs:
+            try:
+                from config.settings import get_settings
+                settings = get_settings()
+                kwargs["timeout"] = settings.embedding_timeout
+            except:
+                kwargs["timeout"] = 300  # Default 5 minutes
+        
         if provider == "qwen":
             # Use default model if not provided
             qwen_model = model or "text-embedding-v2"

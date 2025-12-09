@@ -28,7 +28,8 @@ class QwenEmbedder(BaseEmbedder):
         self,
         api_key: Optional[str] = None,
         model: str = "text-embedding-v2",
-        base_url: Optional[str] = None
+        base_url: Optional[str] = None,
+        timeout: Optional[int] = None
     ):
         """Initialize Qwen embedder."""
         if not HAS_OPENAI:
@@ -39,7 +40,17 @@ class QwenEmbedder(BaseEmbedder):
         self._base_url = base_url
         self.api_key = api_key or self._get_api_key()
         self.model = model
+        self.timeout = timeout or self._get_default_timeout()
         self._client: Optional[OpenAI] = None
+    
+    def _get_default_timeout(self) -> int:
+        """Get default timeout from settings."""
+        try:
+            from config.settings import get_settings
+            settings = get_settings()
+            return settings.embedding_timeout
+        except:
+            return 300  # Default 5 minutes
     
     def _get_api_key(self) -> Optional[str]:
         """Get API key from environment variable."""
@@ -60,7 +71,8 @@ class QwenEmbedder(BaseEmbedder):
                 )
             self._client = OpenAI(
                 api_key=self.api_key,
-                base_url=self._get_base_url()
+                base_url=self._get_base_url(),
+                timeout=self.timeout
             )
         return self._client
     
@@ -71,6 +83,7 @@ class QwenEmbedder(BaseEmbedder):
         
         try:
             client = self._get_client()
+            # Timeout is set in client initialization
             response = client.embeddings.create(
                 model=self.model,
                 input=texts

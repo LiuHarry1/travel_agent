@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { FileText, File, BookOpen, Globe, FileCode, X, Book, ChevronDown, ChevronUp } from 'lucide-react';
 import { FileWithPreview, FileType } from '../types/file';
 import type { AppConfig } from '../types/config';
@@ -54,6 +54,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   const [uploading, setUploading] = useState(false);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [filesCollapsed, setFilesCollapsed] = useState(false); // 控制 Selected Files 是否折叠
+  const successNotifiedRef = useRef<Set<string>>(new Set()); // 使用 ref 同步跟踪已通知成功的文件
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -129,6 +130,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
     setUploading(true);
     setFilesCollapsed(true); // 自动折叠 Selected Files，给 Processing Files 更多空间
+    successNotifiedRef.current.clear(); // 清除之前的通知记录，开始新的上传批次
 
     for (const file of files) {
       const fileId = file.name;
@@ -162,6 +164,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
               'error': ProcessingStage.ERROR,
             };
 
+            const isCompleted = progress.stage === 'completed';
+            
             updateFileStatus(fileId, {
               stage: stageMap[progress.stage] || ProcessingStage.UPLOADING,
               progress: progress.progress,
@@ -172,31 +176,35 @@ export const FileUpload: React.FC<FileUploadProps> = ({
               error: progress.stage === 'error' ? progress.message : undefined,
               errorType: progress.error_type,
               retryable: progress.retryable,
-              endTime: progress.stage === 'completed' ? Date.now() : undefined,
+              endTime: isCompleted ? Date.now() : undefined,
             });
-          }
-        );
 
-        // Check completion status after processing
-        setTimeout(() => {
-          setProcessingFiles(prev => {
-            const finalStatus = prev.get(fileId);
-            if (finalStatus && finalStatus.stage === ProcessingStage.COMPLETED) {
+            // Handle completion directly in progress callback to avoid duplicate notifications
+            if (isCompleted) {
+              // Use ref for synchronous check to prevent duplicate notifications
+              if (successNotifiedRef.current.has(fileId)) {
+                // Already notified, skip
+                return;
+              }
+              
+              // Mark as notified immediately (synchronous)
+              successNotifiedRef.current.add(fileId);
+              
               // Remove from files list on success
               setFiles(files => files.filter(f => f.name !== fileId));
               
+              // Call success callback only once
               onUploadSuccess?.({
                 success: true,
                 filename: file.name,
                 document_id: '',
-                chunks_indexed: finalStatus.chunksIndexed || 0,
+                chunks_indexed: progress.chunks_indexed || 0,
                 collection_name: collection,
-                message: finalStatus.message,
+                message: progress.message || 'File processed successfully',
               });
             }
-            return prev;
-          });
-        }, 100);
+          }
+        );
 
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Upload failed';
@@ -215,6 +223,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   }, [files, collection, config, onUploadSuccess, onUploadError, processingFiles]);
 
   const handleRetry = useCallback(async (fileId: string) => {
+    // Remove from success notified when retrying
+    successNotifiedRef.current.delete(fileId);
+    
     let fileStatusToRetry: FileProcessingStatus | undefined;
     
     setProcessingFiles(prev => {
@@ -262,6 +273,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
             'error': ProcessingStage.ERROR,
           };
 
+          const isCompleted = progress.stage === 'completed';
+          
           updateFileStatus(fileId, {
             stage: stageMap[progress.stage] || ProcessingStage.UPLOADING,
             progress: progress.progress,
@@ -272,28 +285,32 @@ export const FileUpload: React.FC<FileUploadProps> = ({
             error: progress.stage === 'error' ? progress.message : undefined,
             errorType: progress.error_type,
             retryable: progress.retryable,
-            endTime: progress.stage === 'completed' ? Date.now() : undefined,
+            endTime: isCompleted ? Date.now() : undefined,
           });
-        }
-      );
-      
-      // Check completion after retry
-      setTimeout(() => {
-        setProcessingFiles(prev => {
-          const finalStatus = prev.get(fileId);
-          if (finalStatus && finalStatus.stage === ProcessingStage.COMPLETED) {
+
+          // Handle completion directly in progress callback to avoid duplicate notifications
+          if (isCompleted) {
+            // Use ref for synchronous check to prevent duplicate notifications
+            if (successNotifiedRef.current.has(fileId)) {
+              // Already notified, skip
+              return;
+            }
+            
+            // Mark as notified immediately (synchronous)
+            successNotifiedRef.current.add(fileId);
+            
+            // Call success callback only once
             onUploadSuccess?.({
               success: true,
               filename: fileStatusToRetry!.file.name,
               document_id: '',
-              chunks_indexed: finalStatus.chunksIndexed || 0,
+              chunks_indexed: progress.chunks_indexed || 0,
               collection_name: collection,
-              message: finalStatus.message,
+              message: progress.message || 'File processed successfully',
             });
           }
-          return prev;
-        });
-      }, 100);
+        }
+      );
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Retry failed';
       updateFileStatus(fileId, {
@@ -324,6 +341,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     setUploading(false);
     setFilesCollapsed(false);
     setExpandedFiles(new Set());
+    successNotifiedRef.current.clear(); // 清除成功通知记录
   }, []);
 
   // 判断是否处于处理状态

@@ -94,6 +94,10 @@ class Settings(BaseSettings):
     qwen_api_key: str = ""  # Alternative name for DashScope API key
     openai_api_key: str = ""  # For OpenAI
     openai_base_url: str = ""  # Optional custom base URL for OpenAI-compatible APIs
+    
+    # Embedding API timeout (in seconds)
+    # Default: 300 seconds (5 minutes) for large files or slow networks
+    embedding_timeout: int = 300  # Timeout for embedding API requests
 
 
 _settings: Settings = None

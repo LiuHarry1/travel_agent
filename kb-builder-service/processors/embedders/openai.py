@@ -22,7 +22,8 @@ class OpenAIEmbedder(BaseEmbedder):
         self,
         api_key: Optional[str] = None,
         model: str = "text-embedding-3-small",
-        base_url: Optional[str] = None
+        base_url: Optional[str] = None,
+        timeout: Optional[int] = None
     ):
         """Initialize OpenAI embedder."""
         if not HAS_OPENAI:
@@ -33,7 +34,17 @@ class OpenAIEmbedder(BaseEmbedder):
         self._base_url = base_url
         self.api_key = api_key or self._get_api_key()
         self.model = model
+        self.timeout = timeout or self._get_default_timeout()
         self._client: Optional[OpenAI] = None
+    
+    def _get_default_timeout(self) -> int:
+        """Get default timeout from settings."""
+        try:
+            from config.settings import get_settings
+            settings = get_settings()
+            return settings.embedding_timeout
+        except:
+            return 300  # Default 5 minutes
     
     def _get_api_key(self) -> Optional[str]:
         """Get API key from environment variable."""
@@ -50,7 +61,10 @@ class OpenAIEmbedder(BaseEmbedder):
                 raise EmbeddingError(
                     "OpenAI API key not found. Set OPENAI_API_KEY environment variable."
                 )
-            client_kwargs = {"api_key": self.api_key}
+            client_kwargs = {
+                "api_key": self.api_key,
+                "timeout": self.timeout
+            }
             if self._get_base_url():
                 client_kwargs["base_url"] = self._get_base_url()
             self._client = OpenAI(**client_kwargs)
@@ -63,6 +77,7 @@ class OpenAIEmbedder(BaseEmbedder):
         
         try:
             client = self._get_client()
+            # Timeout is set in client initialization
             response = client.embeddings.create(
                 model=self.model,
                 input=texts

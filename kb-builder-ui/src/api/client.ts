@@ -408,26 +408,43 @@ export class ApiClient {
 
           let isCompleted = false;
           let isError = false;
+          let completedNotified = false; // Track if completed notification has been sent
           
           const processBuffer = (line: string) => {
             if (line.startsWith('data: ')) {
               try {
                 const data = JSON.parse(line.substring(6));
                 console.log('Progress update received:', data); // Debug log
-                onProgress(data);
                 
+                // Prevent processing multiple completed messages
                 if (data.stage === 'completed') {
+                  if (completedNotified) {
+                    console.log('Duplicate completed message ignored');
+                    return;
+                  }
+                  completedNotified = true;
                   console.log('Processing completed');
                   isCompleted = true;
+                  onProgress(data); // Call onProgress before resolve
                   resolve();
                   return;
                 }
+                
+                // Don't process any more messages after completion
+                if (isCompleted || completedNotified) {
+                  return;
+                }
+                
                 if (data.stage === 'error') {
                   console.error('Processing error:', data.message);
                   isError = true;
+                  onProgress(data); // Call onProgress before reject
                   reject(new Error(data.message));
                   return;
                 }
+                
+                // Process other stages normally
+                onProgress(data);
               } catch (e) {
                 // Ignore parse errors for malformed JSON
                 console.warn('Failed to parse progress data:', line, e);

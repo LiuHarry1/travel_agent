@@ -19,7 +19,6 @@ function App() {
     return saved ? JSON.parse(saved) : getDefaultConfig();
   });
   const [backendConfig, setBackendConfig] = useState<any>(null);
-  const [configLoaded, setConfigLoaded] = useState(false);
   
   const [currentDatabase, setCurrentDatabase] = useState<string>('default');
   const [currentCollection, setCurrentCollection] = useState(config.defaultCollection);
@@ -56,10 +55,8 @@ function App() {
             }
           }));
         }
-        setConfigLoaded(true);
       } catch (error) {
         console.error('Failed to load backend config:', error);
-        setConfigLoaded(true); // Still mark as loaded to avoid blocking UI
       }
     };
     
@@ -154,17 +151,15 @@ function App() {
 
               <div className="main-content-panel">
                 {activeTab === 'upload' && (
-                  <>
-                    <div className="upload-section">
-                      <FileUpload
-                        config={config}
-                        collection={currentCollection}
-                        database={currentDatabase}
-                        onUploadSuccess={handleUploadSuccess}
-                        onUploadError={handleUploadError}
-                      />
-                    </div>
-                  </>
+                  <div className="upload-section">
+                    <FileUpload
+                      config={config}
+                      collection={currentCollection}
+                      database={currentDatabase}
+                      onUploadSuccess={handleUploadSuccess}
+                      onUploadError={handleUploadError}
+                    />
+                  </div>
                 )}
 
                 {activeTab === 'sources' && (
