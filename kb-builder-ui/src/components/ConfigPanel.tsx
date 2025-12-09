@@ -75,7 +75,27 @@ const EmbeddingConfigForm: React.FC<{
           { value: 'BAAI/bge-large-zh-v1.5', label: 'bge-large-zh-v1.5 (1024d, Chinese)' },
           { value: 'BAAI/bge-base-zh-v1.5', label: 'bge-base-zh-v1.5 (768d, Chinese)' },
           { value: 'BAAI/bge-small-zh-v1.5', label: 'bge-small-zh-v1.5 (384d, Chinese)' },
+        ];
+      case 'bge-en':
+        return [
+          { value: 'BAAI/bge-large-en-v1.5', label: 'bge-large-en-v1.5 (1024d)' },
+          { value: 'BAAI/bge-base-en-v1.5', label: 'bge-base-en-v1.5 (768d)' },
+          { value: 'BAAI/bge-small-en-v1.5', label: 'bge-small-en-v1.5 (384d)' },
+        ];
+      case 'bge-zh':
+        return [
+          { value: 'BAAI/bge-large-zh-v1.5', label: 'bge-large-zh-v1.5 (1024d)' },
+          { value: 'BAAI/bge-base-zh-v1.5', label: 'bge-base-zh-v1.5 (768d)' },
+          { value: 'BAAI/bge-small-zh-v1.5', label: 'bge-small-zh-v1.5 (384d)' },
+        ];
+      case 'nemotron':
+      case 'nvidia':
+        return [
           { value: 'nvidia/llama-nemotron-embed-1b-v2', label: 'llama-nemotron-embed-1b-v2 (1024d)' },
+        ];
+      case 'snowflake':
+        return [
+          { value: 'Snowflake/snowflake-arctic-embed-l', label: 'snowflake-arctic-embed-l (1024d)' },
         ];
       default:
         return [];
@@ -92,7 +112,12 @@ const EmbeddingConfigForm: React.FC<{
         >
           <option value="qwen">Qwen (DashScope)</option>
           <option value="openai">OpenAI</option>
-          <option value="bge">BGE (API)</option>
+          <option value="bge">BGE (General API)</option>
+          <option value="bge-en">BGE English (API)</option>
+          <option value="bge-zh">BGE Chinese (API)</option>
+          <option value="nemotron">NVIDIA Nemotron (API)</option>
+          <option value="nvidia">NVIDIA (Alias for Nemotron)</option>
+          <option value="snowflake">Snowflake Arctic (API)</option>
         </select>
       </div>
       
@@ -117,23 +142,89 @@ const EmbeddingConfigForm: React.FC<{
             type="text"
             value={config.bgeApiUrl || ''}
             onChange={(e) => onChange({ ...config, bgeApiUrl: e.target.value })}
+            placeholder="http://localhost:8001"
+          />
+          <small>Base URL for BGE embedding service (general BGE API)</small>
+        </div>
+      )}
+      
+      {config.provider === 'bge-en' && (
+        <div className="form-group">
+          <label>BGE English API URL:</label>
+          <input
+            type="text"
+            value={config.bgeEnApiUrl || ''}
+            onChange={(e) => onChange({ ...config, bgeEnApiUrl: e.target.value })}
             placeholder="http://10.150.115.110:6000"
           />
-          <small>Base URL for BGE embedding service (e.g., http://10.150.115.110:6000 for English, :6001 for Chinese)</small>
+          <small>Base URL for English BGE embedding service</small>
+        </div>
+      )}
+      
+      {config.provider === 'bge-zh' && (
+        <div className="form-group">
+          <label>BGE Chinese API URL:</label>
+          <input
+            type="text"
+            value={config.bgeZhApiUrl || ''}
+            onChange={(e) => onChange({ ...config, bgeZhApiUrl: e.target.value })}
+            placeholder="http://10.150.115.110:6001"
+          />
+          <small>Base URL for Chinese BGE embedding service</small>
+        </div>
+      )}
+      
+      {(config.provider === 'nemotron' || config.provider === 'nvidia') && (
+        <div className="form-group">
+          <label>Nemotron API URL:</label>
+          <input
+            type="text"
+            value={config.nemotronApiUrl || ''}
+            onChange={(e) => onChange({ ...config, nemotronApiUrl: e.target.value })}
+            placeholder="http://10.150.115.110:6002/embed"
+          />
+          <small>Full API endpoint URL for NVIDIA Nemotron embedding service</small>
+        </div>
+      )}
+      
+      {config.provider === 'snowflake' && (
+        <div className="form-group">
+          <label>Snowflake API URL:</label>
+          <input
+            type="text"
+            value={config.snowflakeApiUrl || ''}
+            onChange={(e) => onChange({ ...config, snowflakeApiUrl: e.target.value })}
+            placeholder="http://10.150.115.110:6003/embed"
+          />
+          <small>Full API endpoint URL for Snowflake Arctic embedding service</small>
         </div>
       )}
       
       {(config.provider === 'qwen' || config.provider === 'openai') && (
-        <div className="form-group">
-          <label>API Key (for testing):</label>
-          <input
-            type="password"
-            value={config.apiKey || ''}
-            onChange={(e) => onChange({ ...config, apiKey: e.target.value })}
-            placeholder="Enter API key to test connection"
-          />
-          <small>API key is not stored, only used for testing</small>
-        </div>
+        <>
+          <div className="form-group">
+            <label>API Key (for testing):</label>
+            <input
+              type="password"
+              value={config.apiKey || ''}
+              onChange={(e) => onChange({ ...config, apiKey: e.target.value })}
+              placeholder="Enter API key to test connection"
+            />
+            <small>API key is not stored, only used for testing</small>
+          </div>
+          {config.provider === 'openai' && (
+            <div className="form-group">
+              <label>OpenAI Base URL (optional):</label>
+              <input
+                type="text"
+                value={config.openaiBaseUrl || ''}
+                onChange={(e) => onChange({ ...config, openaiBaseUrl: e.target.value })}
+                placeholder="https://api.openai.com/v1"
+              />
+              <small>Custom base URL for OpenAI-compatible API (e.g., for proxy or custom endpoints)</small>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

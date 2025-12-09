@@ -93,7 +93,13 @@ async def get_default_config():
             },
             "embedding": {
                 "provider": settings.default_embedding_provider,
-                "model": settings.default_embedding_model
+                "model": settings.default_embedding_model,
+                "bge_api_url": settings.bge_api_url,
+                "bge_en_api_url": settings.bge_en_api_url,
+                "bge_zh_api_url": settings.bge_zh_api_url,
+                "nemotron_api_url": settings.nemotron_api_url,
+                "snowflake_api_url": settings.snowflake_api_url,
+                "openai_base_url": settings.openai_base_url
             },
             "chunking": {
                 "chunk_size": settings.default_chunk_size,

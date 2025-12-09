@@ -1,8 +1,13 @@
 export interface EmbeddingConfig {
-  provider: 'qwen' | 'openai' | 'bge';
+  provider: 'qwen' | 'openai' | 'bge' | 'bge-en' | 'bge-zh' | 'nemotron' | 'nvidia' | 'snowflake';
   model?: string;
-  apiKey?: string;
-  bgeApiUrl?: string;  // BGE API service URL (e.g., http://10.150.115.110:6000)
+  apiKey?: string;  // For qwen and openai
+  bgeApiUrl?: string;  // For bge provider (general BGE API URL)
+  bgeEnApiUrl?: string;  // For bge-en provider (English BGE API URL)
+  bgeZhApiUrl?: string;  // For bge-zh provider (Chinese BGE API URL)
+  nemotronApiUrl?: string;  // For nemotron/nvidia provider
+  snowflakeApiUrl?: string;  // For snowflake provider
+  openaiBaseUrl?: string;  // Optional base URL for OpenAI (for custom endpoints)
 }
 
 export interface ChunkingConfig {
