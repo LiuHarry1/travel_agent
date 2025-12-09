@@ -9,7 +9,7 @@ import { ChunksViewer } from './components/ChunksViewer';
 import { ToastContainer, useToast } from './components/ui/Toast';
 import type { AppConfig } from './types/config';
 import { getDefaultConfig } from './types/config';
-import { UploadResponse, BatchUploadResponse, updateApiClientUrl } from './api/client';
+import { UploadResponse, BatchUploadResponse, updateApiClientUrl, apiClient } from './api/client';
 import './App.css';
 
 function App() {
@@ -18,6 +18,8 @@ function App() {
     const saved = localStorage.getItem('kb-config');
     return saved ? JSON.parse(saved) : getDefaultConfig();
   });
+  const [backendConfig, setBackendConfig] = useState<any>(null);
+  const [configLoaded, setConfigLoaded] = useState(false);
   
   const [currentDatabase, setCurrentDatabase] = useState<string>('default');
   const [currentCollection, setCurrentCollection] = useState(config.defaultCollection);
@@ -30,6 +32,39 @@ function App() {
     setSelectedSource(documentId);
     setActiveTab('chunks');
   };
+
+  // Load backend configuration on mount
+  useEffect(() => {
+    const loadBackendConfig = async () => {
+      try {
+        const backendConfigData = await apiClient.getDefaultConfig();
+        setBackendConfig(backendConfigData);
+        
+        // Merge backend config with current config, prioritizing backend values for URLs
+        if (backendConfigData.embedding) {
+          setConfig(prevConfig => ({
+            ...prevConfig,
+            embedding: {
+              ...prevConfig.embedding,
+              // Update URLs from backend if not already set
+              bgeApiUrl: prevConfig.embedding.bgeApiUrl || backendConfigData.embedding.bge_api_url || '',
+              bgeEnApiUrl: prevConfig.embedding.bgeEnApiUrl || backendConfigData.embedding.bge_en_api_url || '',
+              bgeZhApiUrl: prevConfig.embedding.bgeZhApiUrl || backendConfigData.embedding.bge_zh_api_url || '',
+              nemotronApiUrl: prevConfig.embedding.nemotronApiUrl || backendConfigData.embedding.nemotron_api_url || '',
+              snowflakeApiUrl: prevConfig.embedding.snowflakeApiUrl || backendConfigData.embedding.snowflake_api_url || '',
+              openaiBaseUrl: prevConfig.embedding.openaiBaseUrl || backendConfigData.embedding.openai_base_url || '',
+            }
+          }));
+        }
+        setConfigLoaded(true);
+      } catch (error) {
+        console.error('Failed to load backend config:', error);
+        setConfigLoaded(true); // Still mark as loaded to avoid blocking UI
+      }
+    };
+    
+    loadBackendConfig();
+  }, []);
 
   // Update API client URL when config changes
   useEffect(() => {
@@ -87,6 +122,7 @@ function App() {
             <ConfigPanel
               config={config}
               onConfigChange={setConfig}
+              backendConfig={backendConfig}
             />
           ) : (
             <>

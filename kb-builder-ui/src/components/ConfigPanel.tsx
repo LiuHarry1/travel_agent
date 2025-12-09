@@ -6,11 +6,13 @@ import './ConfigPanel.css';
 interface ConfigPanelProps {
   config: AppConfig;
   onConfigChange: (config: AppConfig) => void;
+  backendConfig?: any;
 }
 
 export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   config,
   onConfigChange,
+  backendConfig,
 }) => {
   const [activeTab, setActiveTab] = useState<'embedding' | 'chunking'>('embedding');
 
@@ -36,6 +38,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
           <EmbeddingConfigForm
             config={config.embedding}
             onChange={(embedding) => onConfigChange({ ...config, embedding })}
+            backendConfig={backendConfig}
           />
         )}
         
@@ -53,7 +56,8 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
 const EmbeddingConfigForm: React.FC<{
   config: EmbeddingConfig;
   onChange: (config: EmbeddingConfig) => void;
-}> = ({ config, onChange }) => {
+  backendConfig?: any;
+}> = ({ config, onChange, backendConfig }) => {
   const getModelOptions = (provider: string) => {
     switch (provider) {
       case 'qwen':
@@ -108,7 +112,37 @@ const EmbeddingConfigForm: React.FC<{
         <label>Provider:</label>
         <select
           value={config.provider}
-          onChange={(e) => onChange({ ...config, provider: e.target.value as any, model: undefined })}
+          onChange={(e) => {
+            const newProvider = e.target.value as any;
+            // When provider changes, auto-fill URL from backend config
+            const newConfig: EmbeddingConfig = { ...config, provider: newProvider, model: undefined };
+            
+            if (backendConfig?.embedding) {
+              const embeddingConfig = backendConfig.embedding;
+              switch (newProvider) {
+                case 'bge':
+                  newConfig.bgeApiUrl = embeddingConfig.bge_api_url || config.bgeApiUrl || '';
+                  break;
+                case 'bge-en':
+                  newConfig.bgeEnApiUrl = embeddingConfig.bge_en_api_url || config.bgeEnApiUrl || '';
+                  break;
+                case 'bge-zh':
+                  newConfig.bgeZhApiUrl = embeddingConfig.bge_zh_api_url || config.bgeZhApiUrl || '';
+                  break;
+                case 'nemotron':
+                case 'nvidia':
+                  newConfig.nemotronApiUrl = embeddingConfig.nemotron_api_url || config.nemotronApiUrl || '';
+                  break;
+                case 'snowflake':
+                  newConfig.snowflakeApiUrl = embeddingConfig.snowflake_api_url || config.snowflakeApiUrl || '';
+                  break;
+                case 'openai':
+                  newConfig.openaiBaseUrl = embeddingConfig.openai_base_url || config.openaiBaseUrl || '';
+                  break;
+              }
+            }
+            onChange(newConfig);
+          }}
         >
           <option value="qwen">Qwen (DashScope)</option>
           <option value="openai">OpenAI</option>
@@ -140,11 +174,11 @@ const EmbeddingConfigForm: React.FC<{
           <label>BGE API URL:</label>
           <input
             type="text"
-            value={config.bgeApiUrl || ''}
+            value={config.bgeApiUrl || backendConfig?.embedding?.bge_api_url || ''}
             onChange={(e) => onChange({ ...config, bgeApiUrl: e.target.value })}
-            placeholder="http://localhost:8001"
+            placeholder={backendConfig?.embedding?.bge_api_url || "http://localhost:8001"}
           />
-          <small>Base URL for BGE embedding service (general BGE API)</small>
+          <small>Base URL for BGE embedding service (general BGE API) - from backend config</small>
         </div>
       )}
       
@@ -153,11 +187,11 @@ const EmbeddingConfigForm: React.FC<{
           <label>BGE English API URL:</label>
           <input
             type="text"
-            value={config.bgeEnApiUrl || ''}
+            value={config.bgeEnApiUrl || backendConfig?.embedding?.bge_en_api_url || ''}
             onChange={(e) => onChange({ ...config, bgeEnApiUrl: e.target.value })}
-            placeholder="http://10.150.115.110:6000"
+            placeholder={backendConfig?.embedding?.bge_en_api_url || "http://10.150.115.110:6000"}
           />
-          <small>Base URL for English BGE embedding service</small>
+          <small>Base URL for English BGE embedding service - from backend config</small>
         </div>
       )}
       
@@ -166,11 +200,11 @@ const EmbeddingConfigForm: React.FC<{
           <label>BGE Chinese API URL:</label>
           <input
             type="text"
-            value={config.bgeZhApiUrl || ''}
+            value={config.bgeZhApiUrl || backendConfig?.embedding?.bge_zh_api_url || ''}
             onChange={(e) => onChange({ ...config, bgeZhApiUrl: e.target.value })}
-            placeholder="http://10.150.115.110:6001"
+            placeholder={backendConfig?.embedding?.bge_zh_api_url || "http://10.150.115.110:6001"}
           />
-          <small>Base URL for Chinese BGE embedding service</small>
+          <small>Base URL for Chinese BGE embedding service - from backend config</small>
         </div>
       )}
       
@@ -179,11 +213,11 @@ const EmbeddingConfigForm: React.FC<{
           <label>Nemotron API URL:</label>
           <input
             type="text"
-            value={config.nemotronApiUrl || ''}
+            value={config.nemotronApiUrl || backendConfig?.embedding?.nemotron_api_url || ''}
             onChange={(e) => onChange({ ...config, nemotronApiUrl: e.target.value })}
-            placeholder="http://10.150.115.110:6002/embed"
+            placeholder={backendConfig?.embedding?.nemotron_api_url || "http://10.150.115.110:6002/embed"}
           />
-          <small>Full API endpoint URL for NVIDIA Nemotron embedding service</small>
+          <small>Full API endpoint URL for NVIDIA Nemotron embedding service - from backend config</small>
         </div>
       )}
       
@@ -192,11 +226,11 @@ const EmbeddingConfigForm: React.FC<{
           <label>Snowflake API URL:</label>
           <input
             type="text"
-            value={config.snowflakeApiUrl || ''}
+            value={config.snowflakeApiUrl || backendConfig?.embedding?.snowflake_api_url || ''}
             onChange={(e) => onChange({ ...config, snowflakeApiUrl: e.target.value })}
-            placeholder="http://10.150.115.110:6003/embed"
+            placeholder={backendConfig?.embedding?.snowflake_api_url || "http://10.150.115.110:6003/embed"}
           />
-          <small>Full API endpoint URL for Snowflake Arctic embedding service</small>
+          <small>Full API endpoint URL for Snowflake Arctic embedding service - from backend config</small>
         </div>
       )}
       
@@ -217,9 +251,9 @@ const EmbeddingConfigForm: React.FC<{
               <label>OpenAI Base URL (optional):</label>
               <input
                 type="text"
-                value={config.openaiBaseUrl || ''}
+                value={config.openaiBaseUrl || backendConfig?.embedding?.openai_base_url || ''}
                 onChange={(e) => onChange({ ...config, openaiBaseUrl: e.target.value })}
-                placeholder="https://api.openai.com/v1"
+                placeholder={backendConfig?.embedding?.openai_base_url || "https://api.openai.com/v1"}
               />
               <small>Custom base URL for OpenAI-compatible API (e.g., for proxy or custom endpoints)</small>
             </div>
