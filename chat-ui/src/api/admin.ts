@@ -16,26 +16,17 @@ export interface ProvidersResponse {
 export interface LLMConfigResponse {
   provider: string
   model: string
-  ollama_url?: string
   openai_base_url?: string
-}
-
-export interface OllamaModelInfo {
-  name: string
-  size?: number
-  modified_at?: string
 }
 
 export interface ModelsResponse {
   provider: string
   models: string[]
-  ollama_models?: OllamaModelInfo[]
 }
 
 export interface UpdateLLMConfigRequest {
   provider: string
   model: string
-  ollama_url?: string
   openai_base_url?: string
 }
 
@@ -67,12 +58,10 @@ export async function getLLMConfig(): Promise<LLMConfigResponse> {
 }
 
 export async function getAvailableModels(
-  provider?: string,
-  ollamaUrl?: string
+  provider?: string
 ): Promise<ModelsResponse> {
   const params = new URLSearchParams()
   if (provider) params.append('provider', provider)
-  if (ollamaUrl) params.append('ollama_url', ollamaUrl)
   
   const url = `${getApiUrl('/api/admin/models')}${params.toString() ? `?${params.toString()}` : ''}`
   const response = await fetch(url, {
@@ -137,22 +126,9 @@ export async function updateFunctionCalls(
 }
 
 // System Prompt API
-export interface SystemPromptResponse {
-  prompt: string
-  template: string
-}
-
 export interface SystemPromptUpdateRequest {
   prompt?: string
   template?: string
-}
-
-export async function getSystemPrompt(): Promise<SystemPromptResponse> {
-  const response = await fetch(getApiUrl('/api/admin/system-prompt'), {
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json' }
-  })
-  return handleResponse<SystemPromptResponse>(response)
 }
 
 export async function updateSystemPrompt(

@@ -24,7 +24,6 @@ export {
   updateLLMConfig,
   getFunctionCalls,
   updateFunctionCalls,
-  getSystemPrompt,
   updateSystemPrompt,
 } from './admin'
 export type {
@@ -37,7 +36,6 @@ export type {
   FunctionDefinition,
   FunctionCallsResponse,
   FunctionCallsUpdateRequest,
-  SystemPromptResponse,
   SystemPromptUpdateRequest,
 } from './admin'
 

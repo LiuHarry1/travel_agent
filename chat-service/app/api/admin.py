@@ -83,7 +83,7 @@ def get_llm_config() -> LLMConfigResponse:
         
         return LLMConfigResponse(
             provider=provider, 
-            model=model, 
+            model=model,
             openai_base_url=openai_base_url
         )
     except Exception as exc:
@@ -255,20 +255,6 @@ def update_function_calls(request: Dict[str, Any]) -> Dict[str, Any]:
         "message": "Function calls updated successfully",
         "enabled_functions": registry.get_enabled_functions()
     }
-
-
-@router.get("/system-prompt", response_model=Dict[str, Any])
-def get_system_prompt() -> Dict[str, Any]:
-    """获取系统提示词"""
-    try:
-        config_service = get_config_service()
-        return {
-            "prompt": config_service.system_prompt_template,
-            "template": config_service.system_prompt_template
-        }
-    except Exception as exc:
-        error_msg = format_error_message(exc, "Failed to get system prompt")
-        raise HTTPException(status_code=500, detail=error_msg) from exc
 
 
 @router.put("/system-prompt", response_model=Dict[str, Any])

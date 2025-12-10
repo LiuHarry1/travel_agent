@@ -23,7 +23,6 @@ export function AdminPage() {
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [provider, setProvider] = useState<string>('')
   const [model, setModel] = useState<string>('')
-  const [ollamaUrl, setOllamaUrl] = useState<string>('http://localhost:11434')
   const [openaiBaseUrl, setOpenaiBaseUrl] = useState<string>('')
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
@@ -56,7 +55,7 @@ export function AdminPage() {
     if (provider) {
       loadModels()
     }
-  }, [provider, ollamaUrl])
+  }, [provider])
 
   const loadProviders = async () => {
     try {
@@ -81,9 +80,7 @@ export function AdminPage() {
       setModel(config.model)
       
       // Set provider-specific URLs from config or use defaults
-      if (config.provider === 'ollama') {
-        setOllamaUrl(config.ollama_url || 'http://localhost:11434')
-      } else if (config.provider === 'openai') {
+      if (config.provider === 'openai') {
         setOpenaiBaseUrl(config.openai_base_url || '')
       }
     } catch (error) {
@@ -103,7 +100,7 @@ export function AdminPage() {
       setLoadingModels(true)
       
       // Fetch models from backend API
-      const response = await getAvailableModels(provider, provider === 'ollama' ? ollamaUrl : undefined)
+      const response = await getAvailableModels(provider)
       setAvailableModels(response.models || [])
       
       // If current model is not in the list, keep it
@@ -137,7 +134,6 @@ export function AdminPage() {
       await updateLLMConfig({
         provider,
         model,
-        ollama_url: provider === 'ollama' ? ollamaUrl : undefined,
         openai_base_url: provider === 'openai' ? openaiBaseUrl : undefined,
       })
       setAlert({
@@ -157,10 +153,6 @@ export function AdminPage() {
   const handleProviderChange = (newProvider: string) => {
     setProvider(newProvider)
     setModel('') // Reset model when provider changes
-  }
-
-  const handleOllamaUrlChange = (newUrl: string) => {
-    setOllamaUrl(newUrl)
   }
 
   const handleOpenaiBaseUrlChange = (newUrl: string) => {
@@ -321,24 +313,6 @@ export function AdminPage() {
                 </select>
               </div>
 
-              {provider === 'ollama' && (
-                <div className="form-group">
-                  <label htmlFor="ollama-url">Ollama URL</label>
-                  <input
-                    id="ollama-url"
-                    type="text"
-                    value={ollamaUrl}
-                    onChange={(e) => handleOllamaUrlChange(e.target.value)}
-                    placeholder={ollamaUrl || 'http://localhost:11434'}
-                    disabled={loading}
-                    className="form-input"
-                  />
-                  <small className="form-hint">
-                    Enter the base URL of your Ollama instance. Click "Refresh Models" to fetch available models.
-                  </small>
-                </div>
-              )}
-
               {provider === 'openai' && (
                 <div className="form-group">
                   <label htmlFor="openai-base-url">OpenAI Base URL</label>
@@ -359,42 +333,25 @@ export function AdminPage() {
                 </div>
               )}
 
-              {provider === 'ollama' && (
-                <div className="form-group">
-                  <button
-                    type="button"
-                    onClick={loadModels}
-                    disabled={loadingModels || !ollamaUrl}
-                    className="btn btn-secondary"
-                  >
-                    {loadingModels ? 'Loading...' : 'Refresh Models'}
-                  </button>
-                </div>
-              )}
-
               <div className="form-group">
                 <label htmlFor="model">Model</label>
-                {loadingModels && provider === 'ollama' ? (
-                  <div className="form-loading">Loading models...</div>
-                ) : (
-                  <select
-                    id="model"
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    disabled={loading || !provider || availableModels.length === 0}
-                    className="form-select"
-                  >
-                    <option value="">Select a model</option>
-                    {availableModels.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                <select
+                  id="model"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  disabled={loading || !provider || availableModels.length === 0}
+                  className="form-select"
+                >
+                  <option value="">Select a model</option>
+                  {availableModels.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
                 {provider && availableModels.length === 0 && !loadingModels && (
                   <small className="form-error">
-                    No models available. {provider === 'ollama' ? 'Please check your Ollama URL and try refreshing.' : 'Please select a provider.'}
+                    No models available. Please select a provider.
                   </small>
                 )}
               </div>
@@ -422,12 +379,6 @@ export function AdminPage() {
                   <span className="info-label">Model:</span>
                   <span className="info-value">{model || 'Not set'}</span>
                 </div>
-                {provider === 'ollama' && (
-                  <div className="info-row">
-                    <span className="info-label">Ollama URL:</span>
-                    <span className="info-value">{ollamaUrl || 'Not set'}</span>
-                  </div>
-                )}
                 {provider === 'openai' && (
                   <div className="info-row">
                     <span className="info-label">OpenAI Base URL:</span>
