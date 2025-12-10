@@ -15,7 +15,7 @@ A modern React-based UI for the KB Builder service.
 ### Prerequisites
 
 - Node.js 18+ and npm
-- KB Builder Service backend running on port 8001
+- KB Builder Service backend running on port 8005
 
 ### Installation
 
@@ -43,7 +43,7 @@ npm run build
 Create a `.env` file in the root directory:
 
 ```env
-VITE_API_URL=http://localhost:8001
+VITE_API_URL=http://localhost:8005
 ```
 
 ## Usage

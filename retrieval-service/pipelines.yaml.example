@@ -94,7 +94,7 @@ pipelines:
       - openai:openai_collection  # openai model -> openai_collection
 
     rerank:
-      api_url: http://rerank-service:8002/rerank
+      api_url: http://rerank-service:8009/rerank
       model: bge-reranker-base
       timeout: 60
 

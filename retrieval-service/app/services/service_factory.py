@@ -26,8 +26,11 @@ def get_retrieval_service(pipeline_name: Optional[str] = None) -> RetrievalServi
     """
     try:
         # Get pipeline config (auto-reloads if changed)
+        logger.debug(f"Getting pipeline config for: {pipeline_name}")
         pipeline_config = pipeline_config_manager.get_pipeline(pipeline_name)
         cache_key = pipeline_name or pipeline_config_manager.get_pipelines().default
+        
+        logger.debug(f"Pipeline config obtained, cache_key: {cache_key}")
         
         # Check cache
         if cache_key in _service_cache:
@@ -36,15 +39,33 @@ def get_retrieval_service(pipeline_name: Optional[str] = None) -> RetrievalServi
         
         # Create new service instance
         logger.info(f"Creating new service instance for pipeline: {cache_key}")
-        service = RetrievalService(pipeline_config)
-        _service_cache[cache_key] = service
-        return service
+        try:
+            service = RetrievalService(pipeline_config)
+            _service_cache[cache_key] = service
+            logger.info(f"Service instance created successfully for pipeline: {cache_key}")
+            return service
+        except Exception as create_error:
+            logger.error(
+                f"Failed to create RetrievalService instance: {type(create_error).__name__}: {create_error}",
+                exc_info=True
+            )
+            raise
         
     except KeyError as e:
-        logger.error(f"Pipeline not found: {e}")
+        # List available pipelines for better error message
+        try:
+            available = list(pipeline_config_manager.get_pipelines().pipelines.keys())
+            logger.error(
+                f"Pipeline '{pipeline_name}' not found. Available pipelines: {available}"
+            )
+        except:
+            logger.error(f"Pipeline not found: {e}")
         raise
     except Exception as e:
-        logger.error(f"Failed to create retrieval service: {e}", exc_info=True)
+        logger.error(
+            f"Failed to create retrieval service: {type(e).__name__}: {e}",
+            exc_info=True
+        )
         raise ValueError(f"Failed to create retrieval service: {e}") from e
 
 

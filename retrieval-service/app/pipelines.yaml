@@ -7,7 +7,7 @@ pipelines:
       user: ''
       password: ''
       database: default
-      collection: memory_doc_db
+      collection: test1
     embedding_models:
     - qwen
     rerank:

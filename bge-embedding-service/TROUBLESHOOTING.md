@@ -81,7 +81,7 @@ curl -I https://docker.mirrors.ustc.edu.cn
 
 ```yaml
 ports:
-  - "8002:8000"  # 改为其他端口
+  - "8009:8000"  # 改为其他端口
 ```
 
 ### 内存不足

@@ -35,10 +35,11 @@ class FunctionRegistry:
         初始化函数注册表
         
         Args:
-            config_path: 配置文件路径，默认为 BACKEND_ROOT / "config" / "functions.yaml"
+            config_path: 配置文件路径，默认为 None（使用统一的 app.yaml）
         """
         if config_path is None:
-            config_path = str(BACKEND_ROOT / "config" / "functions.yaml")
+            # Use unified app.yaml instead of separate functions.yaml
+            config_path = str(BACKEND_ROOT / "config" / "app.yaml")
         self.config_path = Path(config_path)
         self._config_manager = ConfigManager(self.config_path)
         self._functions: Dict[str, FunctionDefinition] = {}
@@ -267,7 +268,7 @@ def _initialize_functions(registry: FunctionRegistry):
     # 注册 Retrieval Service 函数（RAG）
     retrieval_service_url = os.getenv(
         "RETRIEVAL_SERVICE_URL",
-        "http://localhost:8001"
+        "http://localhost:8003"
     )
     
     registry.register_function(

@@ -71,7 +71,21 @@ class APIReranker(BaseReranker):
             
             logger.info(f"Re-ranked {len(chunks)} chunks to {len(reranked)} using reranker service")
             return reranked
+        except requests.exceptions.ConnectionError as e:
+            logger.warning(
+                f"Reranker service unavailable (connection refused): {self.api_url}. "
+                f"Falling back to original order without reranking."
+            )
+            # Return original chunks in original order when reranker is unavailable
+            return chunks[:top_k]
+        except requests.exceptions.Timeout as e:
+            logger.warning(
+                f"Reranker service timeout: {self.api_url}. "
+                f"Falling back to original order without reranking."
+            )
+            return chunks[:top_k]
         except Exception as e:
-            logger.error(f"Rerank API call failed: {e}", exc_info=True)
-            raise
+            logger.error(f"Rerank API call failed: {e}. Falling back to original order.", exc_info=True)
+            # Fallback to original order on any other error
+            return chunks[:top_k]
 

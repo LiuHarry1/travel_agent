@@ -44,6 +44,39 @@ class RAGSourceConfig(BaseModel):
     url: Optional[str] = Field(default=None, description="Source URL (for retrieval_service)")
     pipeline_name: str = Field(default="default", description="Pipeline name")
     config: Dict[str, Any] = Field(default_factory=dict, description="Source-specific config")
+    timeout: float = Field(default=60.0, description="Request timeout in seconds")
+
+
+class RAGCacheConfig(BaseModel):
+    """RAG cache configuration."""
+    enabled: bool = Field(default=True, description="Enable result caching")
+    ttl_seconds: int = Field(default=300, description="Cache TTL in seconds")
+    max_size: int = Field(default=1000, description="Maximum cache entries")
+
+
+class RAGProcessorConfig(BaseModel):
+    """RAG result processor configuration."""
+    ranking_strategy: str = Field(default="score", description="Ranking strategy: score or round")
+    merge_keep_best_score: bool = Field(default=True, description="Keep best score when merging duplicates")
+
+
+class RAGInputGuardrailConfig(BaseModel):
+    """RAG input guardrail configuration."""
+    enabled: bool = Field(default=True, description="Enable input guardrail")
+    strict_mode: bool = Field(default=False, description="Strict mode: reject on failure")
+    max_query_length: int = Field(default=1000, description="Maximum query length")
+    blocked_patterns: List[str] = Field(default_factory=list, description="Blocked patterns")
+    sensitive_patterns: List[str] = Field(default_factory=list, description="Sensitive info patterns")
+
+
+class RAGOutputGuardrailConfig(BaseModel):
+    """RAG output guardrail configuration."""
+    enabled: bool = Field(default=True, description="Enable output guardrail")
+    strict_mode: bool = Field(default=False, description="Strict mode: reject on failure")
+    max_results: int = Field(default=50, description="Maximum number of results")
+    filter_sensitive_info: bool = Field(default=True, description="Filter sensitive information")
+    validate_relevance: bool = Field(default=True, description="Validate result relevance")
+    sensitive_patterns: List[str] = Field(default_factory=list, description="Sensitive info patterns")
 
 
 class RAGSettings(BaseModel):
@@ -53,6 +86,11 @@ class RAGSettings(BaseModel):
     max_rounds: int = Field(default=3, description="Maximum retrieval rounds (for multi_round strategy)")
     query_rewriter: RAGQueryRewriterConfig = Field(default_factory=RAGQueryRewriterConfig)
     sources: List[RAGSourceConfig] = Field(default_factory=list)
+    cache: Optional[RAGCacheConfig] = Field(default=None, description="Cache configuration")
+    processor: RAGProcessorConfig = Field(default_factory=RAGProcessorConfig, description="Processor configuration")
+    input_guardrail: RAGInputGuardrailConfig = Field(default_factory=RAGInputGuardrailConfig, description="Input guardrail configuration")
+    output_guardrail: RAGOutputGuardrailConfig = Field(default_factory=RAGOutputGuardrailConfig, description="Output guardrail configuration")
+    fallback_on_error: bool = Field(default=True, description="Return empty results on error instead of raising")
 
 
 class Settings(BaseModel):
@@ -112,7 +150,8 @@ class Settings(BaseModel):
                 enabled=src.get("enabled", True),
                 url=src.get("url"),
                 pipeline_name=src.get("pipeline_name", "default"),
-                config=src.get("config", {})
+                config=src.get("config", {}),
+                timeout=src.get("timeout", 60.0)
             )
             for src in rag_sources_data
         ]
@@ -122,16 +161,60 @@ class Settings(BaseModel):
             rag_sources.append(RAGSourceConfig(
                 type="retrieval_service",
                 enabled=True,
-                url="http://localhost:8001",
-                pipeline_name="default"
+                url="http://localhost:8003",
+                pipeline_name="default",
+                timeout=60.0
             ))
+        
+        # Parse cache config
+        rag_cache_data = rag_data.get("cache", {})
+        rag_cache = None
+        if rag_cache_data.get("enabled", True):
+            rag_cache = RAGCacheConfig(
+                enabled=rag_cache_data.get("enabled", True),
+                ttl_seconds=rag_cache_data.get("ttl_seconds", 300),
+                max_size=rag_cache_data.get("max_size", 1000)
+            )
+        
+        # Parse processor config
+        rag_processor_data = rag_data.get("processor", {})
+        rag_processor = RAGProcessorConfig(
+            ranking_strategy=rag_processor_data.get("ranking_strategy", "score"),
+            merge_keep_best_score=rag_processor_data.get("merge_keep_best_score", True)
+        )
+        
+        # Parse input guardrail config
+        rag_input_guardrail_data = rag_data.get("input_guardrail", {})
+        rag_input_guardrail = RAGInputGuardrailConfig(
+            enabled=rag_input_guardrail_data.get("enabled", True),
+            strict_mode=rag_input_guardrail_data.get("strict_mode", False),
+            max_query_length=rag_input_guardrail_data.get("max_query_length", 1000),
+            blocked_patterns=rag_input_guardrail_data.get("blocked_patterns", []),
+            sensitive_patterns=rag_input_guardrail_data.get("sensitive_patterns", [])
+        )
+        
+        # Parse output guardrail config
+        rag_output_guardrail_data = rag_data.get("output_guardrail", {})
+        rag_output_guardrail = RAGOutputGuardrailConfig(
+            enabled=rag_output_guardrail_data.get("enabled", True),
+            strict_mode=rag_output_guardrail_data.get("strict_mode", False),
+            max_results=rag_output_guardrail_data.get("max_results", 50),
+            filter_sensitive_info=rag_output_guardrail_data.get("filter_sensitive_info", True),
+            validate_relevance=rag_output_guardrail_data.get("validate_relevance", True),
+            sensitive_patterns=rag_output_guardrail_data.get("sensitive_patterns", [])
+        )
         
         rag_settings = RAGSettings(
             enabled=rag_data.get("enabled", True),
             strategy=rag_data.get("strategy", "multi_round"),
             max_rounds=rag_data.get("max_rounds", 3),
             query_rewriter=rag_query_rewriter,
-            sources=rag_sources
+            sources=rag_sources,
+            cache=rag_cache,
+            processor=rag_processor,
+            input_guardrail=rag_input_guardrail,
+            output_guardrail=rag_output_guardrail,
+            fallback_on_error=rag_data.get("fallback_on_error", True)
         )
         
         return cls(

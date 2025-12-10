@@ -20,19 +20,39 @@ async def search(request: QueryRequest):
     
     Returns only the final results (chunk_id + text).
     """
+    import time
+    start_time = time.time()
+    logger.info(
+        f"Received search request: query={request.query[:100]}, "
+        f"pipeline_name={request.pipeline_name}"
+    )
     try:
+        logger.debug(f"Getting retrieval service for pipeline: {request.pipeline_name}")
         service = get_retrieval_service(request.pipeline_name)
+        logger.debug(f"Service obtained, calling retrieve()")
         result = service.retrieve(request.query, return_debug=False)
+        elapsed = time.time() - start_time
+        logger.info(
+            f"Search completed: query={request.query[:100]}, "
+            f"results_count={len(result.results) if hasattr(result, 'results') else 0}, "
+            f"took {elapsed:.2f}s"
+        )
         return result
     except KeyError as e:
-        logger.error(f"Pipeline not found: {e}")
+        elapsed = time.time() - start_time
+        logger.error(f"Pipeline not found: {e} (took {elapsed:.2f}s)", exc_info=True)
         raise HTTPException(status_code=404, detail=f"Pipeline not found: {e}")
     except ValueError as e:
-        logger.error(f"Invalid configuration: {e}")
+        elapsed = time.time() - start_time
+        logger.error(f"Invalid configuration: {e} (took {elapsed:.2f}s)", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Search error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        elapsed = time.time() - start_time
+        logger.error(
+            f"Search error: {type(e).__name__}: {e} (took {elapsed:.2f}s)",
+            exc_info=True
+        )
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 
 @router.post("/search/debug", response_model=DebugRetrievalResponse)

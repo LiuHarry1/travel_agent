@@ -19,7 +19,7 @@ pip install -r requirements.txt
 2. Set environment variables (optional):
 ```bash
 export RERANKER_MODEL=BAAI/bge-reranker-base  # Default model
-export PORT=8002  # Default port
+export PORT=8009  # Default port
 ```
 
 ## Usage
@@ -32,7 +32,7 @@ python -m app.main
 
 Or using uvicorn directly:
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8002
+uvicorn app.main:app --host 0.0.0.0 --port 8009
 ```
 
 ### API Endpoints
@@ -89,7 +89,7 @@ Health check endpoint.
 The service can be configured via environment variables:
 
 - `RERANKER_MODEL`: Model name (default: `BAAI/bge-reranker-base`)
-- `PORT`: Server port (default: `8002`)
+- `PORT`: Server port (default: `8009`)
 
 ## Integration with Retrieval Service
 
@@ -97,7 +97,7 @@ To use this service with the retrieval-service, update the pipeline configuratio
 
 ```yaml
 rerank:
-  api_url: http://localhost:8002/api/v1/rerank
+  api_url: http://localhost:8009/api/v1/rerank
   model: BAAI/bge-reranker-base  # Optional
   timeout: 30
 ```

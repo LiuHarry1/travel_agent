@@ -5,7 +5,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Accept build argument for API URL
-ARG VITE_API_URL=http://localhost:8000
+ARG VITE_API_URL=http://localhost:8005
 
 # Set as environment variable for build
 ENV VITE_API_URL=$VITE_API_URL

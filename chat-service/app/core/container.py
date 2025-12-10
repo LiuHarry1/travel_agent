@@ -85,7 +85,10 @@ class Container:
         if self._rag_orchestrator is None:
             logger.info("Creating RAG orchestrator...")
             try:
-                from app.service.rag.config import QueryRewriterConfig, RetrievalSourceConfig, RAGConfig
+                from app.service.rag.config import (
+                    QueryRewriterConfig, RetrievalSourceConfig, RAGConfig,
+                    CacheConfig, ProcessorConfig, InputGuardrailConfig, OutputGuardrailConfig
+                )
                 config_service = self.config_service
                 rag_settings = config_service.get_settings().rag
                 
@@ -100,17 +103,57 @@ class Container:
                         enabled=src.enabled,
                         url=src.url,
                         pipeline_name=src.pipeline_name,
-                        config=src.config
+                        config=src.config,
+                        timeout=getattr(src, 'timeout', 60.0)
                     )
                     for src in rag_settings.sources
                 ]
+                
+                # Convert cache config
+                cache_config = None
+                if rag_settings.cache and rag_settings.cache.enabled:
+                    cache_config = CacheConfig(
+                        enabled=rag_settings.cache.enabled,
+                        ttl_seconds=rag_settings.cache.ttl_seconds,
+                        max_size=rag_settings.cache.max_size
+                    )
+                
+                # Convert processor config
+                processor_config = ProcessorConfig(
+                    ranking_strategy=rag_settings.processor.ranking_strategy,
+                    merge_keep_best_score=rag_settings.processor.merge_keep_best_score
+                )
+                
+                # Convert input guardrail config
+                input_guardrail_config = InputGuardrailConfig(
+                    enabled=rag_settings.input_guardrail.enabled,
+                    strict_mode=rag_settings.input_guardrail.strict_mode,
+                    max_query_length=rag_settings.input_guardrail.max_query_length,
+                    blocked_patterns=rag_settings.input_guardrail.blocked_patterns,
+                    sensitive_patterns=rag_settings.input_guardrail.sensitive_patterns
+                )
+                
+                # Convert output guardrail config
+                output_guardrail_config = OutputGuardrailConfig(
+                    enabled=rag_settings.output_guardrail.enabled,
+                    strict_mode=rag_settings.output_guardrail.strict_mode,
+                    max_results=rag_settings.output_guardrail.max_results,
+                    filter_sensitive_info=rag_settings.output_guardrail.filter_sensitive_info,
+                    validate_relevance=rag_settings.output_guardrail.validate_relevance,
+                    sensitive_patterns=rag_settings.output_guardrail.sensitive_patterns
+                )
                 
                 rag_config = RAGConfig(
                     enabled=rag_settings.enabled,
                     strategy=rag_settings.strategy,
                     max_rounds=rag_settings.max_rounds,
                     query_rewriter=query_rewriter_config,
-                    sources=sources_config
+                    sources=sources_config,
+                    cache=cache_config,
+                    processor=processor_config,
+                    input_guardrail=input_guardrail_config,
+                    output_guardrail=output_guardrail_config,
+                    fallback_on_error=rag_settings.fallback_on_error
                 )
                 
                 self._rag_orchestrator = RAGOrchestrator(
@@ -121,7 +164,10 @@ class Container:
             except Exception as e:
                 logger.error(f"Failed to initialize RAG orchestrator: {e}", exc_info=True)
                 # Create fallback config
-                from app.service.rag.config import QueryRewriterConfig, RetrievalSourceConfig, RAGConfig
+                from app.service.rag.config import (
+                    QueryRewriterConfig, RetrievalSourceConfig, RAGConfig,
+                    CacheConfig, ProcessorConfig, InputGuardrailConfig, OutputGuardrailConfig
+                )
                 fallback_config = RAGConfig(
                     enabled=True,
                     strategy="multi_round",
@@ -130,9 +176,15 @@ class Container:
                     sources=[RetrievalSourceConfig(
                         type="retrieval_service",
                         enabled=True,
-                        url="http://localhost:8001",
-                        pipeline_name="default"
-                    )]
+                        url="http://localhost:8003",
+                        pipeline_name="default",
+                        timeout=60.0
+                    )],
+                    cache=CacheConfig(enabled=True, ttl_seconds=300, max_size=1000),
+                    processor=ProcessorConfig(),
+                    input_guardrail=InputGuardrailConfig(enabled=True),
+                    output_guardrail=OutputGuardrailConfig(enabled=True),
+                    fallback_on_error=True
                 )
                 self._rag_orchestrator = RAGOrchestrator(config=fallback_config, llm_client=self.llm_client)
                 logger.warning("Using fallback RAG config")

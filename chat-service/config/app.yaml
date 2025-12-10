@@ -8,16 +8,21 @@ llm:
     company and the products and services they offer.
 
     '
-
 rag:
   enabled: true
   strategy: multi_round
   max_rounds: 3
   query_rewriter:
     enabled: true
-    model: null  # Uses default LLM from config
+    model: null
   sources:
-    - type: retrieval_service
-      enabled: true
-      url: http://localhost:8001
-      pipeline_name: default
+  - type: retrieval_service
+    enabled: true
+    url: http://localhost:8003
+    pipeline_name: memory
+    timeout: 60.0
+functions:
+  enabled:
+  - faq_search
+  - retrieval_service_search
+  configs: {}
