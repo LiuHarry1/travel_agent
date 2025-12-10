@@ -222,6 +222,8 @@ class UnifiedLoader(BaseLoader):
                         "subject": pdf.metadata.get("Subject", ""),
                         "creator": pdf.metadata.get("Creator", ""),
                     }
+                    logger.info(f"Extracted PDF metadata: {pdf_metadata}")
+                    logger.info(f"Raw PDF metadata from pdfplumber: {pdf.metadata}")
                 
                 for page_num, page in enumerate(pdf.pages, 1):
                     page_start_char = len("\n".join(markdown_parts))
