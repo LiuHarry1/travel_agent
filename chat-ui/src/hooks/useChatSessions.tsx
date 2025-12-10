@@ -1,8 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { ChatResponse, Suggestion } from '../types'
-
-const CHAT_SESSIONS_STORAGE_KEY = 'chat-ui-sessions-v2'
-const LEGACY_CHAT_STORAGE_KEY = 'chat-ui-session'
+import { CHAT_SESSIONS_STORAGE_KEY, LEGACY_CHAT_STORAGE_KEY, MAX_SESSIONS, DEFAULT_SESSION_TITLE } from '../constants'
 
 export interface StoredChatSession {
   id: string
@@ -45,7 +43,7 @@ function loadInitialState(): ChatSessionsState {
     if (raw) {
       const parsed = JSON.parse(raw) as ChatSessionsState
       return {
-        sessions: (parsed.sessions ?? []).slice(0, 10),
+        sessions: (parsed.sessions ?? []).slice(0, MAX_SESSIONS),
         activeSessionId: parsed.activeSessionId ?? (parsed.sessions?.[0]?.id ?? null),
       }
     }
@@ -108,7 +106,7 @@ export function ChatSessionsProvider({ children }: { children: ReactNode }) {
       const id = 'session-' + now
       const newSession: StoredChatSession = {
         id,
-        title: 'New chat',
+        title: DEFAULT_SESSION_TITLE,
         sessionId: undefined,
         history: [],
         updatedAt: now,
@@ -121,7 +119,7 @@ export function ChatSessionsProvider({ children }: { children: ReactNode }) {
         const nonEmptySessions = prev.sessions.filter((s) => s.history.length > 0)
         const sessions = [newSession, ...nonEmptySessions]
         return {
-          sessions: sessions.slice(0, 10),
+          sessions: sessions.slice(0, MAX_SESSIONS),
           activeSessionId: id,
         }
       })

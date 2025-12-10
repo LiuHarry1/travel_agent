@@ -6,7 +6,7 @@ interface ToolCallSidebarProps {
 }
 
 export function ToolCallSidebar({ toolCall, onClose }: ToolCallSidebarProps) {
-  const formatJSON = (obj: any): string => {
+  const formatJSON = (obj: unknown): string => {
     if (typeof obj === 'string') {
       try {
         const parsed = JSON.parse(obj)

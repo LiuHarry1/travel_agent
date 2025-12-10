@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, memo, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -6,6 +6,7 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import type { ChatTurn, ToolCall } from '../types'
 import { ToolCallSidebar } from './ToolCallSidebar'
 import { CodeCopyButton } from './CodeCopyButton'
+import { convertImageUrlsToMarkdown } from '../utils/markdown'
 
 interface MessageListProps {
   history: ChatTurn[]
@@ -14,34 +15,7 @@ interface MessageListProps {
   onRegenerate?: () => void
 }
 
-/**
- * Convert image URLs in text to Markdown image format.
- * Detects URLs ending with image extensions and converts them to ![alt](url) format.
- */
-function convertImageUrlsToMarkdown(content: string): string {
-  // Pattern to match image URLs (http/https URLs ending with image extensions)
-  // This regex matches URLs that are not already in Markdown image format
-  const imageUrlPattern = /(https?:\/\/[^\s]+\.(png|jpg|jpeg|gif|webp|svg|bmp))(?![)\]])/gi
-  
-  return content.replace(imageUrlPattern, (match) => {
-    // Check if this URL is already part of a Markdown image
-    // If it's already in ![alt](url) format, don't convert it
-    const beforeMatch = content.substring(0, content.indexOf(match))
-    const afterMatch = content.substring(content.indexOf(match) + match.length)
-    
-    // If there's a ! before and ( after, it's already a Markdown image
-    if (beforeMatch.endsWith('![') && afterMatch.startsWith('](')) {
-      return match
-    }
-    
-    // Convert to Markdown image format
-    // Extract filename for alt text
-    const filename = match.split('/').pop()?.split('.')[0] || '图片'
-    return `![${filename}](${match})`
-  })
-}
-
-export function MessageList({ history, loading, latestUserMessageRef, onRegenerate }: MessageListProps) {
+export const MessageList = memo(function MessageList({ history, loading, latestUserMessageRef, onRegenerate }: MessageListProps) {
   // Track copied and feedback state for each message by index
   const [copiedStates, setCopiedStates] = useState<Record<number, boolean>>({})
   const [feedbackStates, setFeedbackStates] = useState<Record<number, 'up' | 'down' | null>>({})
@@ -57,7 +31,7 @@ export function MessageList({ history, loading, latestUserMessageRef, onRegenera
     return null
   }, [history])
 
-  const handleCopy = async (content: string, index: number) => {
+  const handleCopy = useCallback(async (content: string, index: number) => {
     try {
       await navigator.clipboard.writeText(content)
       setCopiedStates(prev => ({ ...prev, [index]: true }))
@@ -67,12 +41,12 @@ export function MessageList({ history, loading, latestUserMessageRef, onRegenera
     } catch (err) {
       console.error('Failed to copy:', err)
     }
-  }
+  }, [])
 
-  const handleFeedback = (type: 'up' | 'down', index: number) => {
+  const handleFeedback = useCallback((type: 'up' | 'down', index: number) => {
     setFeedbackStates(prev => ({ ...prev, [index]: type }))
     // TODO: Send feedback to backend if needed
-  }
+  }, [])
 
   if (history.length === 0) {
     return (
@@ -98,6 +72,14 @@ export function MessageList({ history, loading, latestUserMessageRef, onRegenera
     }
     return null
   }, [history, latestUserIndex])
+
+  const handleToolCallSelect = useCallback((messageIndex: number, toolCall: ToolCall) => {
+    setSelectedToolCall({ messageIndex, toolCall })
+  }, [])
+
+  const handleToolCallClose = useCallback(() => {
+    setSelectedToolCall(null)
+  }, [])
 
   return (
     <div className="chat-messages">
@@ -127,7 +109,9 @@ export function MessageList({ history, loading, latestUserMessageRef, onRegenera
                         <ReactMarkdown 
                           remarkPlugins={[remarkGfm]}
                           components={{
-                            code: ({ node, inline, className, children, ...props }: any) => {
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            code: (props: any) => {
+                              const { node, inline, className, children, ...restProps } = props
                               const match = /language-(\w+)/.exec(className || '')
                               const language = match ? match[1] : 'text'
                               const codeString = String(children).replace(/\n$/, '')
@@ -164,7 +148,7 @@ export function MessageList({ history, loading, latestUserMessageRef, onRegenera
                               
                               // Inline code
                               return (
-                                <code className="inline-code" {...props}>
+                                <code className="inline-code" {...restProps}>
                                   {children}
                                 </code>
                               )
@@ -186,11 +170,14 @@ export function MessageList({ history, loading, latestUserMessageRef, onRegenera
                             p: ({ node, children, ...props }) => {
                               // Check if paragraph contains only an image
                               // In ReactMarkdown, images are rendered as img elements in children
-                              if (node && node.children && node.children.length === 1) {
-                                const firstChild = node.children[0] as any
-                                // Check if it's an image element by checking tagName property
-                                if (firstChild && firstChild.tagName === 'img') {
-                                  return <p {...props} style={{ margin: 0 }}>{children}</p>
+                              if (node && typeof node === 'object' && 'children' in node) {
+                                const nodeWithChildren = node as { children?: Array<{ tagName?: string }> }
+                                if (nodeWithChildren.children && nodeWithChildren.children.length === 1) {
+                                  const firstChild = nodeWithChildren.children[0]
+                                  // Check if it's an image element by checking tagName property
+                                  if (firstChild && firstChild.tagName === 'img') {
+                                    return <p {...props} style={{ margin: 0 }}>{children}</p>
+                                  }
                                 }
                               }
                               return <p {...props}>{children}</p>
@@ -223,7 +210,7 @@ export function MessageList({ history, loading, latestUserMessageRef, onRegenera
                                   <button
                                     key={toolCall.id || `tool-icon-${index}-${tcIndex}`}
                                     className={`tool-call-icon-btn ${statusClass} ${selectedToolCall?.messageIndex === index && selectedToolCall?.toolCall.id === toolCall.id ? 'active' : ''}`}
-                                    onClick={() => setSelectedToolCall({ messageIndex: index, toolCall })}
+                                    onClick={() => handleToolCallSelect(index, toolCall)}
                                     title={`${toolCall.name} (${toolCall.status || 'unknown'})`}
                                     type="button"
                                     disabled={toolCall.status === 'calling'}  // Disable click while calling
@@ -399,10 +386,18 @@ export function MessageList({ history, loading, latestUserMessageRef, onRegenera
       {selectedToolCall && (
         <ToolCallSidebar
           toolCall={selectedToolCall.toolCall}
-          onClose={() => setSelectedToolCall(null)}
+          onClose={handleToolCallClose}
         />
       )}
     </div>
   )
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison function for memo
+  return (
+    prevProps.history.length === nextProps.history.length &&
+    prevProps.loading === nextProps.loading &&
+    prevProps.onRegenerate === nextProps.onRegenerate &&
+    prevProps.latestUserMessageRef === nextProps.latestUserMessageRef
+  )
+})
 

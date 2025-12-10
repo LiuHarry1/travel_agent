@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import './App.css'
 import { Layout } from './components/Layout'
-import { ChatPage } from './components/ChatPage'
-import { AdminPage } from './components/AdminPage'
+import { ErrorBoundary } from './components/ErrorBoundary'
+
+// Lazy load pages for code splitting
+const ChatPage = lazy(() => import('./components/ChatPage').then(module => ({ default: module.ChatPage })))
+const AdminPage = lazy(() => import('./components/AdminPage').then(module => ({ default: module.AdminPage })))
 
 type TabKey = 'chat' | 'admin'
 
@@ -11,7 +14,12 @@ function App() {
   const [sidebarVisible, setSidebarVisible] = useState(true)
 
   const handleTabChange = (tab: TabKey) => {
-    setActiveTab(tab)
+    // Toggle behavior: if clicking the same tab, switch back to chat
+    if (tab === 'admin' && activeTab === 'admin') {
+      setActiveTab('chat')
+    } else {
+      setActiveTab(tab)
+    }
   }
 
   const handleSidebarToggle = () => {
@@ -19,15 +27,19 @@ function App() {
   }
 
   return (
-    <Layout
-      sidebarVisible={sidebarVisible}
-      activeTab={activeTab}
-      onSidebarToggle={handleSidebarToggle}
-      onTabChange={handleTabChange}
-    >
-      {activeTab === 'chat' && <ChatPage />}
-      {activeTab === 'admin' && <AdminPage />}
-    </Layout>
+    <ErrorBoundary>
+      <Layout
+        sidebarVisible={sidebarVisible}
+        activeTab={activeTab}
+        onSidebarToggle={handleSidebarToggle}
+        onTabChange={handleTabChange}
+      >
+        <Suspense fallback={<div className="loading-container">Loading...</div>}>
+          {activeTab === 'chat' && <ChatPage />}
+          {activeTab === 'admin' && <AdminPage />}
+        </Suspense>
+      </Layout>
+    </ErrorBoundary>
   )
 }
 

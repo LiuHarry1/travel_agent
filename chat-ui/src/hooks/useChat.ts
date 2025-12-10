@@ -1,66 +1,37 @@
-import { useState, useEffect, useRef } from 'react'
-import type { ChatResponse, Alert, ToolCall, StreamEvent, Suggestion } from '../types'
-import { sendChatMessageStream, generateTitle } from '../api/index'
+/**
+ * Main chat hook
+ * Combines state management, streaming, tool calls, and title generation
+ */
+
+import type { ChatResponse } from '../types'
+import { useChatState } from './useChatState'
+import { useChatStream } from './useChatStream'
+import { useChatToolCalls } from './useChatToolCalls'
+import { useChatTitle } from './useChatTitle'
 import { useChatSessions } from './useChatSessions'
+import { getErrorMessage } from '../utils/errorHandler'
+import { MAX_FILE_SIZE } from '../constants'
+import { DEFAULT_SESSION_TITLE } from '../constants'
 
 export function useChat() {
-  const { activeSession, updateActiveSession, createSession } = useChatSessions()
-  const hasInitialized = useRef(false)
-  const abortControllerRef = useRef<AbortController | null>(null)
-  const titleGenerationInProgress = useRef(false)
+  const {
+    sessionId,
+    message,
+    setMessage,
+    history,
+    setHistory,
+    suggestions,
+    loading,
+    setLoading,
+    alert,
+    setAlert,
+    updateActiveSession,
+  } = useChatState()
 
-  const [sessionId, setSessionId] = useState<string | undefined>(activeSession?.sessionId)
-  const [message, setMessage] = useState('')
-  const [history, setHistory] = useState<ChatResponse['history']>(activeSession?.history ?? [])
-  const [suggestions, setSuggestions] = useState<Suggestion[] | undefined>(activeSession?.suggestions)
-  const [loading, setLoading] = useState(false)
-  const [alert, setAlert] = useState<Alert | null>(null)
-
-  // Sync local state when active session changes
-  useEffect(() => {
-    if (!activeSession && !hasInitialized.current) {
-      // Use setTimeout to defer state update until after render
-      // This prevents the "Cannot update component while rendering" error
-      hasInitialized.current = true
-      setTimeout(() => {
-        createSession()
-      }, 0)
-      return
-    }
-    
-    if (activeSession) {
-      hasInitialized.current = true
-      setSessionId(activeSession.sessionId)
-      // Only update history if it's actually different to avoid unnecessary re-renders
-      setHistory((prev) => {
-        // Compare by length and last message to avoid unnecessary updates
-        if (prev.length !== activeSession.history.length) {
-          return activeSession.history
-        }
-        // If lengths are same, check if last messages are different
-        if (prev.length > 0 && activeSession.history.length > 0) {
-          const prevLast = prev[prev.length - 1]
-          const activeLast = activeSession.history[activeSession.history.length - 1]
-          if (prevLast.content !== activeLast.content || 
-              prevLast.toolCalls?.length !== activeLast.toolCalls?.length) {
-            return activeSession.history
-          }
-          // Check if tool call statuses changed
-          if (prevLast.toolCalls && activeLast.toolCalls) {
-            const prevStatuses = prevLast.toolCalls.map(tc => `${tc.id}:${tc.status}`).join(',')
-            const activeStatuses = activeLast.toolCalls.map(tc => `${tc.id}:${tc.status}`).join(',')
-            if (prevStatuses !== activeStatuses) {
-              return activeSession.history
-            }
-          }
-          return prev // No change, return previous to avoid re-render
-        }
-        return activeSession.history
-      })
-      setSuggestions(activeSession.suggestions)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSession])
+  const { startStream, stopStream, abortController } = useChatStream()
+  const toolCallManager = useChatToolCalls()
+  const { generateTitleAsync } = useChatTitle()
+  const { activeSession } = useChatSessions()
 
   const sendMessage = async (text?: string, files?: Array<{ name: string; content: string }>) => {
     const messageText = text || message.trim()
@@ -78,13 +49,13 @@ export function useChat() {
           const base64Content = f.content.split(':')[2]?.split(']')[0] || ''
           size = Math.floor(base64Content.length * 0.75)
         }
-        return size > 5 * 1024 * 1024
+        return size > MAX_FILE_SIZE
       })
       if (oversizedFiles.length > 0) {
         const fileNames = oversizedFiles.map((f) => f.name).join(', ')
         setAlert({
           type: 'error',
-          message: `File too large (over 5MB): ${fileNames}. Please upload smaller files.`,
+          message: `File too large (over ${MAX_FILE_SIZE / (1024 * 1024)}MB): ${fileNames}. Please upload smaller files.`,
         })
         return
       }
@@ -106,9 +77,6 @@ export function useChat() {
 
     setLoading(true)
 
-    // Create abort controller for this request
-    abortControllerRef.current = new AbortController()
-
     let assistantMessageIndex = -1
     if (userMessageContent) {
       const updatedHistory: ChatResponse['history'] = [...currentHistory, { role: 'assistant' as const, content: '', toolCalls: [] }]
@@ -119,6 +87,7 @@ export function useChat() {
 
     // Use a ref to track assistant message index so it can be updated in event handlers
     const assistantIndexRef = { current: assistantMessageIndex }
+    toolCallManager.clear()
 
     try {
       // Filter out tool messages and tool_calls from history before sending to backend
@@ -144,140 +113,91 @@ export function useChat() {
 
       let accumulatedContent = ''
       let currentSessionId = sessionId || undefined
-      const currentToolCalls = new Map<string, ToolCall>()
 
-      await sendChatMessageStream(
-        payload,
-        (chunk: string) => {
-          accumulatedContent += chunk
-          setHistory((prev) => {
-            const updated: ChatResponse['history'] = [...prev]
-            let targetIndex = assistantIndexRef.current
-            if (targetIndex >= 0 && targetIndex < updated.length) {
-              // Update content and preserve tool calls
-              const existingTurn = updated[targetIndex]
-              updated[targetIndex] = {
-                role: 'assistant' as const,
-                content: accumulatedContent,
-                toolCalls: existingTurn.toolCalls || Array.from(currentToolCalls.values()),
-              }
-            } else if (targetIndex < 0 && accumulatedContent) {
-              updated.push({ 
-                role: 'assistant' as const, 
-                content: accumulatedContent,
-                toolCalls: Array.from(currentToolCalls.values())
-              })
-              targetIndex = updated.length - 1
-              assistantIndexRef.current = targetIndex
+      const updateHistoryWithContent = (content: string) => {
+        setHistory((prev) => {
+          const updated: ChatResponse['history'] = [...prev]
+          let targetIndex = assistantIndexRef.current
+          if (targetIndex >= 0 && targetIndex < updated.length) {
+            // Update content and preserve tool calls
+            const existingTurn = updated[targetIndex]
+            updated[targetIndex] = {
+              role: 'assistant' as const,
+              content,
+              toolCalls: existingTurn.toolCalls || toolCallManager.getToolCallsArray(),
             }
-            // Update session asynchronously to avoid triggering re-renders during render
-            setTimeout(() => {
-              updateActiveSession({ history: updated })
-            }, 0)
-            return updated
-          })
-        },
-        () => {
-          setLoading(false)
-          abortControllerRef.current = null
-          if (currentSessionId) {
-            setSessionId(currentSessionId)
-            updateActiveSession({ sessionId: currentSessionId })
-          }
-          
-          // Auto-generate title for new conversations (first user+assistant exchange)
-          // Only generate once per session, and only if this is the first exchange
-          // Check: we have 1 user message, and we just got the first assistant response
-          if (currentHistory.length === 1 && 
-              accumulatedContent &&
-              (!activeSession?.title || activeSession.title === 'New chat')) {
-            // Build the complete conversation history (user + assistant)
-            const fullHistory: ChatResponse['history'] = [
-              ...currentHistory,
-              { role: 'assistant' as const, content: accumulatedContent, toolCalls: [] }
-            ]
-            
-            // Generate title asynchronously (function will check and set flag internally)
-            generateTitleAsync(fullHistory, accumulatedContent)
-          }
-        },
-        (error: string) => {
-          setLoading(false)
-          abortControllerRef.current = null
-          if (userMessageContent) {
-            setHistory(history)
-            setMessage(messageText)
-          }
-          setAlert({ type: 'error', message: error })
-        },
-        (event: StreamEvent) => {
-          // Handle tool call events
-          const toolCallId = event.tool_call_id || event.tool
-          if (!toolCallId) return
-
-          const updateHistoryWithToolCalls = () => {
-            setHistory((prev) => {
-              const updated: ChatResponse['history'] = [...prev]
-              let targetIndex = assistantIndexRef.current
-              if (targetIndex < 0 || targetIndex >= updated.length) {
-                updated.push({ 
-                  role: 'assistant' as const, 
-                  content: '',
-                  toolCalls: Array.from(currentToolCalls.values())
-                })
-                targetIndex = updated.length - 1
-                assistantIndexRef.current = targetIndex
-              } else {
-                const existingTurn = updated[targetIndex]
-                updated[targetIndex] = {
-                  ...existingTurn,
-                  toolCalls: Array.from(currentToolCalls.values()),
-                }
-              }
-              // Update session asynchronously to avoid triggering re-renders
-              setTimeout(() => {
-                updateActiveSession({ history: updated })
-              }, 0)
-              return updated
+          } else if (targetIndex < 0 && content) {
+            updated.push({ 
+              role: 'assistant' as const, 
+              content,
+              toolCalls: toolCallManager.getToolCallsArray()
             })
+            targetIndex = updated.length - 1
+            assistantIndexRef.current = targetIndex
           }
+          // Update session asynchronously to avoid triggering re-renders during render
+          queueMicrotask(() => {
+            updateActiveSession({ history: updated })
+          })
+          return updated
+        })
+      }
 
-          if (event.type === 'tool_call_start' && event.tool) {
-            // Check if this tool call already exists
-            if (currentToolCalls.has(toolCallId)) {
-              return
+      await startStream(
+        payload,
+        {
+          onChunk: (chunk: string) => {
+            accumulatedContent += chunk
+            updateHistoryWithContent(accumulatedContent)
+          },
+          onDone: () => {
+            setLoading(false)
+            abortController.current = null
+            if (currentSessionId) {
+              updateActiveSession({ sessionId: currentSessionId })
             }
-            const toolCall: ToolCall = {
-              id: toolCallId,
-              name: event.tool,
-              arguments: (event.input as Record<string, unknown>) || {},
-              status: 'calling',
+            
+            // Auto-generate title for new conversations (first user+assistant exchange)
+            // Only generate once per session, and only if this is the first exchange
+            // Check: we have 1 user message, and we just got the first assistant response
+            if (currentHistory.length === 1 && 
+                accumulatedContent &&
+                (!activeSession?.title || activeSession.title === DEFAULT_SESSION_TITLE)) {
+              // Build the complete conversation history (user + assistant)
+              const fullHistory: ChatResponse['history'] = [
+                ...currentHistory,
+                { role: 'assistant' as const, content: accumulatedContent, toolCalls: [] }
+              ]
+              
+              // Generate title asynchronously
+              generateTitleAsync(fullHistory, activeSession, updateActiveSession)
             }
-            currentToolCalls.set(toolCallId, toolCall)
-            updateHistoryWithToolCalls()
-          } else if (event.type === 'tool_call_end' && event.tool) {
-            const toolCall = currentToolCalls.get(toolCallId)
-            if (toolCall) {
-              toolCall.status = 'completed'
-              toolCall.result = event.result
-              currentToolCalls.set(toolCallId, toolCall)
-              updateHistoryWithToolCalls()
+          },
+          onError: (error: string) => {
+            setLoading(false)
+            abortController.current = null
+            if (userMessageContent) {
+              setHistory(history)
+              setMessage(messageText)
             }
-          } else if (event.type === 'tool_call_error' && event.tool) {
-            const toolCall = currentToolCalls.get(toolCallId)
-            if (toolCall) {
-              toolCall.status = 'error'
-              toolCall.error = event.error
-              currentToolCalls.set(toolCallId, toolCall)
-              updateHistoryWithToolCalls()
-            }
-          }
-        },
-        abortControllerRef.current.signal
+            setAlert({ type: 'error', message: error })
+          },
+          onEvent: (event) => {
+            toolCallManager.handleStreamEvent(event, assistantIndexRef, (updater) => {
+              setHistory((prev) => {
+                const updated = updater(prev)
+                queueMicrotask(() => {
+                  updateActiveSession({ history: updated })
+                })
+                return updated
+              })
+            })
+          },
+        }
       )
 
       // Final update: ensure tool calls are preserved in the final history
-      if (accumulatedContent && currentToolCalls.size > 0) {
+      if (accumulatedContent && toolCallManager.getToolCallsArray().length > 0) {
         setHistory((prev) => {
           const updated: ChatResponse['history'] = [...prev]
           let targetIndex = assistantIndexRef.current
@@ -286,18 +206,18 @@ export function useChat() {
             updated[targetIndex] = {
               role: 'assistant' as const,
               content: accumulatedContent,
-              toolCalls: existingTurn?.toolCalls || Array.from(currentToolCalls.values()),
+              toolCalls: existingTurn?.toolCalls || toolCallManager.getToolCallsArray(),
             }
           }
-          setTimeout(() => {
+          queueMicrotask(() => {
             updateActiveSession({ history: updated })
-          }, 0)
+          })
           return updated
         })
       }
     } catch (error) {
       setLoading(false)
-      abortControllerRef.current = null
+      abortController.current = null
       
       // Check if error is due to abort
       if (error instanceof Error && error.name === 'AbortError') {
@@ -309,84 +229,14 @@ export function useChat() {
         setHistory(history)
         setMessage(messageText)
       }
-      const errorMessage = error instanceof Error ? error.message : 'Send failed'
+      const errorMessage = getErrorMessage(error) || 'Send failed'
       setAlert({ type: 'error', message: errorMessage })
     }
   }
 
-  const generateTitleAsync = async (
-    fullHistory: ChatResponse['history'],
-    _assistantContent: string
-  ) => {
-    // Early return if already in progress - prevent duplicate calls
-    if (titleGenerationInProgress.current) {
-      console.log('[Title Gen] Skipping: title generation already in progress')
-      return
-    }
-    
-    try {
-      // Check if this is the first exchange (1 user + 1 assistant message)
-      if (fullHistory.length !== 2) {
-        console.log('[Title Gen] Skipping: not first exchange. Length:', fullHistory.length)
-        return
-      }
-      
-      // Double-check: ensure title hasn't been set already (re-check before API call)
-      const currentTitle = activeSession?.title
-      if (currentTitle && currentTitle !== 'New chat') {
-        console.log('[Title Gen] Skipping: title already set to:', currentTitle)
-        return
-      }
-      
-      console.log('[Title Gen] Starting title generation...')
-      
-      // Set flag immediately to prevent duplicate calls
-      titleGenerationInProgress.current = true
-      
-      // Build messages for title generation
-      const messages = fullHistory.map((turn) => ({
-        role: turn.role,
-        content: turn.content || '',
-      }))
-      
-      console.log('[Title Gen] Messages for API:', messages)
-      
-      // Call API to generate title
-      console.log('[Title Gen] Calling generateTitle API...')
-      const title = await generateTitle(messages)
-      
-      console.log('[Title Gen] ✅ Received title from API:', title)
-      
-      // Final check: ensure title still hasn't been set by another call
-      // This prevents race conditions
-      const updatedSession = activeSession
-      if (updatedSession?.title && updatedSession.title !== 'New chat') {
-        console.log('[Title Gen] Skipping update: title was set to', updatedSession.title, 'by another call')
-        return
-      }
-      
-      // Update session title
-      if (title && title !== 'New chat') {
-        console.log('[Title Gen] ✅ Updating session title to:', title)
-        updateActiveSession({ title })
-      } else {
-        console.log('[Title Gen] ⚠️ Title was "New chat", not updating')
-      }
-    } catch (error) {
-      console.error('[Title Gen] ❌ ERROR:', error)
-      // Don't show error alert - title generation is not critical
-    } finally {
-      // Always reset the flag
-      titleGenerationInProgress.current = false
-    }
-  }
-
   const stopGeneration = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-      abortControllerRef.current = null
-      setLoading(false)
-    }
+    stopStream()
+    setLoading(false)
   }
 
   const regenerateResponse = async () => {
@@ -416,9 +266,6 @@ export function useChat() {
     setAlert(null)
     setLoading(true)
 
-    // Create abort controller for this request
-    abortControllerRef.current = new AbortController()
-
     // Add empty assistant message
     const updatedHistory: ChatResponse['history'] = [...newHistory, { role: 'assistant' as const, content: '', toolCalls: [] }]
     const assistantMessageIndex = updatedHistory.length - 1
@@ -427,6 +274,7 @@ export function useChat() {
 
     // Use a ref to track assistant message index
     const assistantIndexRef = { current: assistantMessageIndex }
+    toolCallManager.clear()
 
     try {
       // Filter history for backend
@@ -448,105 +296,67 @@ export function useChat() {
 
       let accumulatedContent = ''
       let currentSessionId = sessionId || undefined
-      const currentToolCalls = new Map<string, ToolCall>()
 
-      await sendChatMessageStream(
-        payload,
-        (chunk: string) => {
-          accumulatedContent += chunk
-          setHistory((prev) => {
-            const updated: ChatResponse['history'] = [...prev]
-            let targetIndex = assistantIndexRef.current
-            if (targetIndex >= 0 && targetIndex < updated.length) {
-              const existingTurn = updated[targetIndex]
-              updated[targetIndex] = {
-                role: 'assistant' as const,
-                content: accumulatedContent,
-                toolCalls: existingTurn.toolCalls || Array.from(currentToolCalls.values()),
-              }
+      const updateHistoryWithContent = (content: string) => {
+        setHistory((prev) => {
+          const updated: ChatResponse['history'] = [...prev]
+          let targetIndex = assistantIndexRef.current
+          if (targetIndex >= 0 && targetIndex < updated.length) {
+            const existingTurn = updated[targetIndex]
+            updated[targetIndex] = {
+              role: 'assistant' as const,
+              content,
+              toolCalls: existingTurn.toolCalls || toolCallManager.getToolCallsArray(),
             }
-            setTimeout(() => {
-              updateActiveSession({ history: updated })
-            }, 0)
-            return updated
+          }
+          queueMicrotask(() => {
+            updateActiveSession({ history: updated })
           })
-        },
-        () => {
-          setLoading(false)
-          abortControllerRef.current = null
-          if (currentSessionId) {
-            setSessionId(currentSessionId)
-            updateActiveSession({ sessionId: currentSessionId })
-          }
-        },
-        (error: string) => {
-          setLoading(false)
-          abortControllerRef.current = null
-          setAlert({ type: 'error', message: error })
-        },
-        (event: StreamEvent) => {
-          const toolCallId = event.tool_call_id || event.tool
-          if (!toolCallId) return
+          return updated
+        })
+      }
 
-          const updateHistoryWithToolCalls = () => {
-            setHistory((prev) => {
-              const updated: ChatResponse['history'] = [...prev]
-              let targetIndex = assistantIndexRef.current
-              if (targetIndex >= 0 && targetIndex < updated.length) {
-                const existingTurn = updated[targetIndex]
-                updated[targetIndex] = {
-                  ...existingTurn,
-                  toolCalls: Array.from(currentToolCalls.values()),
-                }
-              }
-              setTimeout(() => {
-                updateActiveSession({ history: updated })
-              }, 0)
-              return updated
+      await startStream(
+        payload,
+        {
+          onChunk: (chunk: string) => {
+            accumulatedContent += chunk
+            updateHistoryWithContent(accumulatedContent)
+          },
+          onDone: () => {
+            setLoading(false)
+            abortController.current = null
+            if (currentSessionId) {
+              updateActiveSession({ sessionId: currentSessionId })
+            }
+          },
+          onError: (error: string) => {
+            setLoading(false)
+            abortController.current = null
+            setAlert({ type: 'error', message: error })
+          },
+          onEvent: (event) => {
+            toolCallManager.handleStreamEvent(event, assistantIndexRef, (updater) => {
+              setHistory((prev) => {
+                const updated = updater(prev)
+                queueMicrotask(() => {
+                  updateActiveSession({ history: updated })
+                })
+                return updated
+              })
             })
-          }
-
-          if (event.type === 'tool_call_start' && event.tool) {
-            if (currentToolCalls.has(toolCallId)) {
-              return
-            }
-            const toolCall: ToolCall = {
-              id: toolCallId,
-              name: event.tool,
-              arguments: (event.input as Record<string, unknown>) || {},
-              status: 'calling',
-            }
-            currentToolCalls.set(toolCallId, toolCall)
-            updateHistoryWithToolCalls()
-          } else if (event.type === 'tool_call_end' && event.tool) {
-            const toolCall = currentToolCalls.get(toolCallId)
-            if (toolCall) {
-              toolCall.status = 'completed'
-              toolCall.result = event.result
-              currentToolCalls.set(toolCallId, toolCall)
-              updateHistoryWithToolCalls()
-            }
-          } else if (event.type === 'tool_call_error' && event.tool) {
-            const toolCall = currentToolCalls.get(toolCallId)
-            if (toolCall) {
-              toolCall.status = 'error'
-              toolCall.error = event.error
-              currentToolCalls.set(toolCallId, toolCall)
-              updateHistoryWithToolCalls()
-            }
-          }
-        },
-        abortControllerRef.current.signal
+          },
+        }
       )
     } catch (error) {
       setLoading(false)
-      abortControllerRef.current = null
+      abortController.current = null
       
       if (error instanceof Error && error.name === 'AbortError') {
         return
       }
       
-      const errorMessage = error instanceof Error ? error.message : 'Regenerate failed'
+      const errorMessage = getErrorMessage(error) || 'Regenerate failed'
       setAlert({ type: 'error', message: errorMessage })
     }
   }
@@ -565,4 +375,3 @@ export function useChat() {
     regenerateResponse,
   }
 }
-

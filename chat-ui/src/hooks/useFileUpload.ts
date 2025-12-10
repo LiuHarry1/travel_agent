@@ -1,7 +1,5 @@
 import { useState, useRef, type DragEvent, type ChangeEvent } from 'react'
-
-const VALID_EXTENSIONS = ['.txt', '.md', '.json', '.text', '.pdf', '.doc', '.docx']
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+import { validateFile } from '../utils/validation'
 
 interface FileUploadError {
   type: 'size' | 'format'
@@ -13,21 +11,16 @@ export function useFileUpload() {
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const validateFile = (file: File): { valid: boolean; error?: FileUploadError } => {
-    const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'))
-    const isValidType = 
-      VALID_EXTENSIONS.includes(fileExtension) || 
-      file.type.startsWith('text/') ||
-      file.type === 'application/pdf' ||
-      file.type === 'application/msword' ||
-      file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    const isValidSize = file.size <= MAX_FILE_SIZE
-
-    if (!isValidSize) {
-      return { valid: false, error: { type: 'size', files: [file.name] } }
-    }
-    if (!isValidType) {
-      return { valid: false, error: { type: 'format', files: [file.name] } }
+  const validateFileForUpload = (file: File): { valid: boolean; error?: FileUploadError } => {
+    const result = validateFile(file)
+    if (!result.valid && result.error) {
+      return { 
+        valid: false, 
+        error: { 
+          type: result.error.type, 
+          files: [file.name] 
+        } 
+      }
     }
     return { valid: true }
   }
@@ -38,7 +31,7 @@ export function useFileUpload() {
     const errorMap = new Map<FileUploadError['type'], string[]>()
 
     files.forEach((file) => {
-      const validation = validateFile(file)
+      const validation = validateFileForUpload(file)
       if (validation.valid) {
         validFiles.push(file)
       } else if (validation.error) {

@@ -79,8 +79,8 @@ export function Layout({
             type="button"
             className={`settings-btn-top ${activeTab === 'admin' ? 'active' : ''}`}
             onClick={() => onTabChange('admin')}
-            data-tooltip="Admin Settings"
-            aria-label="Admin Settings"
+            data-tooltip={activeTab === 'admin' ? 'Close Admin Settings' : 'Admin Settings'}
+            aria-label={activeTab === 'admin' ? 'Close Admin Settings' : 'Admin Settings'}
           >
             <svg
               width="20"
