@@ -8,7 +8,6 @@ import {
   saveConfig,
   getFunctionCalls,
   updateFunctionCalls,
-  getSystemPrompt,
   updateSystemPrompt,
   type ProviderInfo,
   type FunctionDefinition
