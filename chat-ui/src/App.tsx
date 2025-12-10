@@ -34,7 +34,12 @@ function App() {
         onSidebarToggle={handleSidebarToggle}
         onTabChange={handleTabChange}
       >
-        <Suspense fallback={<div className="loading-container">Loading...</div>}>
+        <Suspense fallback={
+          <div className="loading-container">
+            <div className="loading-spinner"></div>
+            <span style={{ marginLeft: '0.75rem' }}>Loading...</span>
+          </div>
+        }>
           {activeTab === 'chat' && <ChatPage />}
           {activeTab === 'admin' && <AdminPage />}
         </Suspense>
