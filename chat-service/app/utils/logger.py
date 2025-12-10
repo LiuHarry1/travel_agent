@@ -92,9 +92,8 @@ def get_logger(name: str) -> logging.Logger:
     Use this in any module instead of logging.getLogger().
     
     Example:
-        from app.logger import get_logger
+        from app.utils.logger import get_logger
         logger = get_logger(__name__)
         logger.info("Log message")
     """
     return logging.getLogger(name)
-

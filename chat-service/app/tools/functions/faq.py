@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict
 
 # 复用现有的 FAQTool 逻辑
-from ...tools.faq_tool import FAQTool
+from app.tools.implementations.faq_tool import FAQTool
 
 _faq_tool_instance = None
 

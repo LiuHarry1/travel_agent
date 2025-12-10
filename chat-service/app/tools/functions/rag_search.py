@@ -4,10 +4,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
-from ...core.exceptions import RAGError
-from ...llm import LLMClient
-from ...service.rag import RAGOrchestrator, RAGConfig
-from ...shared.config import get_settings
+from app.core.exceptions import RAGError
+from app.llm import LLMClient
+from app.service.rag import RAGOrchestrator, RAGConfig
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ def _get_rag_orchestrator() -> RAGOrchestrator:
             rag_settings = settings.rag
             
             # Convert Pydantic model to RAGConfig
-            from ...service.rag.config import QueryRewriterConfig, RetrievalSourceConfig, RAGConfig
+            from app.service.rag.config import QueryRewriterConfig, RetrievalSourceConfig, RAGConfig
             
             query_rewriter_config = QueryRewriterConfig(
                 enabled=rag_settings.query_rewriter.enabled,
@@ -58,7 +58,7 @@ def _get_rag_orchestrator() -> RAGOrchestrator:
         except Exception as e:
             logger.error(f"Failed to initialize RAG orchestrator: {e}", exc_info=True)
             # Create a minimal fallback config
-            from ...service.rag.config import QueryRewriterConfig, RetrievalSourceConfig, RAGConfig
+            from app.service.rag.config import QueryRewriterConfig, RetrievalSourceConfig, RAGConfig
             fallback_config = RAGConfig(
                 enabled=True,
                 strategy="multi_round",

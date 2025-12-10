@@ -4,7 +4,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Dict, List
 
-from ..sources.base import BaseRetrievalSource, RetrievalResult
+from app.service.rag.sources.base import BaseRetrievalSource, RetrievalResult
 
 
 class BaseRetrievalStrategy(ABC):

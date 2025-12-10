@@ -7,8 +7,8 @@ from typing import Any, Dict, List
 
 import httpx
 
-from ....core.exceptions import RAGError
-from .base import BaseRetrievalSource, RetrievalResult
+from app.core.exceptions import RAGError
+from app.service.rag.sources.base import BaseRetrievalSource, RetrievalResult
 
 logger = logging.getLogger(__name__)
 

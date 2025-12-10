@@ -26,7 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api import admin_router, chat_router, common_router
 from app.core.container import get_container
 from app.core.exceptions import ServiceError
-from app.logger import setup_logging
+from app.utils.logger import setup_logging
 from app.utils.exceptions import format_error_message
 
 # Configure logging to output to both console and file

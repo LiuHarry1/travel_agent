@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from app.utils.constants import BACKEND_ROOT
-from .config_manager import ConfigManager
+from app.tools.implementations.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 

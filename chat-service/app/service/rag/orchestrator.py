@@ -4,13 +4,13 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
-from ...core.exceptions import RAGError
-from ...llm import LLMClient
-from .config import RAGConfig
-from .factories import SourceFactory, StrategyFactory
-from .query_rewriter import QueryRewriter
-from .sources.base import BaseRetrievalSource, RetrievalResult
-from .strategies.base import BaseRetrievalStrategy
+from app.core.exceptions import RAGError
+from app.llm import LLMClient
+from app.service.rag.config import RAGConfig
+from app.service.rag.factories import SourceFactory, StrategyFactory
+from app.service.rag.query_rewriter import QueryRewriter
+from app.service.rag.sources.base import BaseRetrievalSource, RetrievalResult
+from app.service.rag.strategies.base import BaseRetrievalStrategy
 
 logger = logging.getLogger(__name__)
 

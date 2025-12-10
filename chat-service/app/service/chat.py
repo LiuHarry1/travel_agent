@@ -6,17 +6,17 @@ import logging
 import time
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
-from ..core.config_service import get_config_service
-from ..llm import LLMClient, LLMError
-from ..llm.openai import OpenAIClient
-from ..models import ChatRequest
-from ..tools import FunctionRegistry, get_function_registry
-from ..utils.exceptions import format_error_message
-from .conversation_manager import ConversationManager
-from .message_processing import MessageProcessingService
-from .tool_execution import ToolExecutionService
-from .tool_orchestrator import ToolOrchestrator
-from .tool_result_formatter import (
+from app.core.config_service import get_config_service
+from app.llm import LLMClient, LLMError
+from app.llm.openai import OpenAIClient
+from app.models import ChatRequest
+from app.tools import FunctionRegistry, get_function_registry
+from app.utils.exceptions import format_error_message
+from app.service.conversation_manager import ConversationManager
+from app.service.message_processing import MessageProcessingService
+from app.service.tool_execution import ToolExecutionService
+from app.service.tool_orchestrator import ToolOrchestrator
+from app.service.tool_result_formatter import (
     check_tools_used_but_no_info,
     format_tool_result_for_llm,
     response_suggests_contact_harry,

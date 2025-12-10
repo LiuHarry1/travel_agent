@@ -4,14 +4,14 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from ..core.config_service import get_config_service
-from ..llm import LLMClient
-from ..service.chat import ChatService
-from ..service.message_processing import MessageProcessingService
-from ..service.tool_execution import ToolExecutionService
-from ..service.tool_result_formatter import format_tool_result_for_llm
-from ..service.rag import RAGOrchestrator, RAGConfig
-from ..tools import FunctionRegistry, get_function_registry
+from app.core.config_service import get_config_service
+from app.llm import LLMClient
+from app.service.chat import ChatService
+from app.service.message_processing import MessageProcessingService
+from app.service.tool_execution import ToolExecutionService
+from app.service.tool_result_formatter import format_tool_result_for_llm
+from app.service.rag import RAGOrchestrator, RAGConfig
+from app.tools import FunctionRegistry, get_function_registry
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ class Container:
         if self._rag_orchestrator is None:
             logger.info("Creating RAG orchestrator...")
             try:
-                from ..service.rag.config import QueryRewriterConfig, RetrievalSourceConfig, RAGConfig
+                from app.service.rag.config import QueryRewriterConfig, RetrievalSourceConfig, RAGConfig
                 config_service = self.config_service
                 rag_settings = config_service.get_settings().rag
                 
@@ -121,7 +121,7 @@ class Container:
             except Exception as e:
                 logger.error(f"Failed to initialize RAG orchestrator: {e}", exc_info=True)
                 # Create fallback config
-                from ..service.rag.config import QueryRewriterConfig, RetrievalSourceConfig, RAGConfig
+                from app.service.rag.config import QueryRewriterConfig, RetrievalSourceConfig, RAGConfig
                 fallback_config = RAGConfig(
                     enabled=True,
                     strategy="multi_round",

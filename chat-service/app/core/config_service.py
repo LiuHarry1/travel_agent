@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from ..shared.config import Settings, get_settings, reload_settings
+from app.core.config import Settings, get_settings, reload_settings
 
 logger = logging.getLogger(__name__)
 

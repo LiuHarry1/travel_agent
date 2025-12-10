@@ -12,7 +12,7 @@ try:
 except ImportError:
     BM25Okapi = None
 
-from .base_tool import BaseTool, ToolExecutionResult
+from app.tools.base import BaseTool, ToolExecutionResult
 from app.utils.constants import APP_ROOT
 
 
@@ -314,4 +314,3 @@ class FAQTool(BaseTool):
                     "source": "travel_faq_database"
                 }
             )
-

@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Dict, List, Optional
 
-from ...llm import LLMClient
+from app.llm import LLMClient
 
 logger = logging.getLogger(__name__)
 

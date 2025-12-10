@@ -3,7 +3,7 @@
 from typing import Optional
 
 # Re-export core exceptions for backward compatibility
-from ..core.exceptions import (
+from app.core.exceptions import (
     ServiceError,
     ConfigurationError,
     RAGError,

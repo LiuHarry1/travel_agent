@@ -60,7 +60,7 @@ class Settings(BaseModel):
     llm: LLMSettings = Field(default_factory=LLMSettings)
     rag: RAGSettings = Field(default_factory=RAGSettings)
     config_path: str = Field(
-        default_factory=lambda: str(BACKEND_ROOT / "app" / "config.yaml")
+        default_factory=lambda: str(BACKEND_ROOT / "config" / "app.yaml")
     )
     
     @classmethod
@@ -77,7 +77,7 @@ class Settings(BaseModel):
         if config_path is None:
             config_path = os.getenv(
                 "TRAVEL_AGENT_CONFIG",
-                str(BACKEND_ROOT / "app" / "config.yaml")
+                str(BACKEND_ROOT / "config" / "app.yaml")
             )
         
         config_file = Path(config_path)
@@ -192,7 +192,7 @@ class Settings(BaseModel):
         """Save system prompt template."""
         self.llm.system_prompt_template = template
         self.save_to_yaml()
-    
+
 
 
 # Global settings instance
@@ -212,4 +212,3 @@ def reload_settings(config_path: Optional[str] = None) -> Settings:
     global _settings
     _settings = Settings.from_yaml(config_path)
     return _settings
-

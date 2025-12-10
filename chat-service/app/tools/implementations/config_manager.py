@@ -76,4 +76,3 @@ class ConfigManager:
         except Exception as e:
             logger.error(f"Failed to load function registry config: {e}", exc_info=True)
             return [], {}
-
