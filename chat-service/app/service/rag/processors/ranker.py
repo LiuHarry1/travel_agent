@@ -80,3 +80,4 @@ class ResultRanker:
         logger.info(f"Ranked {len(ranked)} results by round")
         return ranked
 
+

@@ -34,3 +34,4 @@ class BaseGuardrail(ABC):
         self.enabled = config.get("enabled", True)
         self.strict_mode = config.get("strict_mode", False)
 
+

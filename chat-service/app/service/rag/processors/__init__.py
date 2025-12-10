@@ -4,3 +4,4 @@ from app.service.rag.processors.ranker import ResultRanker
 
 __all__ = ["ResultMerger", "ResultRanker"]
 
+
