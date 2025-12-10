@@ -195,6 +195,18 @@ class MilvusVectorStore(BaseVectorStore):
                     f"2. Re-upload your files to recreate the collection with the new schema"
                 )
             
+            if not has_metadata:
+                error_msg = (
+                    f"Collection '{collection_name}' exists but doesn't have 'metadata' field.\n"
+                    f"Available fields: {', '.join(field_names)}\n"
+                    f"This collection was created with an older schema without metadata support.\n"
+                    f"To enable metadata support, please:\n"
+                    f"1. Delete the collection: DELETE /api/v1/collections/{collection_name}\n"
+                    f"2. Re-upload your files to recreate the collection with the new schema"
+                )
+                logger.error(error_msg)
+                raise IndexingError(error_msg)
+            
             if not has_file_path:
                 logger.warning(
                     f"Collection '{collection_name}' missing 'file_path' field. "
@@ -250,13 +262,20 @@ class MilvusVectorStore(BaseVectorStore):
             
             # Serialize metadata (including location information)
             metadata_list = []
-            for chunk in chunks:
+            for idx, chunk in enumerate(chunks):
                 metadata_dict = {
                     **chunk.metadata,
                 }
                 # Add location information to metadata
                 if chunk.location:
                     metadata_dict["location"] = chunk.location.to_dict()
+                
+                # Debug: Log first chunk's metadata
+                if idx == 0:
+                    logger.info(f"First chunk metadata before serialization: {chunk.metadata}")
+                    logger.info(f"First chunk location: {chunk.location.to_dict() if chunk.location else None}")
+                    logger.info(f"Metadata dict after merge: {metadata_dict}")
+                
                 metadata_list.append(json.dumps(metadata_dict, ensure_ascii=False))
             
             # Check if collection has metadata field (for backward compatibility)
@@ -389,6 +408,7 @@ class MilvusVectorStore(BaseVectorStore):
             output_fields = ["id", "text", "document_id"]
             schema = collection.schema
             has_metadata = any(field.name == "metadata" for field in schema.fields)
+            logger.info(f"Schema fields: {[f.name for f in schema.fields]}, has_metadata: {has_metadata}")
             if has_metadata:
                 output_fields.append("metadata")
             
@@ -419,14 +439,38 @@ class MilvusVectorStore(BaseVectorStore):
                 if has_metadata and "metadata" in result:
                     try:
                         metadata_str = result.get("metadata", "{}")
+                        logger.debug(f"Chunk {result.get('id')} metadata_str type: {type(metadata_str)}, value: {metadata_str}")
                         if metadata_str:
-                            metadata_dict = json.loads(metadata_str)
+                            if isinstance(metadata_str, str):
+                                metadata_dict = json.loads(metadata_str)
+                            else:
+                                metadata_dict = metadata_str
                             chunk_data["metadata"] = metadata_dict
                             # Extract location if available
                             if "location" in metadata_dict:
                                 chunk_data["location"] = metadata_dict["location"]
-                    except json.JSONDecodeError:
-                        logger.warning(f"Failed to parse metadata for chunk {result.get('id')}")
+                        else:
+                            chunk_data["metadata"] = {}
+                    except (json.JSONDecodeError, TypeError) as e:
+                        logger.warning(f"Failed to parse metadata for chunk {result.get('id')}: {str(e)}")
+                        # Set empty metadata if parsing fails
+                        chunk_data["metadata"] = {}
+                else:
+                    # Always include metadata field, even if empty
+                    chunk_data["metadata"] = {}
+                    # Try to extract basic info from text if metadata is not available
+                    if not has_metadata:
+                        logger.debug(f"Schema does not have metadata field for chunk {result.get('id')}, attempting to extract from text")
+                        # Try to extract page number from text (e.g., <page page="1"> or page="1")
+                        import re
+                        text = result.get("text", "")
+                        page_match = re.search(r'page="?(\d+)"?', text, re.IGNORECASE)
+                        if page_match:
+                            page_num = int(page_match.group(1))
+                            chunk_data["metadata"] = {"page_number": page_num}
+                            chunk_data["location"] = {"page_number": page_num}
+                    elif "metadata" not in result:
+                        logger.debug(f"Result does not contain metadata key for chunk {result.get('id')}, result keys: {list(result.keys())}")
                 
                 chunks.append(chunk_data)
             

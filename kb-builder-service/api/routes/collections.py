@@ -189,6 +189,11 @@ async def create_collection(
                 dtype=DataType.VARCHAR,
                 max_length=2048
             ),
+            FieldSchema(
+                name="metadata",
+                dtype=DataType.VARCHAR,
+                max_length=4096  # JSON string for location and other metadata
+            ),
         ]
         
         schema = CollectionSchema(

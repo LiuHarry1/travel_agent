@@ -131,6 +131,17 @@ class UnifiedLoader(BaseLoader):
         if structure and structure.total_pages:
             metadata["pages_info"] = structure.total_pages
         
+        # 添加PDF元数据到metadata（title, author, subject, creator）
+        if structure and structure.pdf_metadata:
+            for key, value in structure.pdf_metadata.items():
+                if value:  # 只添加非空值
+                    metadata[f"pdf_{key}"] = value
+        
+        # Debug: Log metadata before creating Document
+        logger.info(f"Document metadata before creation: {metadata}")
+        logger.info(f"Document metadata keys: {list(metadata.keys())}")
+        logger.info(f"Structure pdf_metadata: {structure.pdf_metadata if structure else 'None'}")
+        
         return Document(
             content=content,
             source=str(saved_source_path),  # 使用保存后的路径

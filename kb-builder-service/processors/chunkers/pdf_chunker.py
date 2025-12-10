@@ -4,6 +4,9 @@ import re
 from .base import BaseChunker
 from models.document import Document
 from models.chunk import Chunk, ChunkLocation
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class PDFChunker(BaseChunker):
@@ -114,6 +117,11 @@ class PDFChunker(BaseChunker):
                 if img_idx_match:
                     location.image_index = int(img_idx_match.group(1))
             
+            # Debug: Log document metadata for first chunk
+            if chunk_index == start_chunk_index:
+                logger.info(f"Document metadata: {document.metadata}")
+                logger.info(f"Document metadata keys: {list(document.metadata.keys()) if document.metadata else 'None'}")
+            
             chunk = Chunk(
                 text=clean_text,
                 chunk_id=self._generate_chunk_id(document.source, chunk_index),
@@ -129,6 +137,11 @@ class PDFChunker(BaseChunker):
                     "page_number": page_num
                 }
             )
+            
+            # Debug: Log chunk metadata for first chunk
+            if chunk_index == start_chunk_index:
+                logger.info(f"Chunk metadata after creation: {chunk.metadata}")
+                logger.info(f"Chunk metadata keys: {list(chunk.metadata.keys())}")
             chunks.append(chunk)
             return chunks
         
@@ -175,6 +188,11 @@ class PDFChunker(BaseChunker):
                 if img_idx_match:
                     location.image_index = int(img_idx_match.group(1))
             
+            # Debug: Log document metadata for first chunk in page
+            if chunk_index == start_chunk_index:
+                logger.info(f"Document metadata (page chunk): {document.metadata}")
+                logger.info(f"Document metadata keys (page chunk): {list(document.metadata.keys()) if document.metadata else 'None'}")
+            
             chunk = Chunk(
                 text=chunk_text,
                 chunk_id=self._generate_chunk_id(document.source, chunk_index),
@@ -190,6 +208,12 @@ class PDFChunker(BaseChunker):
                     "page_number": page_num
                 }
             )
+            
+            # Debug: Log chunk metadata for first chunk in page
+            if chunk_index == start_chunk_index:
+                logger.info(f"Chunk metadata after creation (page chunk): {chunk.metadata}")
+                logger.info(f"Chunk metadata keys (page chunk): {list(chunk.metadata.keys())}")
+            
             chunks.append(chunk)
             
             # 计算下一个位置（带重叠）

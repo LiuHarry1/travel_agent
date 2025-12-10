@@ -35,11 +35,30 @@ export interface SourceFile {
   file_path?: string;  // Actual file path for accessing the file
 }
 
+export interface ChunkLocation {
+  start_char?: number;
+  end_char?: number;
+  page_number?: number;
+  page_bbox?: { x0: number; y0: number; x1: number; y1: number };
+  paragraph_index?: number;
+  section_index?: number;
+  heading_path?: string[];
+  code_block_index?: number;
+  image_index?: number;
+  image_url?: string;
+  table_index?: number;
+  table_cell?: string;
+}
+
 export interface Chunk {
   id: number;
   text: string;
   document_id: string;
   index: number;
+  metadata?: Record<string, any>;
+  location?: ChunkLocation;
+  file_path?: string;
+  chunk_id?: string;
 }
 
 export interface ChunksResponse {
@@ -258,7 +277,13 @@ export class ApiClient {
       const error = await response.json();
       throw new Error(error.detail || 'Failed to fetch chunks');
     }
-    return response.json();
+    const data = await response.json();
+    console.log('=== Raw Backend Response ===');
+    console.log('Response data:', data);
+    if (data && data.chunks && data.chunks.length > 0) {
+      console.log('Raw first chunk:', JSON.stringify(data.chunks[0], null, 2));
+    }
+    return data;
   }
 
   async getSourceFileUrl(collectionName: string, documentId: string, database?: string): Promise<string> {
