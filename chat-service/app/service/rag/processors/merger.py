@@ -79,3 +79,4 @@ class ResultMerger:
             f"{sum(len(r) for r in result_lists)} total -> {len(merged)} unique results"
         )
         return merged
+

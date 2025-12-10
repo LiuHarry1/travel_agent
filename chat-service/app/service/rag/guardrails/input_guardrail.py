@@ -115,3 +115,4 @@ class InputGuardrail(BaseGuardrail):
         
         # All checks passed
         return GuardrailResult(is_valid=True, sanitized_content=query)
+

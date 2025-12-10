@@ -154,3 +154,4 @@ class RAGCache:
         # Note: This assumes compute_func is async, caller should await
         # For now, we'll just return None and let caller handle computation
         return None
+

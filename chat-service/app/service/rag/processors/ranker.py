@@ -79,3 +79,4 @@ class ResultRanker:
         ranked = sorted(results, key=sort_key)
         logger.info(f"Ranked {len(ranked)} results by round")
         return ranked
+
