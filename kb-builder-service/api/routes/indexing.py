@@ -159,16 +159,29 @@ async def process_file_with_progress(
         await asyncio.sleep(0.05)  # Give frontend time to update UI
         
         try:
-            from processors.chunkers import RecursiveChunker
+            from processors.chunkers import ChunkerFactory
+            from models.document import DocumentType
+            
             chunk_size_val = chunk_size or service.chunk_size
             chunk_overlap_val = chunk_overlap or service.chunk_overlap
             logger.info(f"Creating chunker with chunk_size={chunk_size_val}, chunk_overlap={chunk_overlap_val}")
             
-            chunker = RecursiveChunker(
+            # Get original document type from metadata
+            original_type = document.metadata.get("original_type") if document.metadata else None
+            if original_type:
+                doc_type = DocumentType(original_type)
+            else:
+                # Fallback: use detected type from loader
+                doc_type = doc_type  # Use the doc_type parameter
+            
+            # Use ChunkerFactory to get the correct chunker
+            chunker = ChunkerFactory.create(
+                doc_type=doc_type,
                 chunk_size=chunk_size_val,
                 chunk_overlap=chunk_overlap_val
             )
             
+            logger.info(f"Using {chunker.__class__.__name__} for document type {doc_type.value}")
             logger.info(f"Starting chunk operation on document with {len(document.content)} characters")
             chunks = chunker.chunk(document)
             logger.info(f"Chunking completed: created {len(chunks)} chunks")

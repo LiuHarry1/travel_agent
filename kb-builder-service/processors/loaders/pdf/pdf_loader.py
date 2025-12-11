@@ -49,17 +49,18 @@ class PDFLoader(BaseLoader):
         logger.info(f"Loading PDF file: {original_filename} (file_id: {file_id})")
         
         try:
-            # Detect headings
-            headings = []
+            # Open PDF once and use it for both heading detection and content extraction
             with pdfplumber.open(path) as pdf:
+                # Detect headings
+                headings = []
                 try:
                     headings = self.heading_detector.detect(pdf)
                 except Exception as e:
                     logger.warning(f"Failed to detect PDF headings: {e}", exc_info=True)
                     headings = []
-            
-            # Extract content
-            content, structure = self.pdf_extractor.extract(path, file_id, headings)
+                
+                # Extract content (reuse the same PDF object)
+                content, structure = self.pdf_extractor.extract(path, file_id, headings, pdf=pdf)
             
             # Build document
             return self._build_document(

@@ -33,7 +33,8 @@ class PDFExtractor:
         self, 
         path: Path, 
         file_id: str,
-        headings: List[Dict]
+        headings: List[Dict],
+        pdf=None
     ) -> Tuple[str, DocumentStructure]:
         """
         Extract content from PDF and convert to Markdown.
@@ -42,6 +43,7 @@ class PDFExtractor:
             path: Path to PDF file
             file_id: File ID for naming images
             headings: List of detected headings
+            pdf: Optional already-opened pdfplumber PDF object (for performance optimization)
         
         Returns:
             Tuple of (markdown_content, DocumentStructure)
@@ -55,92 +57,155 @@ class PDFExtractor:
         pdf_metadata = {}
         tables_info = []
         
+        # Use provided PDF object or open new one
+        should_close_pdf = pdf is None
+        if pdf is None:
+            pdf = pdfplumber.open(path)
+        
         try:
-            with pdfplumber.open(path) as pdf:
-                # Extract PDF metadata
-                if pdf.metadata:
-                    pdf_metadata = {
-                        "title": pdf.metadata.get("Title", ""),
-                        "author": pdf.metadata.get("Author", ""),
-                        "subject": pdf.metadata.get("Subject", ""),
-                        "creator": pdf.metadata.get("Creator", ""),
-                    }
-                    logger.info(f"Extracted PDF metadata: {pdf_metadata}")
+            # Extract PDF metadata
+            if pdf.metadata:
+                pdf_metadata = {
+                    "title": pdf.metadata.get("Title", ""),
+                    "author": pdf.metadata.get("Author", ""),
+                    "subject": pdf.metadata.get("Subject", ""),
+                    "creator": pdf.metadata.get("Creator", ""),
+                }
+                logger.info(f"Extracted PDF metadata: {pdf_metadata}")
+            
+            # Open PyMuPDF document once for image extraction (if available)
+            pdf_doc = None
+            try:
+                import fitz  # PyMuPDF
+                pdf_doc = fitz.open(path)
+            except ImportError:
+                pass
+            except Exception as e:
+                logger.warning(f"Failed to open PDF with PyMuPDF for image extraction: {e}")
+            
+            # Process pages
+            current_char_pos = 0
+            page_text_lengths = []  # Cache page text lengths to avoid re-extraction
+            
+            for page_num, page in enumerate(pdf.pages, 1):
+                page_start_char = current_char_pos
                 
-                # Process pages
-                current_char_pos = 0
+                # Extract text
+                text = page.extract_text() or ''
+                page_text_lengths.append(len(text))
                 
-                for page_num, page in enumerate(pdf.pages, 1):
-                    page_start_char = current_char_pos
+                # Extract tables
+                tables = page.extract_tables()
+                if tables:
+                    for table_idx, table in enumerate(tables):
+                        table_md = self._table_to_markdown(table)
+                        table_markdown = f'\n<table index="{len(tables_info)}" page="{page_num}">\n{table_md}\n</table>\n\n'
+                        markdown_parts.append(table_markdown)
+                        current_char_pos += len(table_markdown)
+                        tables_info.append({
+                            "page": page_num,
+                            "index": len(tables_info),
+                            "rows": len(table),
+                            "cols": len(table[0]) if table else 0
+                        })
+                
+                if text:
+                    # Wrap page content with <page> tags
+                    page_start_markdown = f'<page page="{page_num}" start_char="{page_start_char}">\n\n'
+                    markdown_parts.append(page_start_markdown)
+                    current_char_pos += len(page_start_markdown)
                     
-                    # Extract text
-                    text = page.extract_text()
+                    # Insert headings based on character positions
+                    page_headings = [h for h in headings if h['page'] == page_num]
+                    page_headings.sort(key=lambda h: h['start_char'])
                     
-                    # Extract tables
-                    tables = page.extract_tables()
-                    if tables:
-                        for table_idx, table in enumerate(tables):
-                            table_md = self._table_to_markdown(table)
-                            table_markdown = f'\n<table index="{len(tables_info)}" page="{page_num}">\n{table_md}\n</table>\n\n'
-                            markdown_parts.append(table_markdown)
-                            current_char_pos += len(table_markdown)
-                            tables_info.append({
-                                "page": page_num,
-                                "index": len(tables_info),
-                                "rows": len(table),
-                                "cols": len(table[0]) if table else 0
-                            })
+                    # Calculate page start offset in character stream (using cached lengths)
+                    page_start_offset = sum(page_text_lengths[:page_num - 1])
                     
-                    if text:
-                        # Wrap page content with <page> tags
-                        page_start_markdown = f'<page page="{page_num}" start_char="{page_start_char}">\n\n'
-                        markdown_parts.append(page_start_markdown)
-                        current_char_pos += len(page_start_markdown)
+                    # Insert headings in reverse order to avoid position offset issues
+                    text_with_headings = text
+                    inserted_positions = []  # Track where we've inserted to avoid duplicates
+                    
+                    for heading in reversed(page_headings):
+                        heading_text = heading['text']
+                        heading_level = heading['level']
+                        clean_heading_text = heading_text.strip()
+                        heading_char_offset = heading['start_char']
                         
-                        # Insert headings
-                        page_headings = [h for h in headings if h['page'] == page_num]
-                        page_headings.sort(key=lambda h: h['start_char'])
+                        # Calculate relative position within this page
+                        relative_offset = heading_char_offset - page_start_offset
                         
-                        text_with_headings = text
-                        
-                        # Replace from back to front to avoid position offset issues
-                        for heading in reversed(page_headings):
-                            heading_text = heading['text']
-                            heading_level = heading['level']
-                            clean_heading_text = heading_text.strip()
+                        # Try to find heading at expected position first
+                        found = False
+                        if 0 <= relative_offset < len(text):
+                            # Check if heading text appears near the expected position
+                            search_start = max(0, relative_offset - 50)
+                            search_end = min(len(text), relative_offset + len(clean_heading_text) + 50)
+                            search_text = text[search_start:search_end]
                             
+                            # Try exact match first
+                            if clean_heading_text in search_text:
+                                match_pos = search_text.find(clean_heading_text)
+                                actual_pos = search_start + match_pos
+                                
+                                # Check if we haven't already inserted here
+                                if not any(abs(actual_pos - pos) < 10 for pos in inserted_positions):
+                                    md_heading = '#' * heading_level + ' ' + clean_heading_text + '\n\n'
+                                    text_with_headings = (
+                                        text_with_headings[:actual_pos] +
+                                        md_heading +
+                                        text_with_headings[actual_pos + len(clean_heading_text):]
+                                    )
+                                    inserted_positions.append(actual_pos)
+                                    found = True
+                        
+                        # Fallback to text matching if position-based matching failed
+                        if not found:
+                            # Try exact match in full text
                             if clean_heading_text in text_with_headings:
-                                md_heading = '#' * heading_level + ' ' + clean_heading_text + '\n\n'
-                                text_with_headings = text_with_headings.replace(
-                                    clean_heading_text,
-                                    md_heading,
-                                    1
-                                )
-                            else:
-                                # Try fuzzy match
+                                # Find all occurrences
+                                matches = list(re.finditer(re.escape(clean_heading_text), text_with_headings))
+                                for match in reversed(matches):
+                                    match_pos = match.start()
+                                    # Check if we haven't already inserted near this position
+                                    if not any(abs(match_pos - pos) < 10 for pos in inserted_positions):
+                                        md_heading = '#' * heading_level + ' ' + clean_heading_text + '\n\n'
+                                        text_with_headings = (
+                                            text_with_headings[:match_pos] +
+                                            md_heading +
+                                            text_with_headings[match_pos + len(clean_heading_text):]
+                                        )
+                                        inserted_positions.append(match_pos)
+                                        found = True
+                                        break
+                            
+                            # Try fuzzy match as last resort
+                            if not found:
                                 heading_pattern = re.escape(clean_heading_text)
                                 heading_pattern = heading_pattern.replace(r'\ ', r'\s+')
                                 match = re.search(heading_pattern, text_with_headings, re.IGNORECASE)
                                 if match:
-                                    md_heading = '#' * heading_level + ' ' + clean_heading_text + '\n\n'
-                                    text_with_headings = (
-                                        text_with_headings[:match.start()] +
-                                        md_heading +
-                                        text_with_headings[match.end():]
-                                    )
-                        
-                        # Add page content
-                        page_content = f'## Page {page_num}\n\n{text_with_headings}\n\n'
-                        markdown_parts.append(page_content)
-                        current_char_pos += len(page_content)
+                                    match_pos = match.start()
+                                    if not any(abs(match_pos - pos) < 10 for pos in inserted_positions):
+                                        md_heading = '#' * heading_level + ' ' + clean_heading_text + '\n\n'
+                                        text_with_headings = (
+                                            text_with_headings[:match.start()] +
+                                            md_heading +
+                                            text_with_headings[match.end():]
+                                        )
+                                        inserted_positions.append(match_pos)
                     
-                    # Extract images
+                    # Add page content
+                    page_content = f'## Page {page_num}\n\n{text_with_headings}\n\n'
+                    markdown_parts.append(page_content)
+                    current_char_pos += len(page_content)
+                
+                # Extract images for this page (using pre-opened PyMuPDF document)
+                if pdf_doc:
                     try:
-                        import fitz  # PyMuPDF
-                        pdf_doc = fitz.open(path)
                         page_obj = pdf_doc[page_num - 1]
-                        
                         image_list = page_obj.get_images()
+                        
                         for img_idx, img in enumerate(image_list):
                             try:
                                 xref = img[0]
@@ -161,27 +226,35 @@ class PDFExtractor:
                             except Exception as e:
                                 logger.warning(f"Failed to extract image from PDF page {page_num}: {e}")
                                 continue
-                        
-                        pdf_doc.close()
-                    except ImportError:
-                        pass
                     except Exception as e:
-                        logger.warning(f"Failed to extract images from PDF: {e}")
-                    
-                    # Close page tag
-                    if text:
-                        page_end_markdown = f'</page>\n\n'
-                        markdown_parts.append(page_end_markdown)
-                        page_end_char = current_char_pos
-                        current_char_pos += len(page_end_markdown)
-                        pages_info.append({
-                            "page": page_num,
-                            "start_char": page_start_char,
-                            "end_char": page_end_char,
-                            "bbox": list(page.bbox) if hasattr(page, 'bbox') else None
-                        })
+                        logger.warning(f"Failed to extract images from PDF page {page_num}: {e}")
+                
+                # Close page tag
+                if text:
+                    page_end_markdown = f'</page>\n\n'
+                    markdown_parts.append(page_end_markdown)
+                    page_end_char = current_char_pos
+                    current_char_pos += len(page_end_markdown)
+                    pages_info.append({
+                        "page": page_num,
+                        "start_char": page_start_char,
+                        "end_char": page_end_char,
+                        "bbox": list(page.bbox) if hasattr(page, 'bbox') else None
+                    })
+            
+            # Close PyMuPDF document
+            if pdf_doc:
+                try:
+                    pdf_doc.close()
+                except Exception:
+                    pass
+        
         except Exception as e:
             raise LoaderError(f"Failed to process PDF: {str(e)}") from e
+        finally:
+            # Only close if we opened it ourselves
+            if should_close_pdf and pdf:
+                pdf.close()
         
         # Build DocumentStructure
         structure = StructureBuilder.build_pdf_structure(

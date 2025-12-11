@@ -1,5 +1,6 @@
 """PDF heading detection based on font analysis."""
-from typing import List, Dict
+from typing import List, Dict, Optional
+from collections import defaultdict
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -7,6 +8,13 @@ logger = get_logger(__name__)
 
 class HeadingDetector:
     """Detects headings in PDF documents based on font analysis."""
+    
+    def __init__(self, sample_pages: Optional[int] = 5):
+        """
+        Args:
+            sample_pages: Number of pages to sample for font distribution analysis (None = analyze all pages)
+        """
+        self.sample_pages = sample_pages
     
     def detect(self, pdf) -> List[Dict]:
         """
@@ -23,7 +31,49 @@ class HeadingDetector:
         all_chars = []
         char_offset = 0
         
-        # Collect character information from all pages
+        # Determine pages to analyze for font distribution
+        total_pages = len(pdf.pages)
+        if self.sample_pages and total_pages > self.sample_pages:
+            # Sample first N pages for font distribution
+            sample_page_range = range(1, min(self.sample_pages + 1, total_pages + 1))
+            logger.debug(f"Sampling first {self.sample_pages} pages for font distribution analysis")
+        else:
+            # Analyze all pages
+            sample_page_range = range(1, total_pages + 1)
+        
+        # Collect character information from sample pages for font analysis
+        sample_chars = []
+        for page_num in sample_page_range:
+            page = pdf.pages[page_num - 1]
+            chars = page.chars
+            if not chars:
+                continue
+            
+            for char in chars:
+                sample_chars.append({
+                    'size': char.get('size', 0),
+                    'fontname': char.get('fontname', ''),
+                })
+        
+        if not sample_chars:
+            return []
+        
+        # Analyze font size distribution from sample
+        font_sizes = [c['size'] for c in sample_chars if c['size'] > 0]
+        if not font_sizes:
+            return []
+        
+        # Calculate font size statistics
+        font_sizes_sorted = sorted(set(font_sizes), reverse=True)
+        median_size = sorted(font_sizes)[len(font_sizes) // 2]
+        avg_size = sum(font_sizes) / len(font_sizes)
+        
+        # Identify heading fonts: significantly larger than body text
+        heading_threshold = max(avg_size * 1.2, median_size * 1.15)
+        
+        logger.debug(f"Font analysis: avg={avg_size:.2f}, median={median_size:.2f}, threshold={heading_threshold:.2f}")
+        
+        # Now collect all characters from all pages for heading detection
         for page_num, page in enumerate(pdf.pages, 1):
             chars = page.chars
             if not chars:
@@ -45,19 +95,6 @@ class HeadingDetector:
         
         if not all_chars:
             return []
-        
-        # Analyze font size distribution
-        font_sizes = [c['size'] for c in all_chars if c['size'] > 0]
-        if not font_sizes:
-            return []
-        
-        # Calculate font size statistics
-        font_sizes_sorted = sorted(set(font_sizes), reverse=True)
-        median_size = sorted(font_sizes)[len(font_sizes) // 2]
-        avg_size = sum(font_sizes) / len(font_sizes)
-        
-        # Identify heading fonts: significantly larger than body text
-        heading_threshold = max(avg_size * 1.2, median_size * 1.15)
         
         # Detect bold fonts
         def is_bold(fontname: str) -> bool:
@@ -94,12 +131,10 @@ class HeadingDetector:
             """Determine line based on y coordinate."""
             return round(char['y0'] / 2) * 2
         
-        # Group characters by line
-        lines = {}
+        # Group characters by line (using defaultdict for efficiency)
+        lines = defaultdict(list)
         for char in all_chars:
             line_key = get_line_key(char)
-            if line_key not in lines:
-                lines[line_key] = []
             lines[line_key].append(char)
         
         # Sort each line by x coordinate
