@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     # Chunking
     default_chunk_size: int = 1000
     default_chunk_overlap: int = 200
+    tiktoken_encoding: str = "cl100k_base"  # Tiktoken encoding name for chunking
+    
+    # Multi-granularity chunking (optional)
+    # If multi_granularity_chunk_sizes is empty list, use single granularity (default_chunk_size)
+    # Example: [200, 400, 800] for fine, medium, and coarse granularity
+    multi_granularity_chunk_sizes: List[int] = []  # Empty list means use single granularity
+    multi_granularity_chunk_overlap: int = 60  # 10-20% overlap for multi-granularity chunks
     
     # Collection
     default_collection_name: str = "knowledge_base"

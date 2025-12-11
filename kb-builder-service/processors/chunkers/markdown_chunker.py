@@ -1,229 +1,223 @@
-"""Markdown-specific chunker."""
-from typing import List
+"""Markdown-specific chunker using RecursiveCharacterTextSplitter with code block protection."""
+from typing import List, Optional, Tuple, Dict
 import re
+import hashlib
+import tiktoken
 from .base import BaseChunker
+from .langchain_utils import create_tiktoken_splitter
 from models.document import Document
 from models.chunk import Chunk, ChunkLocation
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class MarkdownChunker(BaseChunker):
-    """Markdown-specific chunker that respects heading hierarchy and protects code blocks."""
+    """Markdown-specific chunker using RecursiveCharacterTextSplitter with code block protection."""
     
     def __init__(
         self,
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
-        min_chunk_size: int = 100
+        min_chunk_size: int = 100,
+        encoding_name: str = "cl100k_base"
     ):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.min_chunk_size = min_chunk_size
-        # Heading pattern
-        self.heading_pattern = re.compile(r'^(#{1,6})\s+(.+)$', re.MULTILINE)
-        # Code block pattern
-        self.code_block_pattern = re.compile(r'```(\w+)?\n(.*?)```', re.DOTALL)
-        # Image and link pattern
-        self.image_pattern = re.compile(r'!\[([^\]]*)\]\(([^)]+)\)')
-        self.link_pattern = re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
+        self.encoding_name = encoding_name
+        
+        # Create LangChain splitter with tiktoken
+        self.splitter = create_tiktoken_splitter(
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            encoding_name=encoding_name
+        )
+        
+        # Create tiktoken encoder for token counting
+        self.enc = tiktoken.get_encoding(encoding_name)
+        
+        # Code block pattern: matches ```language\n...\n```
+        self.code_block_pattern = re.compile(
+            r'```(\w+)?\n(.*?)```',
+            re.DOTALL
+        )
     
     def chunk(self, document: Document) -> List[Chunk]:
-        """Split Markdown document into chunks, respecting heading hierarchy."""
+        """Split Markdown document into chunks, protecting code blocks."""
         text = document.content
         
         if not text or len(text.strip()) == 0:
             return []
         
+        # Step 1: Extract code blocks and replace with placeholders
+        text_with_placeholders, code_blocks = self._extract_code_blocks(text)
+        
+        # Step 2: Use RecursiveCharacterTextSplitter for non-code-block text
+        text_chunks = self.splitter.split_text(text_with_placeholders)
+        
+        # Step 3: Convert to Chunk objects and restore code blocks
         chunks = []
-        chunk_index = 0
-        
-        # Find all headings
-        headings = list(self.heading_pattern.finditer(text))
-        
-        if not headings:
-            # No headings, use recursive chunking
-            from .recursive import RecursiveChunker
-            recursive_chunker = RecursiveChunker(
-                chunk_size=self.chunk_size,
-                chunk_overlap=self.chunk_overlap,
-                min_chunk_size=self.min_chunk_size
-            )
-            return recursive_chunker.chunk(document)
-        
-        # Chunk by heading hierarchy
-        for i, heading_match in enumerate(headings):
-            heading_level = len(heading_match.group(1))
-            heading_text = heading_match.group(2).strip()
-            heading_start = heading_match.start()
-            
-            # Find next same-level or higher-level heading position
-            if i + 1 < len(headings):
-                next_heading_start = headings[i + 1].start()
-                # If next heading level is higher, continue including
-                next_level = len(headings[i + 1].group(1))
-                if next_level > heading_level:
-                    # Find next same-level or higher-level heading
-                    for j in range(i + 2, len(headings)):
-                        j_level = len(headings[j].group(1))
-                        if j_level <= heading_level:
-                            next_heading_start = headings[j].start()
-                            break
-                section_end = next_heading_start
-            else:
-                section_end = len(text)
-            
-            section_text = text[heading_start:section_end].strip()
-            
-            # Build heading path
-            heading_path = self._build_heading_path(headings, i)
-            
-            # If section is too large, further chunk it
-            if len(section_text) > self.chunk_size:
-                section_chunks = self._chunk_within_section(
-                    section_text,
-                    document,
-                    heading_path,
-                    heading_start,
-                    chunk_index
-                )
-                chunks.extend(section_chunks)
-                chunk_index += len(section_chunks)
-            else:
-                # Entire section as one chunk
-                # Extract code block index
-                code_block_index = None
-                code_blocks = list(self.code_block_pattern.finditer(section_text))
-                if code_blocks:
-                    code_block_index = 0  # First code block
-                
-                location = ChunkLocation(
-                    start_char=heading_start,
-                    end_char=section_end,
-                    heading_path=heading_path,
-                    code_block_index=code_block_index
-                )
-                
-                chunk = Chunk(
-                    text=section_text,
-                    chunk_id=self._generate_chunk_id(document.source, chunk_index),
-                    document_id=document.source,
-                    chunk_index=chunk_index,
-                    file_path=document.metadata.get("file_path") if document.metadata else None,
-                    location=location,
-                    metadata={
-                        **document.metadata,
-                        "chunk_size": len(section_text),
-                        "start_pos": heading_start,
-                        "end_pos": section_end
-                    }
-                )
-                chunks.append(chunk)
-                chunk_index += 1
-        
-        return chunks
-    
-    def _build_heading_path(self, headings: List[re.Match], current_idx: int) -> List[str]:
-        """Build heading path from root to current heading."""
-        path = []
-        current_level = len(headings[current_idx].group(1))
-        current_text = headings[current_idx].group(2).strip()
-        
-        # Search upward for parent headings
-        for i in range(current_idx - 1, -1, -1):
-            level = len(headings[i].group(1))
-            if level < current_level:
-                path.insert(0, headings[i].group(2).strip())
-                current_level = level
-                if level == 1:
-                    break
-        
-        path.append(current_text)
-        return path
-    
-    def _chunk_within_section(
-        self,
-        section_text: str,
-        document: Document,
-        heading_path: List[str],
-        section_offset: int,
-        start_chunk_index: int
-    ) -> List[Chunk]:
-        """Chunk within a section, protecting code blocks."""
-        chunks = []
-        chunk_index = start_chunk_index
         current_pos = 0
         
-        # Find all code block positions
-        code_blocks = list(self.code_block_pattern.finditer(section_text))
-        code_block_indices = [(m.start(), m.end()) for m in code_blocks]
-        
-        while current_pos < len(section_text):
-            end_pos = min(current_pos + self.chunk_size, len(section_text))
-            chunk_text = section_text[current_pos:end_pos]
-            
-            # Check if in code block
-            in_code_block = False
-            for cb_start, cb_end in code_block_indices:
-                if cb_start < end_pos < cb_end:
-                    # In code block, extend to code block end
-                    chunk_text = section_text[current_pos:cb_end]
-                    end_pos = cb_end
-                    in_code_block = True
-                    break
-            
-            # 如果不在代码块中，尝试在句子边界分割
-            if not in_code_block and end_pos < len(section_text):
-                for sep in ['\n\n', '. ', '。', '！', '？', '\n']:
-                    sep_pos = chunk_text.rfind(sep)
-                    if sep_pos >= self.chunk_size * 0.5:
-                        chunk_text = chunk_text[:sep_pos + len(sep)]
-                        end_pos = current_pos + len(chunk_text)
-                        break
-            
+        for chunk_index, chunk_text in enumerate(text_chunks):
             chunk_text = chunk_text.strip()
             if not chunk_text:
-                current_pos = end_pos
                 continue
             
-            # Determine code block index
-            code_block_index = None
-            for idx, (cb_start, cb_end) in enumerate(code_block_indices):
-                if cb_start >= current_pos and cb_end <= end_pos:
-                    code_block_index = idx
-                    break
+            # Check minimum chunk size (unless it's the last chunk)
+            if chunk_index < len(text_chunks) - 1:
+                token_count = len(self.enc.encode(chunk_text))
+                if token_count < self.min_chunk_size:
+                    # Try to merge with next chunk if available
+                    if chunk_index + 1 < len(text_chunks):
+                        next_chunk = text_chunks[chunk_index + 1].strip()
+                        merged_text = chunk_text + "\n\n" + next_chunk
+                        merged_token_count = len(self.enc.encode(merged_text))
+                        # Only merge if merged chunk is reasonable size
+                        if merged_token_count <= self.chunk_size * 1.5:
+                            chunk_text = merged_text
+                            # Skip next chunk since we merged it
+                            text_chunks[chunk_index + 1] = ""
             
+            # Restore code blocks in chunk
+            chunk_text = self._restore_code_blocks(chunk_text, code_blocks)
+            
+            # Calculate position in original text
+            start_pos = text.find(chunk_text, current_pos)
+            if start_pos == -1:
+                # Fallback: use current_pos
+                start_pos = current_pos
+            end_pos = start_pos + len(chunk_text)
+            current_pos = end_pos
+            
+            # Find code block indices in this chunk
+            code_block_index = self._find_code_block_index(chunk_text, text, start_pos, code_blocks)
+            
+            # Generate chunk ID
+            chunk_id = self._generate_chunk_id(document.source, chunk_index)
+            
+            # Get file_path from metadata if available
+            file_path = document.metadata.get("file_path") if document.metadata else None
+            
+            # Create location
             location = ChunkLocation(
-                start_char=section_offset + current_pos,
-                end_char=section_offset + end_pos,
-                heading_path=heading_path.copy(),
+                start_char=start_pos,
+                end_char=end_pos,
                 code_block_index=code_block_index
             )
             
+            # Create chunk
             chunk = Chunk(
                 text=chunk_text,
-                chunk_id=self._generate_chunk_id(document.source, chunk_index),
+                chunk_id=chunk_id,
                 document_id=document.source,
                 chunk_index=chunk_index,
-                file_path=document.metadata.get("file_path") if document.metadata else None,
+                file_path=file_path,
                 location=location,
                 metadata={
                     **document.metadata,
                     "chunk_size": len(chunk_text),
-                    "start_pos": section_offset + current_pos,
-                    "end_pos": section_offset + end_pos
+                    "start_pos": start_pos,
+                    "end_pos": end_pos,
+                    "content_type": "text"
                 }
             )
             chunks.append(chunk)
-            
-            # Overlap
-            overlap_amount = min(self.chunk_overlap, len(chunk_text))
-            current_pos = max(current_pos + 1, end_pos - overlap_amount)
-            chunk_index += 1
         
+        logger.info(f"Created {len(chunks)} chunks from Markdown document")
         return chunks
+    
+    def _extract_code_blocks(self, text: str) -> Tuple[str, Dict[int, Dict]]:
+        """
+        Extract code blocks from text and replace with placeholders.
+        
+        Returns:
+            (text_with_placeholders, code_blocks_dict)
+        """
+        code_blocks = {}
+        text_with_placeholders = text
+        code_block_id = 0
+        
+        for match in self.code_block_pattern.finditer(text):
+            language = match.group(1) or ""
+            code_content = match.group(2)
+            
+            # Store code block
+            code_blocks[code_block_id] = {
+                'language': language,
+                'content': code_content,
+                'full_match': match.group(0),
+                'start_pos': match.start(),
+                'end_pos': match.end()
+            }
+            
+            # Replace with placeholder
+            placeholder = f'<CODE_BLOCK_PLACEHOLDER_{code_block_id}>'
+            text_with_placeholders = text_with_placeholders.replace(
+                match.group(0),
+                placeholder,
+                1
+            )
+            
+            code_block_id += 1
+        
+        return text_with_placeholders, code_blocks
+    
+    def _restore_code_blocks(self, chunk_text: str, code_blocks: Dict[int, Dict]) -> str:
+        """Restore code blocks from placeholders in chunk text."""
+        restored_text = chunk_text
+        
+        # Find all placeholders in chunk
+        placeholder_pattern = re.compile(r'<CODE_BLOCK_PLACEHOLDER_(\d+)>')
+        for match in placeholder_pattern.finditer(chunk_text):
+            code_block_id = int(match.group(1))
+            code_block = code_blocks.get(code_block_id)
+            
+            if code_block:
+                # Restore the full code block
+                restored_text = restored_text.replace(
+                    match.group(0),
+                    code_block['full_match'],
+                    1
+                )
+        
+        return restored_text
+    
+    def _find_code_block_index(
+        self,
+        chunk_text: str,
+        full_text: str,
+        chunk_start_pos: int,
+        code_blocks: Dict[int, Dict]
+    ) -> Optional[int]:
+        """Find the code block index if this chunk contains a code block."""
+        # Check if chunk contains any code block placeholders
+        placeholder_pattern = re.compile(r'<CODE_BLOCK_PLACEHOLDER_(\d+)>')
+        match = placeholder_pattern.search(chunk_text)
+        
+        if match:
+            code_block_id = int(match.group(1))
+            code_block = code_blocks.get(code_block_id)
+            
+            if code_block:
+                # Find the index of this code block in the original document
+                # by checking which code block's position overlaps with chunk
+                for idx, (cb_id, cb_data) in enumerate(code_blocks.items()):
+                    if cb_id == code_block_id:
+                        return idx
+                
+                # If not found by ID, find by position
+                chunk_end_pos = chunk_start_pos + len(chunk_text)
+                for idx, (cb_id, cb_data) in enumerate(code_blocks.items()):
+                    cb_start = cb_data['start_pos']
+                    cb_end = cb_data['end_pos']
+                    if cb_start >= chunk_start_pos and cb_end <= chunk_end_pos:
+                        return idx
+        
+        return None
     
     def _generate_chunk_id(self, document_id: str, chunk_index: int) -> str:
         """Generate unique chunk ID."""
-        import hashlib
         content = f"{document_id}_{chunk_index}"
         return hashlib.md5(content.encode()).hexdigest()
-

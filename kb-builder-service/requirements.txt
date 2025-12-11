@@ -23,3 +23,8 @@ beautifulsoup4>=4.12.0  # For HTML parsing
 markdownify>=0.11.6  # For HTML to Markdown conversion
 Pillow>=10.0.0  # For image processing
 
+# Text chunking
+langchain>=0.1.0  # For RecursiveCharacterTextSplitter
+langchain-text-splitters>=0.0.1  # For RecursiveCharacterTextSplitter (newer versions)
+tiktoken>=0.5.0  # For token counting
+

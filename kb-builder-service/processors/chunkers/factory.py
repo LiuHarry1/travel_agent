@@ -27,10 +27,17 @@ class ChunkerFactory:
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
         min_chunk_size: Optional[int] = None,
+        encoding_name: Optional[str] = None,
         **kwargs
     ) -> BaseChunker:
         """Create chunker for document type."""
         chunker_class = cls._chunkers.get(doc_type, RecursiveChunker)
+        
+        # Get encoding_name from config if not provided
+        if encoding_name is None:
+            from config.settings import get_settings
+            settings = get_settings()
+            encoding_name = settings.tiktoken_encoding
         
         # Set default parameters based on file type
         if doc_type == DocumentType.PDF:
@@ -46,6 +53,7 @@ class ChunkerFactory:
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
             min_chunk_size=min_size,
+            encoding_name=encoding_name,
             **kwargs
         )
     

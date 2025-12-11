@@ -88,7 +88,9 @@ async def process_file_with_progress(
     chunk_overlap: Optional[int],
     service: IndexingService,
     bge_api_url: Optional[str] = None,
-    base_url: Optional[str] = None
+    base_url: Optional[str] = None,
+    multi_granularity_chunk_sizes: Optional[List[int]] = None,
+    multi_granularity_chunk_overlap: Optional[int] = None
 ) -> AsyncGenerator[str, None]:
     """Process file with progress updates."""
     document = None
@@ -161,10 +163,10 @@ async def process_file_with_progress(
         try:
             from processors.chunkers import ChunkerFactory
             from models.document import DocumentType
+            from config.settings import get_settings
+            import hashlib
             
-            chunk_size_val = chunk_size or service.chunk_size
-            chunk_overlap_val = chunk_overlap or service.chunk_overlap
-            logger.info(f"Creating chunker with chunk_size={chunk_size_val}, chunk_overlap={chunk_overlap_val}")
+            settings = get_settings()
             
             # Get original document type from metadata
             original_type = document.metadata.get("original_type") if document.metadata else None
@@ -174,17 +176,77 @@ async def process_file_with_progress(
                 # Fallback: use detected type from loader
                 doc_type = doc_type  # Use the doc_type parameter
             
-            # Use ChunkerFactory to get the correct chunker
-            chunker = ChunkerFactory.create(
-                doc_type=doc_type,
-                chunk_size=chunk_size_val,
-                chunk_overlap=chunk_overlap_val
-            )
+            # Get encoding_name from config
+            encoding_name = settings.tiktoken_encoding  # Default from config
             
-            logger.info(f"Using {chunker.__class__.__name__} for document type {doc_type.value}")
-            logger.info(f"Starting chunk operation on document with {len(document.content)} characters")
-            chunks = chunker.chunk(document)
-            logger.info(f"Chunking completed: created {len(chunks)} chunks")
+            # Check if multi-granularity chunking is enabled
+            if multi_granularity_chunk_sizes is None:
+                multi_granularity_chunk_sizes = settings.multi_granularity_chunk_sizes
+            
+            if multi_granularity_chunk_sizes and len(multi_granularity_chunk_sizes) > 0:
+                # Multi-granularity chunking
+                if multi_granularity_chunk_overlap is None:
+                    multi_granularity_chunk_overlap = settings.multi_granularity_chunk_overlap
+                
+                logger.info(f"Using multi-granularity chunking with sizes: {multi_granularity_chunk_sizes}, overlap: {multi_granularity_chunk_overlap}")
+                all_chunks = []
+                
+                for idx, granularity in enumerate(multi_granularity_chunk_sizes):
+                    chunker = ChunkerFactory.create(
+                        doc_type=doc_type,
+                        chunk_size=granularity,
+                        chunk_overlap=multi_granularity_chunk_overlap,
+                        encoding_name=encoding_name
+                    )
+                    
+                    logger.info(f"Chunking with granularity {granularity} using {chunker.__class__.__name__}")
+                    granularity_chunks = chunker.chunk(document)
+                    
+                    # Update chunk metadata and IDs to include granularity
+                    for chunk_index, chunk in enumerate(granularity_chunks):
+                        # Update chunk_id to include granularity for uniqueness
+                        chunk.chunk_id = f"{document.source}_{granularity}_{chunk_index}"
+                        
+                        # Add granularity metadata
+                        chunk.metadata["granularity"] = granularity
+                        chunk.metadata["chunk_size"] = granularity
+                        chunk.metadata["chunk_overlap"] = multi_granularity_chunk_overlap
+                        
+                        # Ensure content_type is set if not already
+                        if "content_type" not in chunk.metadata:
+                            chunk.metadata["content_type"] = "text"
+                    
+                    all_chunks.extend(granularity_chunks)
+                    logger.info(f"Generated {len(granularity_chunks)} chunks with granularity {granularity}")
+                    
+                    # Update progress
+                    progress = 10 + int((idx + 1) / len(multi_granularity_chunk_sizes) * 80)
+                    yield send_progress("chunking", progress, f"Chunking with granularity {granularity}... {len(all_chunks)} total chunks", {
+                        "chunks_count": len(all_chunks),
+                        "current_granularity": granularity
+                    })
+                    await asyncio.sleep(0.05)
+                
+                chunks = all_chunks
+                logger.info(f"Multi-granularity chunking completed: created {len(chunks)} total chunks")
+            else:
+                # Single granularity chunking (backward compatible)
+                chunk_size_val = chunk_size or service.chunk_size
+                chunk_overlap_val = chunk_overlap or service.chunk_overlap
+                logger.info(f"Creating chunker with chunk_size={chunk_size_val}, chunk_overlap={chunk_overlap_val}")
+                
+                # Use ChunkerFactory to get the correct chunker
+                chunker = ChunkerFactory.create(
+                    doc_type=doc_type,
+                    chunk_size=chunk_size_val,
+                    chunk_overlap=chunk_overlap_val,
+                    encoding_name=encoding_name
+                )
+                
+                logger.info(f"Using {chunker.__class__.__name__} for document type {doc_type.value}")
+                logger.info(f"Starting chunk operation on document with {len(document.content)} characters")
+                chunks = chunker.chunk(document)
+                logger.info(f"Chunking completed: created {len(chunks)} chunks")
             
             yield send_progress("chunking", 90, f"Chunking... {len(chunks)} chunks created", {
                 "chunks_count": len(chunks)
@@ -322,6 +384,8 @@ async def upload_and_index_stream(
     bge_api_url: Optional[str] = Form(None),
     chunk_size: Optional[int] = Form(None),
     chunk_overlap: Optional[int] = Form(None),
+    multi_granularity_chunk_sizes: Optional[str] = Form(None),  # JSON string: "[200, 400, 800]"
+    multi_granularity_chunk_overlap: Optional[int] = Form(None),
     database: Optional[str] = Form(None),
     service: IndexingService = Depends(get_indexing_service_with_database)
 ):
@@ -375,6 +439,19 @@ async def upload_and_index_stream(
             tmp.write(content)
             temp_path = tmp.name
         
+        # Parse multi-granularity chunk sizes if provided
+        parsed_multi_granularity_sizes = None
+        if multi_granularity_chunk_sizes:
+            try:
+                parsed_multi_granularity_sizes = json.loads(multi_granularity_chunk_sizes)
+                if not isinstance(parsed_multi_granularity_sizes, list):
+                    raise ValueError("multi_granularity_chunk_sizes must be a JSON array")
+                # Validate all items are integers
+                parsed_multi_granularity_sizes = [int(x) for x in parsed_multi_granularity_sizes]
+            except (json.JSONDecodeError, ValueError, TypeError) as e:
+                logger.warning(f"Failed to parse multi_granularity_chunk_sizes: {e}, ignoring")
+                parsed_multi_granularity_sizes = None
+        
         # Process with progress updates
         async def generate():
             async for progress in process_file_with_progress(
@@ -388,7 +465,9 @@ async def upload_and_index_stream(
                 chunk_overlap,
                 service,
                 bge_api_url,
-                base_url
+                base_url,
+                parsed_multi_granularity_sizes,
+                multi_granularity_chunk_overlap
             ):
                 yield progress
         
@@ -430,6 +509,8 @@ async def upload_and_index(
     bge_api_url: Optional[str] = Form(None),
     chunk_size: Optional[int] = Form(None),
     chunk_overlap: Optional[int] = Form(None),
+    multi_granularity_chunk_sizes: Optional[str] = Form(None),  # JSON string: "[200, 400, 800]"
+    multi_granularity_chunk_overlap: Optional[int] = Form(None),
     database: Optional[str] = Form(None),
     service: IndexingService = Depends(get_indexing_service_with_database)
 ):
@@ -469,6 +550,19 @@ async def upload_and_index(
             tmp.write(content)
             temp_path = tmp.name
             
+            # Parse multi-granularity chunk sizes if provided
+            parsed_multi_granularity_sizes = None
+            if multi_granularity_chunk_sizes:
+                try:
+                    parsed_multi_granularity_sizes = json.loads(multi_granularity_chunk_sizes)
+                    if not isinstance(parsed_multi_granularity_sizes, list):
+                        raise ValueError("multi_granularity_chunk_sizes must be a JSON array")
+                    # Validate all items are integers
+                    parsed_multi_granularity_sizes = [int(x) for x in parsed_multi_granularity_sizes]
+                except (json.JSONDecodeError, ValueError, TypeError) as e:
+                    logger.warning(f"Failed to parse multi_granularity_chunk_sizes: {e}, ignoring")
+                    parsed_multi_granularity_sizes = None
+            
             # Index document
             index_kwargs = {
                 "source": temp_path,
@@ -483,6 +577,10 @@ async def upload_and_index(
             }
             if embedding_provider and embedding_provider.lower() == "bge" and bge_api_url:
                 index_kwargs["bge_api_url"] = bge_api_url
+            if parsed_multi_granularity_sizes:
+                index_kwargs["multi_granularity_chunk_sizes"] = parsed_multi_granularity_sizes
+            if multi_granularity_chunk_overlap is not None:
+                index_kwargs["multi_granularity_chunk_overlap"] = multi_granularity_chunk_overlap
             result = service.index_document(**index_kwargs)
             
             if result["success"]:

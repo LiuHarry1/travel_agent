@@ -80,13 +80,42 @@ class IndexingService:
                 }
                 doc_type = type_map.get(ext, DocumentType.TXT)
             
-            chunker = ChunkerFactory.create(
-                doc_type=doc_type,
-                chunk_size=chunk_size or self.chunk_size,
-                chunk_overlap=chunk_overlap or self.chunk_overlap
-            )
-            chunks = chunker.chunk(document)
-            logger.info(f"Created {len(chunks)} chunks using {chunker.__class__.__name__}")
+            # Get encoding_name from config
+            from config.settings import get_settings
+            settings = get_settings()
+            encoding_name = kwargs.get("encoding_name", settings.tiktoken_encoding)
+            
+            # Check if multi-granularity chunking is enabled
+            multi_granularity_sizes = kwargs.get("multi_granularity_chunk_sizes")
+            if multi_granularity_sizes is None:
+                # Check settings
+                multi_granularity_sizes = settings.multi_granularity_chunk_sizes
+            
+            # Use multi-granularity if configured, otherwise use single granularity
+            if multi_granularity_sizes and len(multi_granularity_sizes) > 0:
+                # Multi-granularity chunking
+                multi_granularity_overlap = kwargs.get(
+                    "multi_granularity_chunk_overlap",
+                    settings.multi_granularity_chunk_overlap
+                )
+                chunks = self._generate_multi_granularity_chunks(
+                    document=document,
+                    doc_type=doc_type,
+                    chunk_sizes=multi_granularity_sizes,
+                    chunk_overlap=multi_granularity_overlap,
+                    encoding_name=encoding_name
+                )
+                logger.info(f"Created {len(chunks)} multi-granularity chunks using sizes: {multi_granularity_sizes}")
+            else:
+                # Single granularity chunking (backward compatible)
+                chunker = ChunkerFactory.create(
+                    doc_type=doc_type,
+                    chunk_size=chunk_size or self.chunk_size,
+                    chunk_overlap=chunk_overlap or self.chunk_overlap,
+                    encoding_name=encoding_name
+                )
+                chunks = chunker.chunk(document)
+                logger.info(f"Created {len(chunks)} chunks using {chunker.__class__.__name__}")
             
             # 3. Enrich chunks with location information
             chunks = self._enrich_with_locations(chunks, doc_type)
@@ -132,6 +161,60 @@ class IndexingService:
         except Exception as e:
             logger.error(f"Indexing failed: {str(e)}", exc_info=True)
             raise IndexingError(f"Failed to index document: {str(e)}") from e
+    
+    def _generate_multi_granularity_chunks(
+        self,
+        document,
+        doc_type: DocumentType,
+        chunk_sizes: List[int],
+        chunk_overlap: int,
+        encoding_name: str
+    ) -> List:
+        """
+        Generate chunks with multiple granularities.
+        
+        Args:
+            document: Document object
+            doc_type: Document type
+            chunk_sizes: List of chunk sizes (e.g., [200, 400, 800])
+            chunk_overlap: Chunk overlap for all granularities
+            encoding_name: Tiktoken encoding name
+        
+        Returns:
+            List of chunks with granularity metadata
+        """
+        all_chunks = []
+        
+        for granularity in chunk_sizes:
+            # Create chunker for this granularity
+            chunker = ChunkerFactory.create(
+                doc_type=doc_type,
+                chunk_size=granularity,
+                chunk_overlap=chunk_overlap,
+                encoding_name=encoding_name
+            )
+            
+            # Generate chunks for this granularity
+            granularity_chunks = chunker.chunk(document)
+            
+            # Update chunk metadata and IDs to include granularity
+            for chunk_index, chunk in enumerate(granularity_chunks):
+                # Update chunk_id to include granularity for uniqueness
+                chunk.chunk_id = f"{document.source}_{granularity}_{chunk_index}"
+                
+                # Add granularity metadata
+                chunk.metadata["granularity"] = granularity
+                chunk.metadata["chunk_size"] = granularity
+                chunk.metadata["chunk_overlap"] = chunk_overlap
+                
+                # Ensure content_type is set if not already
+                if "content_type" not in chunk.metadata:
+                    chunk.metadata["content_type"] = "text"
+            
+            all_chunks.extend(granularity_chunks)
+            logger.debug(f"Generated {len(granularity_chunks)} chunks with granularity {granularity}")
+        
+        return all_chunks
     
     def _enrich_with_locations(self, chunks: List, doc_type: DocumentType) -> List:
         """Enrich chunks with location information."""

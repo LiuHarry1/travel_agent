@@ -14,6 +14,10 @@ export interface ChunkingConfig {
   chunkSize: number;
   chunkOverlap: number;
   strategy: 'recursive' | 'semantic' | 'fixed';
+  // Multi-granularity chunking
+  useMultiGranularity: boolean;
+  multiGranularitySizes: number[];
+  multiGranularityOverlap: number;
 }
 
 export interface AppConfig {
@@ -38,6 +42,9 @@ export function getDefaultConfig(): AppConfig {
       chunkSize: 1000,
       chunkOverlap: 200,
       strategy: 'recursive',
+      useMultiGranularity: false,
+      multiGranularitySizes: [200, 400, 800],
+      multiGranularityOverlap: 60,
     },
     defaultCollection: 'knowledge_base',
     autoCreateCollection: true,

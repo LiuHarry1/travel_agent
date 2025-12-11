@@ -268,9 +268,36 @@ const ChunkingConfigForm: React.FC<{
   config: ChunkingConfig;
   onChange: (config: ChunkingConfig) => void;
 }> = ({ config, onChange }) => {
+  // Ensure backward compatibility with old configs
+  const useMultiGranularity = config.useMultiGranularity ?? false;
+  const multiGranularitySizes = config.multiGranularitySizes ?? [200, 400, 800];
+  const multiGranularityOverlap = config.multiGranularityOverlap ?? 60;
+
   const estimatedChunks = (_size: number) => {
     if (config.chunkSize <= config.chunkOverlap) return 0;
     return Math.ceil(10000 / (config.chunkSize - config.chunkOverlap));
+  };
+
+  const estimatedMultiGranularityChunks = () => {
+    if (!useMultiGranularity || multiGranularitySizes.length === 0) return 0;
+    return multiGranularitySizes.reduce((total, size) => {
+      if (size <= multiGranularityOverlap) return total;
+      return total + Math.ceil(10000 / (size - multiGranularityOverlap));
+    }, 0);
+  };
+
+  const handleMultiGranularitySizesChange = (value: string) => {
+    // Parse comma-separated values
+    const sizes = value
+      .split(',')
+      .map(s => parseInt(s.trim()))
+      .filter(n => !isNaN(n) && n > 0);
+    onChange({ 
+      ...config, 
+      multiGranularitySizes: sizes.length > 0 ? sizes : [200, 400, 800],
+      useMultiGranularity: useMultiGranularity,
+      multiGranularityOverlap: multiGranularityOverlap
+    });
   };
 
   return (
@@ -286,36 +313,95 @@ const ChunkingConfigForm: React.FC<{
           <option value="fixed">Fixed Size</option>
         </select>
       </div>
-      
+
       <div className="form-group">
-        <label>Chunk Size:</label>
-        <input
-          type="number"
-          value={config.chunkSize}
-          onChange={(e) => onChange({ ...config, chunkSize: parseInt(e.target.value) || 1000 })}
-          min={100}
-          max={10000}
-        />
-        <small>Characters per chunk</small>
+        <label>
+          <input
+            type="checkbox"
+            checked={useMultiGranularity}
+            onChange={(e) => onChange({ 
+              ...config, 
+              useMultiGranularity: e.target.checked,
+              multiGranularitySizes: multiGranularitySizes,
+              multiGranularityOverlap: multiGranularityOverlap
+            })}
+            style={{ marginRight: '8px' }}
+          />
+          Use Multi-Granularity Chunking
+        </label>
+        <small>Generate chunks with multiple sizes for better retrieval (e.g., 200, 400, 800 tokens)</small>
       </div>
-      
-      <div className="form-group">
-        <label>Chunk Overlap:</label>
-        <input
-          type="number"
-          value={config.chunkOverlap}
-          onChange={(e) => onChange({ ...config, chunkOverlap: parseInt(e.target.value) || 200 })}
-          min={0}
-          max={1000}
-        />
-        <small>Overlapping characters between chunks</small>
-      </div>
-      
-      <div className="preview-info">
-        <Lightbulb size={16} style={{ position: 'absolute', top: 'var(--spacing-sm)', right: 'var(--spacing-sm)', opacity: 0.3 }} />
-        <p>Preview: With chunk size {config.chunkSize} and overlap {config.chunkOverlap},</p>
-        <p>a 10,000 character document will create approximately {estimatedChunks(10000)} chunks.</p>
-      </div>
+
+      {useMultiGranularity ? (
+        <>
+          <div className="form-group">
+            <label>Chunk Sizes (comma-separated):</label>
+            <input
+              type="text"
+              value={multiGranularitySizes.join(', ')}
+              onChange={(e) => handleMultiGranularitySizesChange(e.target.value)}
+              placeholder="200, 400, 800"
+            />
+            <small>Multiple chunk sizes in tokens (e.g., 200, 400, 800). Each size will generate separate chunks.</small>
+          </div>
+          
+          <div className="form-group">
+            <label>Multi-Granularity Overlap:</label>
+            <input
+              type="number"
+              value={multiGranularityOverlap}
+              onChange={(e) => onChange({ 
+                ...config, 
+                multiGranularityOverlap: parseInt(e.target.value) || 60,
+                useMultiGranularity: useMultiGranularity,
+                multiGranularitySizes: multiGranularitySizes
+              })}
+              min={0}
+              max={200}
+            />
+            <small>Overlap between chunks for all granularities (typically 10-20% of smallest chunk size)</small>
+          </div>
+
+          <div className="preview-info">
+            <Lightbulb size={16} style={{ position: 'absolute', top: 'var(--spacing-sm)', right: 'var(--spacing-sm)', opacity: 0.3 }} />
+            <p>Multi-Granularity Preview:</p>
+            <p>With sizes [{multiGranularitySizes.join(', ')}] and overlap {multiGranularityOverlap},</p>
+            <p>a 10,000 character document will create approximately {estimatedMultiGranularityChunks()} total chunks across all granularities.</p>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="form-group">
+            <label>Chunk Size:</label>
+            <input
+              type="number"
+              value={config.chunkSize}
+              onChange={(e) => onChange({ ...config, chunkSize: parseInt(e.target.value) || 1000 })}
+              min={100}
+              max={10000}
+            />
+            <small>Characters per chunk</small>
+          </div>
+          
+          <div className="form-group">
+            <label>Chunk Overlap:</label>
+            <input
+              type="number"
+              value={config.chunkOverlap}
+              onChange={(e) => onChange({ ...config, chunkOverlap: parseInt(e.target.value) || 200 })}
+              min={0}
+              max={1000}
+            />
+            <small>Overlapping characters between chunks</small>
+          </div>
+          
+          <div className="preview-info">
+            <Lightbulb size={16} style={{ position: 'absolute', top: 'var(--spacing-sm)', right: 'var(--spacing-sm)', opacity: 0.3 }} />
+            <p>Preview: With chunk size {config.chunkSize} and overlap {config.chunkOverlap},</p>
+            <p>a 10,000 character document will create approximately {estimatedChunks(10000)} chunks.</p>
+          </div>
+        </>
+      )}
     </div>
   );
 };

@@ -1,226 +1,119 @@
-"""DOCX-specific chunker."""
+"""DOCX-specific chunker using RecursiveCharacterTextSplitter."""
 from typing import List
-import re
+import hashlib
+import tiktoken
 from .base import BaseChunker
+from .langchain_utils import create_tiktoken_splitter
 from models.document import Document
 from models.chunk import Chunk, ChunkLocation
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class DOCXChunker(BaseChunker):
-    """DOCX-specific chunker that respects paragraph boundaries."""
+    """DOCX-specific chunker using RecursiveCharacterTextSplitter."""
     
     def __init__(
         self,
         chunk_size: int = 1200,
         chunk_overlap: int = 200,
-        min_chunk_size: int = 150
+        min_chunk_size: int = 150,
+        encoding_name: str = "cl100k_base"
     ):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.min_chunk_size = min_chunk_size
-        # Paragraph marker pattern
-        self.paragraph_pattern = re.compile(r'<paragraph\s+index="(\d+)"[^>]*>', re.IGNORECASE)
-        # Image tag pattern
-        self.img_pattern = re.compile(r'<img[^>]+>', re.IGNORECASE)
+        self.encoding_name = encoding_name
+        
+        # Create LangChain splitter with tiktoken
+        self.splitter = create_tiktoken_splitter(
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            encoding_name=encoding_name
+        )
+        
+        # Create tiktoken encoder for token counting
+        self.enc = tiktoken.get_encoding(encoding_name)
     
     def chunk(self, document: Document) -> List[Chunk]:
-        """Split DOCX document into chunks, respecting paragraph boundaries."""
+        """Split DOCX document into chunks using RecursiveCharacterTextSplitter."""
         text = document.content
         
         if not text or len(text.strip()) == 0:
             return []
         
+        # Use LangChain splitter to split text
+        text_chunks = self.splitter.split_text(text)
+        
+        # Convert to Chunk objects
         chunks = []
-        chunk_index = 0
         current_pos = 0
         
-        # Chunk by paragraphs
-        paragraphs = text.split('\n\n')
-        
-        current_chunk_parts = []
-        current_chunk_size = 0
-        current_paragraph_index = 0
-        
-        for para_idx, para in enumerate(paragraphs):
-            para = para.strip()
-            if not para:
-                continue
-            
-            para_size = len(para)
-            
-            # If current chunk plus this paragraph would exceed size, save current chunk first
-            if current_chunk_size + para_size > self.chunk_size and current_chunk_parts:
-                # Create chunk
-                chunk_text = '\n\n'.join(current_chunk_parts)
-                location = ChunkLocation(
-                    start_char=current_pos,
-                    end_char=current_pos + len(chunk_text),
-                    paragraph_index=current_paragraph_index
-                )
-                
-                chunk = Chunk(
-                    text=chunk_text,
-                    chunk_id=self._generate_chunk_id(document.source, chunk_index),
-                    document_id=document.source,
-                    chunk_index=chunk_index,
-                    file_path=document.metadata.get("file_path") if document.metadata else None,
-                    location=location,
-                    metadata={
-                        **document.metadata,
-                        "chunk_size": len(chunk_text),
-                        "start_pos": current_pos,
-                        "end_pos": current_pos + len(chunk_text)
-                    }
-                )
-                chunks.append(chunk)
-                
-                # Overlap: keep last part
-                overlap_text = '\n\n'.join(current_chunk_parts[-1:])
-                current_chunk_parts = [overlap_text] if len(overlap_text) <= self.chunk_overlap else []
-                current_chunk_size = len(overlap_text)
-                current_pos += len(chunk_text) - len(overlap_text)
-                chunk_index += 1
-                current_paragraph_index = para_idx
-            
-            # If single paragraph exceeds chunk_size, need to split paragraph
-            if para_size > self.chunk_size:
-                # Save current chunk first
-                if current_chunk_parts:
-                    chunk_text = '\n\n'.join(current_chunk_parts)
-                    location = ChunkLocation(
-                        start_char=current_pos,
-                        end_char=current_pos + len(chunk_text),
-                        paragraph_index=current_paragraph_index
-                    )
-                    chunk = Chunk(
-                        text=chunk_text,
-                        chunk_id=self._generate_chunk_id(document.source, chunk_index),
-                        document_id=document.source,
-                        chunk_index=chunk_index,
-                        file_path=document.metadata.get("file_path") if document.metadata else None,
-                        location=location,
-                        metadata={
-                            **document.metadata,
-                            "chunk_size": len(chunk_text),
-                            "start_pos": current_pos,
-                            "end_pos": current_pos + len(chunk_text)
-                        }
-                    )
-                    chunks.append(chunk)
-                    current_pos += len(chunk_text)
-                    chunk_index += 1
-                    current_chunk_parts = []
-                    current_chunk_size = 0
-                
-                # Split large paragraph
-                para_chunks = self._split_large_paragraph(
-                    para,
-                    document,
-                    current_pos,
-                    para_idx,
-                    chunk_index
-                )
-                chunks.extend(para_chunks)
-                chunk_index += len(para_chunks)
-                if para_chunks:
-                    current_pos = para_chunks[-1].metadata["end_pos"]
-                    current_chunk_parts = []
-                    current_chunk_size = 0
-            else:
-                # Add to current chunk
-                current_chunk_parts.append(para)
-                current_chunk_size += para_size + 2  # +2 for \n\n
-                current_paragraph_index = para_idx
-        
-        # Process remaining chunk
-        if current_chunk_parts:
-            chunk_text = '\n\n'.join(current_chunk_parts)
-            location = ChunkLocation(
-                start_char=current_pos,
-                end_char=current_pos + len(chunk_text),
-                paragraph_index=current_paragraph_index
-            )
-            chunk = Chunk(
-                text=chunk_text,
-                chunk_id=self._generate_chunk_id(document.source, chunk_index),
-                document_id=document.source,
-                chunk_index=chunk_index,
-                file_path=document.metadata.get("file_path") if document.metadata else None,
-                location=location,
-                metadata={
-                    **document.metadata,
-                    "chunk_size": len(chunk_text),
-                    "start_pos": current_pos,
-                    "end_pos": current_pos + len(chunk_text)
-                }
-            )
-            chunks.append(chunk)
-        
-        return chunks
-    
-    def _split_large_paragraph(
-        self,
-        para: str,
-        document: Document,
-        start_pos: int,
-        para_idx: int,
-        start_chunk_index: int
-    ) -> List[Chunk]:
-        """Split a large paragraph into smaller chunks."""
-        chunks = []
-        chunk_index = start_chunk_index
-        current_pos = 0
-        
-        while current_pos < len(para):
-            end_pos = min(current_pos + self.chunk_size, len(para))
-            chunk_text = para[current_pos:end_pos]
-            
-            # Try to split at sentence boundaries
-            if end_pos < len(para):
-                for sep in ['. ', '。', '！', '？', '\n']:
-                    sep_pos = chunk_text.rfind(sep)
-                    if sep_pos >= self.chunk_size * 0.5:
-                        chunk_text = chunk_text[:sep_pos + len(sep)]
-                        end_pos = current_pos + len(chunk_text)
-                        break
-            
+        for chunk_index, chunk_text in enumerate(text_chunks):
             chunk_text = chunk_text.strip()
+            
+            # Skip empty chunks
             if not chunk_text:
-                current_pos = end_pos
                 continue
             
+            # Check minimum chunk size (unless it's the last chunk)
+            if chunk_index < len(text_chunks) - 1:
+                token_count = len(self.enc.encode(chunk_text))
+                if token_count < self.min_chunk_size:
+                    # Try to merge with next chunk if available
+                    if chunk_index + 1 < len(text_chunks):
+                        next_chunk = text_chunks[chunk_index + 1].strip()
+                        merged_text = chunk_text + "\n\n" + next_chunk
+                        merged_token_count = len(self.enc.encode(merged_text))
+                        # Only merge if merged chunk is reasonable size
+                        if merged_token_count <= self.chunk_size * 1.5:
+                            chunk_text = merged_text
+                            # Skip next chunk since we merged it
+                            text_chunks[chunk_index + 1] = ""
+            
+            # Calculate position in original text
+            start_pos = text.find(chunk_text, current_pos)
+            if start_pos == -1:
+                # Fallback: use current_pos
+                start_pos = current_pos
+            end_pos = start_pos + len(chunk_text)
+            current_pos = end_pos
+            
+            # Generate chunk ID
+            chunk_id = self._generate_chunk_id(document.source, chunk_index)
+            
+            # Get file_path from metadata if available
+            file_path = document.metadata.get("file_path") if document.metadata else None
+            
+            # Create location (only start_pos and end_pos, no paragraph_index)
             location = ChunkLocation(
-                start_char=start_pos + current_pos,
-                end_char=start_pos + end_pos,
-                paragraph_index=para_idx
+                start_char=start_pos,
+                end_char=end_pos
             )
             
+            # Create chunk
             chunk = Chunk(
                 text=chunk_text,
-                chunk_id=self._generate_chunk_id(document.source, chunk_index),
+                chunk_id=chunk_id,
                 document_id=document.source,
                 chunk_index=chunk_index,
-                file_path=document.metadata.get("file_path") if document.metadata else None,
+                file_path=file_path,
                 location=location,
                 metadata={
                     **document.metadata,
                     "chunk_size": len(chunk_text),
-                    "start_pos": start_pos + current_pos,
-                    "end_pos": start_pos + end_pos
+                    "start_pos": start_pos,
+                    "end_pos": end_pos,
+                    "content_type": "text"
                 }
             )
             chunks.append(chunk)
-            
-            # Overlap
-            overlap_amount = min(self.chunk_overlap, len(chunk_text))
-            current_pos = max(current_pos + 1, end_pos - overlap_amount)
-            chunk_index += 1
         
+        logger.info(f"Created {len(chunks)} chunks from DOCX document")
         return chunks
     
     def _generate_chunk_id(self, document_id: str, chunk_index: int) -> str:
         """Generate unique chunk ID."""
-        import hashlib
         content = f"{document_id}_{chunk_index}"
         return hashlib.md5(content.encode()).hexdigest()
-

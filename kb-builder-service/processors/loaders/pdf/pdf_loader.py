@@ -1,12 +1,12 @@
 """PDF document loader."""
 from pathlib import Path
 from typing import Optional
+import time
 
 from ..base import BaseLoader
 from models.document import Document, DocumentType
 from utils.exceptions import LoaderError
 from utils.logger import get_logger
-from .heading_detector import HeadingDetector
 from .pdf_extractor import PDFExtractor
 
 logger = get_logger(__name__)
@@ -29,7 +29,6 @@ class PDFLoader(BaseLoader):
             base_url: Base URL for static files
         """
         super().__init__(static_dir, base_url)
-        self.heading_detector = HeadingDetector()
         self.pdf_extractor = PDFExtractor(self.image_handler)
     
     def load(self, source: str, **kwargs) -> Document:
@@ -48,19 +47,26 @@ class PDFLoader(BaseLoader):
         
         logger.info(f"Loading PDF file: {original_filename} (file_id: {file_id})")
         
+        start_time = time.time()
+        pdf = None
+        
         try:
-            # Open PDF once and use it for both heading detection and content extraction
-            with pdfplumber.open(path) as pdf:
-                # Detect headings
-                headings = []
-                try:
-                    headings = self.heading_detector.detect(pdf)
-                except Exception as e:
-                    logger.warning(f"Failed to detect PDF headings: {e}", exc_info=True)
-                    headings = []
-                
-                # Extract content (reuse the same PDF object)
-                content, structure = self.pdf_extractor.extract(path, file_id, headings, pdf=pdf)
+            # Open PDF once and use it for content extraction
+            pdf = pdfplumber.open(path)
+            
+            # Log PDF info
+            num_pages = len(pdf.pages)
+            logger.info(f"PDF has {num_pages} pages")
+            
+            # Extract content
+            content, structure = self.pdf_extractor.extract(path, file_id, headings=None, pdf=pdf)
+            
+            # Log processing stats
+            processing_time = time.time() - start_time
+            logger.info(
+                f"Successfully processed PDF: {original_filename} "
+                f"({num_pages} pages, {processing_time:.2f}s)"
+            )
             
             # Build document
             return self._build_document(
@@ -72,9 +78,22 @@ class PDFLoader(BaseLoader):
                 file_id=file_id,
                 **kwargs
             )
+        except FileNotFoundError as e:
+            logger.error(f"PDF file not found: {source}")
+            raise
         except Exception as e:
-            logger.error(f"Failed to load PDF file: {str(e)}", exc_info=True)
+            logger.error(
+                f"Failed to load PDF file {source}: {str(e)}",
+                exc_info=True
+            )
             raise LoaderError(f"Failed to load PDF file: {str(e)}") from e
+        finally:
+            # Ensure PDF is closed
+            if pdf:
+                try:
+                    pdf.close()
+                except Exception as close_error:
+                    logger.warning(f"Error closing PDF file: {close_error}")
     
     def supports(self, doc_type: DocumentType) -> bool:
         """Check if supports PDF."""

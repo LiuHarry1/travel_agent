@@ -149,8 +149,10 @@ export const FileUpload: React.FC<FileUploadProps> = ({
             embeddingProvider: config.embedding.provider,
             embeddingModel: config.embedding.model,
             bgeApiUrl: config.embedding.bgeApiUrl,
-            chunkSize: config.chunking.chunkSize,
-            chunkOverlap: config.chunking.chunkOverlap,
+            chunkSize: config.chunking.useMultiGranularity ? undefined : config.chunking.chunkSize,
+            chunkOverlap: config.chunking.useMultiGranularity ? undefined : config.chunking.chunkOverlap,
+            multiGranularitySizes: config.chunking.useMultiGranularity ? config.chunking.multiGranularitySizes : undefined,
+            multiGranularityOverlap: config.chunking.useMultiGranularity ? config.chunking.multiGranularityOverlap : undefined,
             database: database,
           },
           (progress) => {
@@ -259,8 +261,10 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           embeddingProvider: config.embedding.provider,
           embeddingModel: config.embedding.model,
           bgeApiUrl: config.embedding.bgeApiUrl,
-          chunkSize: config.chunking.chunkSize,
-          chunkOverlap: config.chunking.chunkOverlap,
+          chunkSize: config.chunking.useMultiGranularity ? undefined : config.chunking.chunkSize,
+          chunkOverlap: config.chunking.useMultiGranularity ? undefined : config.chunking.chunkOverlap,
+          multiGranularitySizes: config.chunking.useMultiGranularity ? config.chunking.multiGranularitySizes : undefined,
+          multiGranularityOverlap: config.chunking.useMultiGranularity ? config.chunking.multiGranularityOverlap : undefined,
         },
         (progress) => {
           const stageMap: Record<string, ProcessingStage> = {

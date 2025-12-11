@@ -369,6 +369,8 @@ export class ApiClient {
       bgeApiUrl?: string;
       chunkSize?: number;
       chunkOverlap?: number;
+      multiGranularitySizes?: number[];
+      multiGranularityOverlap?: number;
       database?: string;
     },
     onProgress: (progress: any) => void
@@ -401,6 +403,12 @@ export class ApiClient {
       }
       if (options.chunkOverlap !== undefined && options.chunkOverlap !== null) {
         formData.append('chunk_overlap', options.chunkOverlap.toString());
+      }
+      if (options.multiGranularitySizes && options.multiGranularitySizes.length > 0) {
+        formData.append('multi_granularity_chunk_sizes', JSON.stringify(options.multiGranularitySizes));
+      }
+      if (options.multiGranularityOverlap !== undefined && options.multiGranularityOverlap !== null) {
+        formData.append('multi_granularity_chunk_overlap', options.multiGranularityOverlap.toString());
       }
 
       // Use fetch with ReadableStream for SSE
