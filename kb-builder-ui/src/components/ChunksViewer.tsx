@@ -97,7 +97,7 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
       const containerRect = container.getBoundingClientRect();
       const newWidth = e.clientX - containerRect.left;
       
-      // 限制最小和最大宽度
+      // Limit minimum and maximum width
       const minWidth = 250;
       const maxWidth = Math.min(600, containerRect.width * 0.6);
       
@@ -294,14 +294,14 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
                         className={`chunk-tab ${(activeTab[selectedChunk.index] || 'text') === 'text' ? 'active' : ''}`}
                         onClick={() => handleTabChange(selectedChunk.index, 'text')}
                       >
-                        文本内容
+                        Text Content
                       </button>
                       {chunkLocation && (
                         <button
                           className={`chunk-tab ${activeTab[selectedChunk.index] === 'location' ? 'active' : ''}`}
                           onClick={() => handleTabChange(selectedChunk.index, 'location')}
                         >
-                          位置信息
+                          Location Info
                         </button>
                       )}
                       {selectedChunk.metadata && Object.keys(filterEmptyMetadata(selectedChunk.metadata)).length > 0 && (
@@ -309,14 +309,14 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
                           className={`chunk-tab ${activeTab[selectedChunk.index] === 'metadata' ? 'active' : ''}`}
                           onClick={() => handleTabChange(selectedChunk.index, 'metadata')}
                         >
-                          元数据
+                          Metadata
                         </button>
                       )}
                       <button
                         className={`chunk-tab ${activeTab[selectedChunk.index] === 'technical' ? 'active' : ''}`}
                         onClick={() => handleTabChange(selectedChunk.index, 'technical')}
                       >
-                        技术信息
+                        Technical Info
                       </button>
                     </div>
                     
@@ -332,25 +332,25 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
                           <div className="metadata-table">
                             {chunkLocation.start_char !== undefined && (
                               <div className="metadata-row">
-                                <span className="metadata-label">起始字符:</span>
+                                <span className="metadata-label">Start Char:</span>
                                 <span className="metadata-value">{chunkLocation.start_char}</span>
                               </div>
                             )}
                             {chunkLocation.end_char !== undefined && (
                               <div className="metadata-row">
-                                <span className="metadata-label">结束字符:</span>
+                                <span className="metadata-label">End Char:</span>
                                 <span className="metadata-value">{chunkLocation.end_char}</span>
                               </div>
                             )}
                             {chunkLocation.page_number !== undefined && (
                               <div className="metadata-row">
-                                <span className="metadata-label">页码:</span>
+                                <span className="metadata-label">Page:</span>
                                 <span className="metadata-value">{chunkLocation.page_number}</span>
                               </div>
                             )}
                             {chunkLocation.page_bbox && (
                               <div className="metadata-row">
-                                <span className="metadata-label">页面坐标:</span>
+                                <span className="metadata-label">Page Coordinates:</span>
                                 <span className="metadata-value">
                                   ({chunkLocation.page_bbox.x0}, {chunkLocation.page_bbox.y0}) - 
                                   ({chunkLocation.page_bbox.x1}, {chunkLocation.page_bbox.y1})
@@ -359,37 +359,37 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
                             )}
                             {chunkLocation.paragraph_index !== undefined && (
                               <div className="metadata-row">
-                                <span className="metadata-label">段落索引:</span>
+                                <span className="metadata-label">Paragraph Index:</span>
                                 <span className="metadata-value">{chunkLocation.paragraph_index}</span>
                               </div>
                             )}
                             {chunkLocation.section_index !== undefined && (
                               <div className="metadata-row">
-                                <span className="metadata-label">章节索引:</span>
+                                <span className="metadata-label">Section Index:</span>
                                 <span className="metadata-value">{chunkLocation.section_index}</span>
                               </div>
                             )}
                             {chunkLocation.heading_path && chunkLocation.heading_path.length > 0 && (
                               <div className="metadata-row">
-                                <span className="metadata-label">标题路径:</span>
+                                <span className="metadata-label">Heading Path:</span>
                                 <span className="metadata-value">{chunkLocation.heading_path.join(' > ')}</span>
                               </div>
                             )}
                             {chunkLocation.code_block_index !== undefined && (
                               <div className="metadata-row">
-                                <span className="metadata-label">代码块索引:</span>
+                                <span className="metadata-label">Code Block Index:</span>
                                 <span className="metadata-value">{chunkLocation.code_block_index}</span>
                               </div>
                             )}
                             {chunkLocation.image_index !== undefined && (
                               <div className="metadata-row">
-                                <span className="metadata-label">图片索引:</span>
+                                <span className="metadata-label">Image Index:</span>
                                 <span className="metadata-value">{chunkLocation.image_index}</span>
                               </div>
                             )}
                             {chunkLocation.image_url && (
                               <div className="metadata-row">
-                                <span className="metadata-label">图片URL:</span>
+                                <span className="metadata-label">Image URL:</span>
                                 <span className="metadata-value">
                                   <a href={chunkLocation.image_url} target="_blank" rel="noopener noreferrer">
                                     {chunkLocation.image_url}
@@ -399,13 +399,13 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
                             )}
                             {chunkLocation.table_index !== undefined && (
                               <div className="metadata-row">
-                                <span className="metadata-label">表格索引:</span>
+                                <span className="metadata-label">Table Index:</span>
                                 <span className="metadata-value">{chunkLocation.table_index}</span>
                               </div>
                             )}
                             {chunkLocation.table_cell && (
                               <div className="metadata-row">
-                                <span className="metadata-label">表格单元格:</span>
+                                <span className="metadata-label">Table Cell:</span>
                                 <span className="metadata-value">{chunkLocation.table_cell}</span>
                               </div>
                             )}
@@ -472,55 +472,55 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
                               <>
                                 {chunkLocation.page_number !== undefined && (
                                   <div className="metadata-row">
-                                    <span className="metadata-label">页码:</span>
+                                    <span className="metadata-label">Page:</span>
                                     <span className="metadata-value">{chunkLocation.page_number}</span>
                                   </div>
                                 )}
                                 {chunkLocation.start_char !== undefined && (
                                   <div className="metadata-row">
-                                    <span className="metadata-label">起始字符:</span>
+                                    <span className="metadata-label">Start Char:</span>
                                     <span className="metadata-value">{chunkLocation.start_char}</span>
                                   </div>
                                 )}
                                 {chunkLocation.end_char !== undefined && (
                                   <div className="metadata-row">
-                                    <span className="metadata-label">结束字符:</span>
+                                    <span className="metadata-label">End Char:</span>
                                     <span className="metadata-value">{chunkLocation.end_char}</span>
                                   </div>
                                 )}
                                 {chunkLocation.heading_path && chunkLocation.heading_path.length > 0 && (
                                   <div className="metadata-row">
-                                    <span className="metadata-label">标题路径:</span>
+                                    <span className="metadata-label">Heading Path:</span>
                                     <span className="metadata-value">{chunkLocation.heading_path.join(' > ')}</span>
                                   </div>
                                 )}
                                 {chunkLocation.paragraph_index !== undefined && (
                                   <div className="metadata-row">
-                                    <span className="metadata-label">段落索引:</span>
+                                    <span className="metadata-label">Paragraph Index:</span>
                                     <span className="metadata-value">{chunkLocation.paragraph_index}</span>
                                   </div>
                                 )}
                                 {chunkLocation.section_index !== undefined && (
                                   <div className="metadata-row">
-                                    <span className="metadata-label">章节索引:</span>
+                                    <span className="metadata-label">Section Index:</span>
                                     <span className="metadata-value">{chunkLocation.section_index}</span>
                                   </div>
                                 )}
                                 {chunkLocation.code_block_index !== undefined && (
                                   <div className="metadata-row">
-                                    <span className="metadata-label">代码块索引:</span>
+                                    <span className="metadata-label">Code Block Index:</span>
                                     <span className="metadata-value">{chunkLocation.code_block_index}</span>
                                   </div>
                                 )}
                                 {chunkLocation.image_index !== undefined && (
                                   <div className="metadata-row">
-                                    <span className="metadata-label">图片索引:</span>
+                                    <span className="metadata-label">Image Index:</span>
                                     <span className="metadata-value">{chunkLocation.image_index}</span>
                                   </div>
                                 )}
                                 {chunkLocation.image_url && (
                                   <div className="metadata-row">
-                                    <span className="metadata-label">图片URL:</span>
+                                    <span className="metadata-label">Image URL:</span>
                                     <span className="metadata-value">
                                       <a href={chunkLocation.image_url} target="_blank" rel="noopener noreferrer">
                                         {chunkLocation.image_url}
@@ -530,19 +530,19 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
                                 )}
                                 {chunkLocation.table_index !== undefined && (
                                   <div className="metadata-row">
-                                    <span className="metadata-label">表格索引:</span>
+                                    <span className="metadata-label">Table Index:</span>
                                     <span className="metadata-value">{chunkLocation.table_index}</span>
                                   </div>
                                 )}
                                 {chunkLocation.table_cell && (
                                   <div className="metadata-row">
-                                    <span className="metadata-label">表格单元格:</span>
+                                    <span className="metadata-label">Table Cell:</span>
                                     <span className="metadata-value">{chunkLocation.table_cell}</span>
                                   </div>
                                 )}
                                 {chunkLocation.page_bbox && (
                                   <div className="metadata-row">
-                                    <span className="metadata-label">页面坐标:</span>
+                                    <span className="metadata-label">Page Coordinates:</span>
                                     <span className="metadata-value">
                                       ({chunkLocation.page_bbox.x0}, {chunkLocation.page_bbox.y0}) - 
                                       ({chunkLocation.page_bbox.x1}, {chunkLocation.page_bbox.y1})

@@ -31,8 +31,8 @@ export function getDefaultConfig(): AppConfig {
   return {
     apiUrl,
     embedding: {
-      provider: 'openai',  // 改为 openai 或 bge
-      model: 'text-embedding-3-small',  // 改为你想要的模型
+      provider: 'openai',  // Change to openai or bge
+      model: 'text-embedding-3-small',  // Change to your desired model
     },
     chunking: {
       chunkSize: 1000,

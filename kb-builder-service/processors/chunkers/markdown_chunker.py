@@ -18,11 +18,11 @@ class MarkdownChunker(BaseChunker):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.min_chunk_size = min_chunk_size
-        # 标题模式
+        # Heading pattern
         self.heading_pattern = re.compile(r'^(#{1,6})\s+(.+)$', re.MULTILINE)
-        # 代码块模式
+        # Code block pattern
         self.code_block_pattern = re.compile(r'```(\w+)?\n(.*?)```', re.DOTALL)
-        # 图片和链接模式
+        # Image and link pattern
         self.image_pattern = re.compile(r'!\[([^\]]*)\]\(([^)]+)\)')
         self.link_pattern = re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
     
@@ -36,11 +36,11 @@ class MarkdownChunker(BaseChunker):
         chunks = []
         chunk_index = 0
         
-        # 找到所有标题
+        # Find all headings
         headings = list(self.heading_pattern.finditer(text))
         
         if not headings:
-            # 没有标题，使用递归分片
+            # No headings, use recursive chunking
             from .recursive import RecursiveChunker
             recursive_chunker = RecursiveChunker(
                 chunk_size=self.chunk_size,
@@ -49,19 +49,19 @@ class MarkdownChunker(BaseChunker):
             )
             return recursive_chunker.chunk(document)
         
-        # 按标题层级分片
+        # Chunk by heading hierarchy
         for i, heading_match in enumerate(headings):
             heading_level = len(heading_match.group(1))
             heading_text = heading_match.group(2).strip()
             heading_start = heading_match.start()
             
-            # 找到下一个同级或更高级标题的位置
+            # Find next same-level or higher-level heading position
             if i + 1 < len(headings):
                 next_heading_start = headings[i + 1].start()
-                # 如果下一个标题级别更高，继续包含
+                # If next heading level is higher, continue including
                 next_level = len(headings[i + 1].group(1))
                 if next_level > heading_level:
-                    # 找到下一个同级或更高级标题
+                    # Find next same-level or higher-level heading
                     for j in range(i + 2, len(headings)):
                         j_level = len(headings[j].group(1))
                         if j_level <= heading_level:
@@ -73,10 +73,10 @@ class MarkdownChunker(BaseChunker):
             
             section_text = text[heading_start:section_end].strip()
             
-            # 构建标题路径
+            # Build heading path
             heading_path = self._build_heading_path(headings, i)
             
-            # 如果section太大，进一步分片
+            # If section is too large, further chunk it
             if len(section_text) > self.chunk_size:
                 section_chunks = self._chunk_within_section(
                     section_text,
@@ -88,12 +88,12 @@ class MarkdownChunker(BaseChunker):
                 chunks.extend(section_chunks)
                 chunk_index += len(section_chunks)
             else:
-                # 整个section作为一个chunk
-                # 提取代码块索引
+                # Entire section as one chunk
+                # Extract code block index
                 code_block_index = None
                 code_blocks = list(self.code_block_pattern.finditer(section_text))
                 if code_blocks:
-                    code_block_index = 0  # 第一个代码块
+                    code_block_index = 0  # First code block
                 
                 location = ChunkLocation(
                     start_char=heading_start,
@@ -127,7 +127,7 @@ class MarkdownChunker(BaseChunker):
         current_level = len(headings[current_idx].group(1))
         current_text = headings[current_idx].group(2).strip()
         
-        # 向上查找父级标题
+        # Search upward for parent headings
         for i in range(current_idx - 1, -1, -1):
             level = len(headings[i].group(1))
             if level < current_level:
@@ -152,7 +152,7 @@ class MarkdownChunker(BaseChunker):
         chunk_index = start_chunk_index
         current_pos = 0
         
-        # 找到所有代码块的位置
+        # Find all code block positions
         code_blocks = list(self.code_block_pattern.finditer(section_text))
         code_block_indices = [(m.start(), m.end()) for m in code_blocks]
         
@@ -160,11 +160,11 @@ class MarkdownChunker(BaseChunker):
             end_pos = min(current_pos + self.chunk_size, len(section_text))
             chunk_text = section_text[current_pos:end_pos]
             
-            # 检查是否在代码块中间
+            # Check if in code block
             in_code_block = False
             for cb_start, cb_end in code_block_indices:
                 if cb_start < end_pos < cb_end:
-                    # 在代码块中间，扩展到代码块结束
+                    # In code block, extend to code block end
                     chunk_text = section_text[current_pos:cb_end]
                     end_pos = cb_end
                     in_code_block = True
@@ -184,7 +184,7 @@ class MarkdownChunker(BaseChunker):
                 current_pos = end_pos
                 continue
             
-            # 确定代码块索引
+            # Determine code block index
             code_block_index = None
             for idx, (cb_start, cb_end) in enumerate(code_block_indices):
                 if cb_start >= current_pos and cb_end <= end_pos:
@@ -214,7 +214,7 @@ class MarkdownChunker(BaseChunker):
             )
             chunks.append(chunk)
             
-            # 重叠
+            # Overlap
             overlap_amount = min(self.chunk_overlap, len(chunk_text))
             current_pos = max(current_pos + 1, end_pos - overlap_amount)
             chunk_index += 1

@@ -130,7 +130,7 @@ async def get_source_file_url(
         
         # Use file_path from collection
         if file_path_str:
-            # file_path_str might be relative like "sources/7a0b3112_面试经验.pdf"
+            # file_path_str might be relative like "sources/7a0b3112_interview_experience.pdf"
             # or absolute path
             if Path(file_path_str).is_absolute():
                 file_path = Path(file_path_str)

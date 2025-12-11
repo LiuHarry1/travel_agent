@@ -32,7 +32,7 @@ class ChunkerFactory:
         """Create chunker for document type."""
         chunker_class = cls._chunkers.get(doc_type, RecursiveChunker)
         
-        # 根据文件类型设置默认参数
+        # Set default parameters based on file type
         if doc_type == DocumentType.PDF:
             default_min_size = 100
         elif doc_type == DocumentType.DOCX:

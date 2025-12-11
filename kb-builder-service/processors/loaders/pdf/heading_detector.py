@@ -25,7 +25,7 @@ class HeadingDetector:
         
         Returns:
             List of heading dictionaries with format:
-            [{"level": 1, "text": "标题", "page": 1, "start_char": 100, "font_size": 16.0}]
+            [{"level": 1, "text": "Heading", "page": 1, "start_char": 100, "font_size": 16.0}]
         """
         headings = []
         all_chars = []

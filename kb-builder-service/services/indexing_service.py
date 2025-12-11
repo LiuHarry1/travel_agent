@@ -46,10 +46,10 @@ class IndexingService:
         """
         try:
             # 1. Load document
-            # 使用统一加载器，传入 static_dir 和 base_url 配置
+            # Use unified loader with static_dir and base_url configuration
             from config.settings import get_settings
             settings = get_settings()
-            # 优先使用传入的 base_url，否则使用配置的 static_base_url
+            # Prefer the provided base_url, otherwise use configured static_base_url
             final_base_url = base_url or settings.static_base_url
             loader = LoaderFactory.create(
                 doc_type, 
@@ -138,15 +138,15 @@ class IndexingService:
         extractor = LocationExtractor()
         
         for chunk in chunks:
-            # 如果chunk已经有location信息（从chunker设置），跳过
+            # If chunk already has location information (set by chunker), skip
             if chunk.location:
                 continue
             
-            # 从metadata获取位置信息
+            # Get position information from metadata
             start_pos = chunk.metadata.get("start_pos", 0)
             end_pos = chunk.metadata.get("end_pos", len(chunk.text))
             
-            # 根据文件类型提取位置信息
+            # Extract location information based on file type
             if doc_type == DocumentType.PDF:
                 chunk.location = extractor.extract_for_pdf(chunk.text, start_pos, end_pos)
             elif doc_type == DocumentType.DOCX:
@@ -156,7 +156,7 @@ class IndexingService:
             elif doc_type == DocumentType.MARKDOWN:
                 chunk.location = extractor.extract_for_markdown(chunk.text, start_pos, end_pos)
             else:
-                # 默认：只设置基本位置信息
+                # Default: only set basic position information
                 from models.chunk import ChunkLocation
                 chunk.location = ChunkLocation(
                     start_char=start_pos,

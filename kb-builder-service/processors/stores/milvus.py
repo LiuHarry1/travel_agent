@@ -138,13 +138,13 @@ class MilvusVectorStore(BaseVectorStore):
             # Provide more helpful error messages for common issues
             if "No space left on device" in error_msg or "ENOSPC" in error_msg:
                 raise IndexingError(
-                    f"Milvus 磁盘空间不足。\n"
-                    f"错误详情: {error_msg}\n"
-                    f"建议解决方案:\n"
-                    f"1. 检查磁盘空间: df -h\n"
-                    f"2. 如果使用 Docker，清理容器和卷: docker system prune -a --volumes\n"
-                    f"3. 清理 Milvus 日志文件\n"
-                    f"4. 删除不需要的 collection 释放空间"
+                    f"Milvus disk space insufficient.\n"
+                    f"Error details: {error_msg}\n"
+                    f"Suggested solutions:\n"
+                    f"1. Check disk space: df -h\n"
+                    f"2. If using Docker, clean containers and volumes: docker system prune -a --volumes\n"
+                    f"3. Clean Milvus log files\n"
+                    f"4. Delete unnecessary collections to free space"
                 ) from e
             else:
                 raise IndexingError(f"Failed to create collection: {error_msg}") from e
@@ -315,13 +315,13 @@ class MilvusVectorStore(BaseVectorStore):
             # Provide more helpful error messages for common issues
             if "No space left on device" in error_msg or "ENOSPC" in error_msg:
                 raise IndexingError(
-                    f"Milvus 磁盘空间不足。\n"
-                    f"错误详情: {error_msg}\n"
-                    f"建议解决方案:\n"
-                    f"1. 检查磁盘空间: df -h\n"
-                    f"2. 如果使用 Docker，清理容器和卷: docker system prune -a --volumes\n"
-                    f"3. 清理 Milvus 日志文件\n"
-                    f"4. 删除不需要的 collection 释放空间"
+                    f"Milvus disk space insufficient.\n"
+                    f"Error details: {error_msg}\n"
+                    f"Suggested solutions:\n"
+                    f"1. Check disk space: df -h\n"
+                    f"2. If using Docker, clean containers and volumes: docker system prune -a --volumes\n"
+                    f"3. Clean Milvus log files\n"
+                    f"4. Delete unnecessary collections to free space"
                 ) from e
             else:
                 raise IndexingError(f"Indexing failed: {error_msg}") from e
@@ -364,8 +364,8 @@ class MilvusVectorStore(BaseVectorStore):
             # Convert to list of dicts
             sources = []
             for doc_id, info in source_info.items():
-                # doc_id is the original filename (e.g., "面试经验.pdf")
-                # file_path is the actual saved path (e.g., "static/sources/7a0b3112_面试经验.pdf")
+                # doc_id is the original filename (e.g., "interview_experience.pdf")
+                # file_path is the actual saved path (e.g., "static/sources/7a0b3112_interview_experience.pdf")
                 sources.append({
                     "document_id": doc_id,
                     "chunk_count": info["count"],

@@ -15,16 +15,16 @@ class RecursiveChunker(BaseChunker):
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
         separators: List[str] = None,
-        min_chunk_size: int = 100  # 最小 chunk 大小，避免产生太短的 chunk
+        min_chunk_size: int = 100  # Minimum chunk size to avoid creating chunks that are too short
     ):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        # 改进的分隔符优先级：语义边界优先
+        # Improved separator priority: semantic boundaries first
         self.separators = separators or ["\n\n\n", "\n\n", ". ", "。", "！", "？", " ", ""]
         self.min_chunk_size = min_chunk_size
-        # HTML 标签正则表达式，用于识别和保护 HTML 标签
+        # HTML tag regex for identifying and protecting HTML tags
         self.html_tag_pattern = re.compile(r'<[^>]+>')
-        # 特殊标记模式（用于保护结构化标记）
+        # Special marker patterns (for protecting structured markers)
         self.special_markers = re.compile(r'<(page|paragraph|heading|table|code_block)[^>]*>', re.IGNORECASE)
     
     def chunk(self, document: Document) -> List[Chunk]:

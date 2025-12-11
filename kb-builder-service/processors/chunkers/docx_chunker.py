@@ -18,9 +18,9 @@ class DOCXChunker(BaseChunker):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.min_chunk_size = min_chunk_size
-        # 段落标记模式
+        # Paragraph marker pattern
         self.paragraph_pattern = re.compile(r'<paragraph\s+index="(\d+)"[^>]*>', re.IGNORECASE)
-        # 图片标签模式
+        # Image tag pattern
         self.img_pattern = re.compile(r'<img[^>]+>', re.IGNORECASE)
     
     def chunk(self, document: Document) -> List[Chunk]:
@@ -34,7 +34,7 @@ class DOCXChunker(BaseChunker):
         chunk_index = 0
         current_pos = 0
         
-        # 按段落分片
+        # Chunk by paragraphs
         paragraphs = text.split('\n\n')
         
         current_chunk_parts = []
@@ -48,9 +48,9 @@ class DOCXChunker(BaseChunker):
             
             para_size = len(para)
             
-            # 如果当前chunk加上这个段落会超过大小，先保存当前chunk
+            # If current chunk plus this paragraph would exceed size, save current chunk first
             if current_chunk_size + para_size > self.chunk_size and current_chunk_parts:
-                # 创建chunk
+                # Create chunk
                 chunk_text = '\n\n'.join(current_chunk_parts)
                 location = ChunkLocation(
                     start_char=current_pos,
@@ -74,7 +74,7 @@ class DOCXChunker(BaseChunker):
                 )
                 chunks.append(chunk)
                 
-                # 重叠：保留最后一部分
+                # Overlap: keep last part
                 overlap_text = '\n\n'.join(current_chunk_parts[-1:])
                 current_chunk_parts = [overlap_text] if len(overlap_text) <= self.chunk_overlap else []
                 current_chunk_size = len(overlap_text)
@@ -82,9 +82,9 @@ class DOCXChunker(BaseChunker):
                 chunk_index += 1
                 current_paragraph_index = para_idx
             
-            # 如果单个段落就超过chunk_size，需要拆分段落
+            # If single paragraph exceeds chunk_size, need to split paragraph
             if para_size > self.chunk_size:
-                # 先保存当前chunk
+                # Save current chunk first
                 if current_chunk_parts:
                     chunk_text = '\n\n'.join(current_chunk_parts)
                     location = ChunkLocation(
@@ -112,7 +112,7 @@ class DOCXChunker(BaseChunker):
                     current_chunk_parts = []
                     current_chunk_size = 0
                 
-                # 拆分大段落
+                # Split large paragraph
                 para_chunks = self._split_large_paragraph(
                     para,
                     document,
@@ -127,12 +127,12 @@ class DOCXChunker(BaseChunker):
                     current_chunk_parts = []
                     current_chunk_size = 0
             else:
-                # 添加到当前chunk
+                # Add to current chunk
                 current_chunk_parts.append(para)
                 current_chunk_size += para_size + 2  # +2 for \n\n
                 current_paragraph_index = para_idx
         
-        # 处理剩余的chunk
+        # Process remaining chunk
         if current_chunk_parts:
             chunk_text = '\n\n'.join(current_chunk_parts)
             location = ChunkLocation(
@@ -175,7 +175,7 @@ class DOCXChunker(BaseChunker):
             end_pos = min(current_pos + self.chunk_size, len(para))
             chunk_text = para[current_pos:end_pos]
             
-            # 尝试在句子边界分割
+            # Try to split at sentence boundaries
             if end_pos < len(para):
                 for sep in ['. ', '。', '！', '？', '\n']:
                     sep_pos = chunk_text.rfind(sep)
@@ -211,7 +211,7 @@ class DOCXChunker(BaseChunker):
             )
             chunks.append(chunk)
             
-            # 重叠
+            # Overlap
             overlap_amount = min(self.chunk_overlap, len(chunk_text))
             current_pos = max(current_pos + 1, end_pos - overlap_amount)
             chunk_index += 1

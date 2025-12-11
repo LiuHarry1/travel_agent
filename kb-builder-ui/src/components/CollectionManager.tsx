@@ -33,17 +33,17 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const loadingRef = useRef(false);
   
-  // 排序函数：按创建时间排序，如果相同则按名称排序
+  // Sort function: sort by creation time, if same then by name
   const sortCollections = useCallback((data: Collection[]): Collection[] => {
     return [...data].sort((a, b) => {
       const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
       const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
       
       if (timeA > 0 && timeB > 0 && timeA !== timeB) {
-        return timeA - timeB; // 升序：最早创建的在前
+        return timeA - timeB; // Ascending: earliest created first
       }
       
-      // 如果创建时间相同或无效，按名称排序以保持稳定的顺序
+      // If creation time is same or invalid, sort by name to maintain stable order
       return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
     });
   }, []);
@@ -64,7 +64,7 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
   }, [config]);
 
   const loadCollections = useCallback(async () => {
-    // 防止重复加载
+    // Prevent duplicate loading
     if (loadingRef.current) return;
     
     loadingRef.current = true;
@@ -72,7 +72,7 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
     setError(null);
     try {
       const data = await apiClient.listCollections(database);
-      // 使用统一的排序函数确保排序稳定
+      // Use unified sort function to ensure stable sorting
       const sortedData = sortCollections(data);
       setCollections(sortedData);
     } catch (err) {

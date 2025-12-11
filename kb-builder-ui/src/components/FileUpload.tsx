@@ -53,8 +53,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   const [processingFiles, setProcessingFiles] = useState<Map<string, FileProcessingStatus>>(new Map());
   const [uploading, setUploading] = useState(false);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
-  const [filesCollapsed, setFilesCollapsed] = useState(false); // 控制 Selected Files 是否折叠
-  const successNotifiedRef = useRef<Set<string>>(new Set()); // 使用 ref 同步跟踪已通知成功的文件
+  const [filesCollapsed, setFilesCollapsed] = useState(false); // Control whether Selected Files is collapsed
+  const successNotifiedRef = useRef<Set<string>>(new Set()); // Use ref to synchronously track successfully notified files
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -129,8 +129,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     if (files.length === 0) return;
 
     setUploading(true);
-    setFilesCollapsed(true); // 自动折叠 Selected Files，给 Processing Files 更多空间
-    successNotifiedRef.current.clear(); // 清除之前的通知记录，开始新的上传批次
+    setFilesCollapsed(true); // Auto-collapse Selected Files to give Processing Files more space
+    successNotifiedRef.current.clear(); // Clear previous notification records, start new upload batch
 
     for (const file of files) {
       const fileId = file.name;
@@ -334,17 +334,17 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     });
   };
 
-  // 清除所有状态，返回到初始上传状态
+  // Clear all state, return to initial upload state
   const handleClearAll = useCallback(() => {
     setFiles([]);
     setProcessingFiles(new Map());
     setUploading(false);
     setFilesCollapsed(false);
     setExpandedFiles(new Set());
-    successNotifiedRef.current.clear(); // 清除成功通知记录
+    successNotifiedRef.current.clear(); // Clear success notification records
   }, []);
 
-  // 判断是否处于处理状态
+  // Check if in processing state
   const isProcessing = uploading || processingFiles.size > 0;
 
   const FileTypeIcon: React.FC<{ type: FileType }> = ({ type }) => {
@@ -382,7 +382,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         Upload Documents to Knowledge Base
       </h2>
       
-      {/* File Drop Zone - 只在没有处理中时显示 */}
+      {/* File Drop Zone - only show when not processing */}
       {!isProcessing && (
         <div
           className={`drop-zone ${files.length > 0 ? 'has-files compact' : ''}`}
@@ -409,7 +409,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       </div>
       )}
 
-      {/* Selected Files - 只在没有处理中时显示 */}
+      {/* Selected Files - only show when not processing */}
       {files.length > 0 && !isProcessing && (
         <>
           <div className="section-divider"></div>

@@ -21,12 +21,12 @@ class PDFChunker(BaseChunker):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.min_chunk_size = min_chunk_size
-        # 页面标记模式
+        # Page marker patterns
         self.page_pattern = re.compile(r'<page\s+page="(\d+)"[^>]*>', re.IGNORECASE)
         self.page_close_pattern = re.compile(r'</page>', re.IGNORECASE)
-        # 图片标签模式
+        # Image tag pattern
         self.img_pattern = re.compile(r'<img[^>]+>', re.IGNORECASE)
-        # 表格标记模式
+        # Table marker pattern
         self.table_pattern = re.compile(r'<table[^>]*>.*?</table>', re.DOTALL | re.IGNORECASE)
     
     def chunk(self, document: Document) -> List[Chunk]:
@@ -39,44 +39,44 @@ class PDFChunker(BaseChunker):
         chunks = []
         chunk_index = 0
         
-        # 尝试使用标题信息进行分块
-        # 检查是否有PDF标题信息
+        # Try to use heading information for chunking
+        # Check if PDF heading information exists
         pdf_headings = None
         if document.structure and document.structure.pdf_headings:
             pdf_headings = document.structure.pdf_headings
         
-        # 查找Markdown格式的标题（在_load_pdf中已经插入）
+        # Find Markdown format headings (inserted in _load_pdf)
         heading_pattern = re.compile(r'^(#{1,6})\s+(.+)$', re.MULTILINE)
         all_headings = list(heading_pattern.finditer(text))
         
-        # 过滤掉"Page X"这样的伪标题
+        # Filter out "Page X" pseudo-headings
         headings = []
         page_heading_pattern = re.compile(r'^Page\s+\d+$', re.IGNORECASE)
         for heading_match in all_headings:
             heading_text = heading_match.group(2).strip()
-            # 跳过"Page X"格式的标题
+            # Skip "Page X" format headings
             if not page_heading_pattern.match(heading_text):
                 headings.append(heading_match)
         
-        # 如果有标题，优先使用标题分块
+        # If headings exist, prioritize heading-based chunking
         if headings:
             logger.info(f"Using heading-based chunking for PDF with {len(headings)} headings (filtered {len(all_headings) - len(headings)} page markers)")
             return self._chunk_by_headings(text, document, headings, chunk_index)
         
-        # 如果没有标题，回退到页面分块
+        # If no headings, fall back to page-based chunking
         logger.info("No headings detected, falling back to page-based chunking")
         return self._chunk_by_pages(text, document)
     
     def _chunk_by_pages(self, text: str, document: Document) -> List[Chunk]:
-        """按页面分块（原有逻辑）"""
+        """Chunk by pages (original logic)."""
         chunks = []
         chunk_index = 0
         
-        # 找到所有页面标记
+        # Find all page markers
         page_matches = list(self.page_pattern.finditer(text))
         
         if not page_matches:
-            # 如果没有页面标记，使用递归分片
+            # If no page markers, use recursive chunking
             from .recursive import RecursiveChunker
             recursive_chunker = RecursiveChunker(
                 chunk_size=self.chunk_size,
@@ -85,22 +85,22 @@ class PDFChunker(BaseChunker):
             )
             return recursive_chunker.chunk(document)
         
-        # 按页面分片
+        # Chunk by pages
         for i, page_match in enumerate(page_matches):
             page_num = int(page_match.group(1))
             page_start = page_match.start()
             
-            # 找到页面结束位置
+            # Find page end position
             if i + 1 < len(page_matches):
                 page_end = page_matches[i + 1].start()
             else:
-                # 最后一个页面，找到 </page> 标签
+                # Last page, find </page> tag
                 close_match = self.page_close_pattern.search(text, page_start)
                 page_end = close_match.end() if close_match else len(text)
             
             page_text = text[page_start:page_end]
             
-            # 在页面内进一步分片（如果需要）
+            # Further chunk within page if needed
             page_chunks = self._chunk_within_page(
                 page_text,
                 document,
@@ -114,25 +114,25 @@ class PDFChunker(BaseChunker):
         return chunks
     
     def _chunk_by_headings(self, text: str, document: Document, headings: List[re.Match], start_chunk_index: int) -> List[Chunk]:
-        """按标题层级分块（参考markdown_chunker的实现）"""
+        """Chunk by heading hierarchy (referencing markdown_chunker implementation)."""
         chunks = []
         chunk_index = start_chunk_index
         
         logger.info(f"Starting heading-based chunking with {len(headings)} headings")
         
-        # 按标题层级分片
+        # Chunk by heading hierarchy
         for i, heading_match in enumerate(headings):
             heading_level = len(heading_match.group(1))
             heading_text = heading_match.group(2).strip()
             heading_start = heading_match.start()
             
-            # 找到下一个同级或更高级标题的位置
+            # Find next same-level or higher-level heading position
             if i + 1 < len(headings):
                 next_heading_start = headings[i + 1].start()
-                # 如果下一个标题级别更高，继续包含
+                # If next heading level is higher, continue including
                 next_level = len(headings[i + 1].group(1))
                 if next_level > heading_level:
-                    # 找到下一个同级或更高级标题
+                    # Find next same-level or higher-level heading
                     for j in range(i + 2, len(headings)):
                         j_level = len(headings[j].group(1))
                         if j_level <= heading_level:
@@ -144,39 +144,39 @@ class PDFChunker(BaseChunker):
             
             section_text = text[heading_start:section_end].strip()
             
-            # 构建标题路径
+            # Build heading path
             heading_path = self._build_heading_path(headings, i)
             
-            # 提取页面信息（从section_text中的<page>标签，在清理前提取）
+            # Extract page information (from <page> tags in section_text, before cleaning)
             page_num = None
             page_match = self.page_pattern.search(section_text)
             if page_match:
                 page_num = int(page_match.group(1))
             
-            # 清理页面标记
+            # Clean page markers
             clean_section_text = self._clean_page_markers(section_text)
             
-            # 跳过太小的section（小于min_chunk_size）
+            # Skip sections that are too small (less than min_chunk_size)
             if len(clean_section_text.strip()) < self.min_chunk_size:
-                # 尝试合并到前一个chunk（如果存在）
+                # Try to merge with previous chunk if exists
                 if chunks:
                     last_chunk = chunks[-1]
-                    # 合并文本
+                    # Merge text
                     merged_text = last_chunk.text + "\n\n" + clean_section_text
-                    if len(merged_text) <= self.chunk_size * 1.5:  # 允许适度超出
+                    if len(merged_text) <= self.chunk_size * 1.5:  # Allow moderate overflow
                         last_chunk.text = merged_text
                         last_chunk.location.end_char = section_end
                         last_chunk.metadata["chunk_size"] = len(merged_text)
                         last_chunk.metadata["end_pos"] = section_end
                         continue
-                # 如果无法合并，跳过太小的section
+                # If cannot merge, skip section that is too small
                 continue
             
-            # 如果section太大，进一步分片
+            # If section is too large, further chunk it
             if len(clean_section_text) > self.chunk_size:
                 logger.debug(f"Section too large ({len(clean_section_text)} chars), splitting. heading_path: {heading_path}")
                 section_chunks = self._chunk_within_section(
-                    clean_section_text,  # 使用清理后的文本，避免重复清理和位置计算错误
+                    clean_section_text,  # Use cleaned text to avoid duplicate cleaning and position calculation errors
                     document,
                     heading_path,
                     heading_start,
@@ -187,7 +187,7 @@ class PDFChunker(BaseChunker):
                 chunks.extend(section_chunks)
                 chunk_index += len(section_chunks)
             else:
-                # 整个section作为一个chunk
+                # Entire section as one chunk
                 location = ChunkLocation(
                     start_char=heading_start,
                     end_char=section_end,
@@ -195,7 +195,7 @@ class PDFChunker(BaseChunker):
                     page_number=page_num
                 )
                 
-                # 提取图片信息
+                # Extract image information
                 img_match = self.img_pattern.search(section_text)
                 if img_match:
                     img_src_match = re.search(r'src="([^"]+)"', img_match.group(0))
@@ -239,20 +239,20 @@ class PDFChunker(BaseChunker):
         chunk_index = start_chunk_index
         current_pos = 0
         
-        # 清理页面标记
+        # Clean page markers
         clean_text = self._clean_page_markers(page_text)
         
         if not clean_text:
             return []
         
-        # 如果页面内容小于chunk_size，直接作为一个chunk
+        # If page content is smaller than chunk_size, use as one chunk
         if len(clean_text) <= self.chunk_size:
             location = ChunkLocation(
                 start_char=page_offset + current_pos,
                 end_char=page_offset + len(page_text),
                 page_number=page_num
             )
-            # 提取图片信息
+            # Extract image information
             img_match = self.img_pattern.search(clean_text)
             if img_match:
                 img_src_match = re.search(r'src="([^"]+)"', img_match.group(0))
@@ -290,15 +290,15 @@ class PDFChunker(BaseChunker):
             chunks.append(chunk)
             return chunks
         
-        # 页面内容较大，需要进一步分片
-        # 使用改进的递归分片，但保护图片和表格
+        # Page content is large, need further chunking
+        # Use improved recursive chunking, but protect images and tables
         while current_pos < len(clean_text):
             end_pos = min(current_pos + self.chunk_size, len(clean_text))
             chunk_text = clean_text[current_pos:end_pos]
             
-            # 如果不在文本末尾，尝试在安全位置分割
+            # If not at text end, try to split at safe position
             if end_pos < len(clean_text):
-                # 保护图片标签
+                # Protect image tags
                 chunk_text = self._protect_tags_in_chunk(chunk_text, clean_text, current_pos, end_pos)
                 end_pos = current_pos + len(chunk_text)
             
@@ -323,7 +323,7 @@ class PDFChunker(BaseChunker):
                 page_number=page_num
             )
             
-            # 提取图片信息
+            # Extract image information
             img_match = self.img_pattern.search(chunk_text)
             if img_match:
                 img_src_match = re.search(r'src="([^"]+)"', img_match.group(0))
@@ -361,7 +361,7 @@ class PDFChunker(BaseChunker):
             
             chunks.append(chunk)
             
-            # 计算下一个位置（带重叠）
+            # Calculate next position (with overlap)
             overlap_amount = min(self.chunk_overlap, len(chunk_text))
             current_pos = max(current_pos + 1, end_pos - overlap_amount)
             chunk_index += 1
@@ -374,14 +374,14 @@ class PDFChunker(BaseChunker):
         current_level = len(headings[current_idx].group(1))
         current_text = headings[current_idx].group(2).strip()
         
-        # 过滤"Page X"伪标题的模式
+        # Pattern to filter "Page X" pseudo-headings
         page_heading_pattern = re.compile(r'^Page\s+\d+$', re.IGNORECASE)
         
-        # 向上查找父级标题
+        # Search upward for parent headings
         for i in range(current_idx - 1, -1, -1):
             level = len(headings[i].group(1))
             heading_text = headings[i].group(2).strip()
-            # 跳过"Page X"格式的伪标题
+            # Skip "Page X" format pseudo-headings
             if page_heading_pattern.match(heading_text):
                 continue
             if level < current_level:
@@ -390,7 +390,7 @@ class PDFChunker(BaseChunker):
                 if level == 1:
                     break
         
-        # 确保当前标题也不是"Page X"
+        # Ensure current heading is not "Page X"
         if not page_heading_pattern.match(current_text):
             path.append(current_text)
         
@@ -427,7 +427,7 @@ class PDFChunker(BaseChunker):
                 page_number=page_num
             )
             
-            # 提取图片信息
+            # Extract image information
             img_match = self.img_pattern.search(clean_section_text)
             if img_match:
                 img_src_match = re.search(r'src="([^"]+)"', img_match.group(0))
@@ -461,46 +461,44 @@ class PDFChunker(BaseChunker):
                 break
             end_pos = min(current_pos + self.chunk_size, len(clean_section_text))
             
-            # 防止无限循环：确保end_pos至少比current_pos大1
+            # Prevent infinite loop: ensure end_pos is at least 1 greater than current_pos
             if end_pos <= current_pos:
                 end_pos = min(current_pos + 1, len(clean_section_text))
             
             chunk_text = clean_section_text[current_pos:end_pos]
             
-            # 如果不在文本末尾，尝试在安全位置分割
+            # If not at text end, try to split at safe position
             if end_pos < len(clean_section_text):
-                # 保护图片和表格标签
+                # Protect image and table tags
                 protected_chunk = self._protect_tags_in_chunk(chunk_text, clean_section_text, current_pos, end_pos)
-                # 只有在protected_chunk确实更长时才使用它
+                # Only use it if protected_chunk is actually longer
                 if len(protected_chunk) > len(chunk_text):
                     chunk_text = protected_chunk
                     end_pos = current_pos + len(chunk_text)
-                # 再次确保end_pos > current_pos
+                # Ensure end_pos > current_pos again
                 if end_pos <= current_pos:
                     end_pos = current_pos + 1
                     chunk_text = clean_section_text[current_pos:end_pos]
             
-            # 记录strip前的end_pos，用于后续计算
+            # Record end_pos before strip for subsequent calculations
             original_end_pos = end_pos
             chunk_text = chunk_text.strip()
             
-            # 如果strip后chunk_text变小很多，需要调整end_pos
-            # 但要注意：strip只是移除首尾空白，不应该改变end_pos
-            # 问题可能是：如果chunk_text主要是空白，strip后变得很小
-            # 但end_pos是基于原始chunk_text计算的，所以应该保持不变
+            # Note: strip only removes leading/trailing whitespace, should not change end_pos
+            # The end_pos is based on original chunk_text, so it should remain unchanged
             
             if not chunk_text:
-                # 如果strip后为空，说明这段主要是空白，跳过
-                # 确保至少前进1个字符，防止无限循环
+                # If empty after strip, this section is mostly whitespace, skip
+                # Ensure at least advance 1 character to prevent infinite loop
                 current_pos = max(current_pos + 1, end_pos)
                 if current_pos >= len(clean_section_text):
                     break
                 continue
             
-            # 检查最小chunk大小
+            # Check minimum chunk size
             if len(chunk_text) < self.min_chunk_size:
                 if end_pos < len(clean_section_text):
-                    # 尝试扩展：扩展到chunk_size的1.5倍
+                    # Try to extend: extend to 1.5x chunk_size
                     extended_end = min(current_pos + int(self.chunk_size * 1.5), len(clean_section_text))
                     extended_text = clean_section_text[current_pos:extended_end]
                     extended_text = self._protect_tags_in_chunk(extended_text, clean_section_text, current_pos, extended_end)
@@ -509,7 +507,7 @@ class PDFChunker(BaseChunker):
                         chunk_text = extended_text_stripped
                         end_pos = current_pos + len(extended_text)
                     else:
-                        # 无法扩展到最小大小，尝试合并到前一个chunk
+                        # Cannot extend to minimum size, try to merge with previous chunk
                         if chunks and chunk_index > start_chunk_index:
                             last_chunk = chunks[-1]
                             merged_text = last_chunk.text + "\n\n" + chunk_text
@@ -518,23 +516,23 @@ class PDFChunker(BaseChunker):
                                 last_chunk.location.end_char = section_offset + end_pos
                                 last_chunk.metadata["chunk_size"] = len(merged_text)
                                 last_chunk.metadata["end_pos"] = section_offset + end_pos
-                                # 移动到下一个位置（考虑overlap，但确保至少前进chunk_size的20%）
+                                # Move to next position (considering overlap, but ensure at least 20% of chunk_size advance)
                                 overlap_amount = min(self.chunk_overlap, len(merged_text))
                                 min_advance = max(1, int(self.chunk_size * 0.2))
                                 current_pos = max(current_pos + min_advance, end_pos - overlap_amount)
                                 if current_pos >= len(clean_section_text):
                                     break
                                 continue
-                        # 如果无法合并，跳过太小的chunk
-                        # 直接跳到下一个合理的分割点（至少前进chunk_size的50%）
-                        # 这样可以避免创建太多很小的chunks
+                        # If cannot merge, skip chunk that is too small
+                        # Jump directly to next reasonable split point (at least 50% of chunk_size advance)
+                        # This avoids creating too many small chunks
                         skip_to = min(current_pos + max(self.chunk_size // 2, self.min_chunk_size * 2), len(clean_section_text))
                         current_pos = skip_to
                         if current_pos >= len(clean_section_text):
                             break
                         continue
                 else:
-                    # 已到文本末尾，尝试合并到前一个chunk
+                    # Reached text end, try to merge with previous chunk
                     if chunks and chunk_index > start_chunk_index:
                         last_chunk = chunks[-1]
                         merged_text = last_chunk.text + "\n\n" + chunk_text
@@ -542,11 +540,11 @@ class PDFChunker(BaseChunker):
                         last_chunk.location.end_char = section_offset + end_pos
                         last_chunk.metadata["chunk_size"] = len(merged_text)
                         last_chunk.metadata["end_pos"] = section_offset + end_pos
-                        # 确保至少前进1个字符，防止无限循环
+                        # Ensure at least advance 1 character to prevent infinite loop
                         current_pos = max(current_pos + 1, end_pos)
                         continue
-                    # 如果无法合并且是最后一个chunk，仍然添加（避免丢失内容）
-                    # 但记录警告
+                    # If cannot merge and is last chunk, still add (to avoid losing content)
+                    # But log warning
                     if len(chunk_text) < self.min_chunk_size:
                         logger.warning(f"Creating small chunk ({len(chunk_text)} chars) at end of section")
             
@@ -557,7 +555,7 @@ class PDFChunker(BaseChunker):
                 page_number=page_num
             )
             
-            # 提取图片信息
+            # Extract image information
             img_match = self.img_pattern.search(chunk_text)
             if img_match:
                 img_src_match = re.search(r'src="([^"]+)"', img_match.group(0))
@@ -584,32 +582,32 @@ class PDFChunker(BaseChunker):
             )
             chunks.append(chunk)
             
-            # 重叠：计算下一个chunk的起始位置
-            # 正常情况下，下一个chunk应该从 end_pos - overlap_amount 开始
+            # Overlap: calculate next chunk's starting position
+            # Normally, next chunk should start from end_pos - overlap_amount
             overlap_amount = min(self.chunk_overlap, len(chunk_text))
             new_pos = end_pos - overlap_amount
             
-            # 确保位置确实前进了
-            # 如果chunk很小（小于chunk_size的30%），overlap可能导致位置几乎不前进
-            # 需要确保至少前进chunk_size的20%，避免创建太多小chunks
+            # Ensure position actually advances
+            # If chunk is small (less than 30% of chunk_size), overlap may cause position to barely advance
+            # Need to ensure at least 20% of chunk_size advance to avoid creating too many small chunks
             chunk_ratio = len(chunk_text) / self.chunk_size if self.chunk_size > 0 else 1.0
             if chunk_ratio < 0.3:
-                # 小chunk：确保至少前进chunk_size的30%
+                # Small chunk: ensure at least 30% of chunk_size advance
                 min_advance = max(1, int(self.chunk_size * 0.3))
             else:
-                # 正常chunk：确保至少前进chunk_size的10%
+                # Normal chunk: ensure at least 10% of chunk_size advance
                 min_advance = max(1, int(self.chunk_size * 0.1))
             
             if new_pos <= current_pos:
-                # 如果overlap导致位置没有前进，至少前进min_advance
+                # If overlap causes no position advance, advance at least min_advance
                 new_pos = current_pos + min_advance
                 logger.debug(f"Overlap adjustment: current_pos={current_pos}, end_pos={end_pos}, overlap={overlap_amount}, chunk_size={len(chunk_text)}, adjusted new_pos={new_pos}")
             elif (new_pos - current_pos) < min_advance:
-                # 如果前进太少（比如chunk很小导致overlap很大），确保至少前进min_advance
+                # If advance is too small (e.g., small chunk causes large overlap), ensure at least min_advance
                 new_pos = current_pos + min_advance
                 logger.debug(f"Min advance adjustment: current_pos={current_pos}, calculated new_pos={end_pos - overlap_amount}, chunk_size={len(chunk_text)}, adjusted new_pos={new_pos}")
             
-            # 确保不超过文本长度
+            # Ensure not exceeding text length
             if new_pos >= len(clean_section_text):
                 break
                 
@@ -619,14 +617,14 @@ class PDFChunker(BaseChunker):
         logger.debug(f"Created {len(chunks)} chunks from section of {len(clean_section_text)} chars (heading_path: {heading_path})")
         if len(chunks) > 50:
             logger.warning(f"WARNING: Created {len(chunks)} chunks from section of only {len(clean_section_text)} chars! This seems excessive.")
-            # 记录一些chunk的大小信息用于诊断
+            # Record chunk size information for diagnosis
             chunk_sizes = [len(c.text) for c in chunks]
             logger.warning(f"Chunk sizes: min={min(chunk_sizes)}, max={max(chunk_sizes)}, avg={sum(chunk_sizes)/len(chunk_sizes):.1f}")
-            # 记录前5个chunk的详细信息
+            # Record details of first 5 chunks
             for i, c in enumerate(chunks[:5]):
                 logger.warning(f"  Chunk {i}: size={len(c.text)}, start={c.location.start_char}, end={c.location.end_char}")
-            # 检查是否有重复的chunk
-            chunk_texts = [c.text[:50] for c in chunks[:10]]  # 前10个chunk的前50字符
+            # Check for duplicate chunks
+            chunk_texts = [c.text[:50] for c in chunks[:10]]  # First 50 chars of first 10 chunks
             if len(chunk_texts) != len(set(chunk_texts)):
                 logger.warning(f"  WARNING: Found duplicate chunks!")
         return chunks
@@ -672,22 +670,22 @@ class PDFChunker(BaseChunker):
     
     def _protect_tags_in_chunk(self, chunk_text: str, full_text: str, start: int, proposed_end: int) -> str:
         """Protect HTML tags from being split."""
-        # 检查是否有未闭合的标签
+        # Check for unclosed tags
         if '<' in chunk_text and '>' not in chunk_text[-50:]:
-            # 可能在标签中间，找到标签结束
+            # Possibly in the middle of a tag, find tag end
             remaining = full_text[proposed_end:]
             tag_end = remaining.find('>')
             if tag_end != -1 and tag_end < 200:
                 chunk_text = full_text[start:proposed_end + tag_end + 1]
         
-        # 保护图片标签
+        # Protect image tags
         if '<img' in chunk_text and '/>' not in chunk_text[-100:]:
             remaining = full_text[proposed_end:]
             img_end = remaining.find('/>')
             if img_end != -1 and img_end < 200:
                 chunk_text = full_text[start:proposed_end + img_end + 2]
         
-        # 保护表格标签
+        # Protect table tags
         if '<table' in chunk_text and '</table>' not in chunk_text:
             remaining = full_text[proposed_end:]
             table_end = remaining.find('</table>')

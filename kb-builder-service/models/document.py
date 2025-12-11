@@ -16,28 +16,28 @@ class DocumentType(str, Enum):
 @dataclass
 class DocumentStructure:
     """Document structure information (type-specific)."""
-    # 通用字段
+    # Common fields
     total_pages: Optional[int] = None
     total_sections: Optional[int] = None
     
-    # PDF 特定
-    pdf_metadata: Optional[Dict[str, Any]] = None  # 作者、标题等
-    pdf_headings: Optional[List[Dict]] = None  # [{level: 1, text: "标题", page: 1, start_char: 100, font_size: 16.0}]
+    # PDF specific
+    pdf_metadata: Optional[Dict[str, Any]] = None  # Author, title, etc.
+    pdf_headings: Optional[List[Dict]] = None  # [{level: 1, text: "Heading", page: 1, start_char: 100, font_size: 16.0}]
     
-    # DOCX 特定
-    docx_styles: Optional[List[str]] = None  # 使用的样式
-    docx_sections: Optional[List[Dict]] = None  # 章节信息
+    # DOCX specific
+    docx_styles: Optional[List[str]] = None  # Used styles
+    docx_sections: Optional[List[Dict]] = None  # Section information
     
-    # HTML 特定
+    # HTML specific
     html_title: Optional[str] = None
-    html_headings: Optional[List[Dict]] = None  # [{level: 1, text: "标题", id: "h1"}]
+    html_headings: Optional[List[Dict]] = None  # [{level: 1, text: "Heading", id: "h1"}]
     
-    # Markdown 特定
+    # Markdown specific
     md_headings: Optional[List[Dict]] = None
     md_code_blocks: Optional[List[Dict]] = None
     
-    # 表格（所有类型）
-    tables: Optional[List[Dict]] = None  # 表格列表
+    # Tables (all types)
+    tables: Optional[List[Dict]] = None  # Table list
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -74,21 +74,21 @@ class Document:
     source: str
     doc_type: DocumentType
     metadata: Dict[str, Any] = field(default_factory=dict)
-    structure: Optional[DocumentStructure] = None  # 文档结构信息
+    structure: Optional[DocumentStructure] = None  # Document structure information
     
     def __post_init__(self):
         if self.metadata is None:
             self.metadata = {}
     
     def get_location_info(self) -> Dict[str, Any]:
-        """获取文档的位置信息（用于 RAG 引用）"""
+        """Get document location information (for RAG citation)."""
         base_info = {
             "file": self.source,
             "type": self.doc_type.value,
             "file_path": self.metadata.get("file_path")
         }
         
-        # 根据文件类型添加特定信息
+        # Add type-specific information
         if self.structure:
             if self.doc_type == DocumentType.PDF:
                 base_info["total_pages"] = self.structure.total_pages

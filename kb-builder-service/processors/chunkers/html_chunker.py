@@ -18,11 +18,11 @@ class HTMLChunker(BaseChunker):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.min_chunk_size = min_chunk_size
-        # 标题模式
+        # Heading pattern
         self.heading_pattern = re.compile(r'^(#{1,6})\s+(.+)$', re.MULTILINE)
-        # HTML标签模式
+        # HTML tag pattern
         self.html_tag_pattern = re.compile(r'<[^>]+>')
-        # 需要保护的标签
+        # Tags that need protection
         self.protected_tags = ['img', 'a', 'table', 'ul', 'ol', 'li', 'div', 'span', 'p']
     
     def chunk(self, document: Document) -> List[Chunk]:
@@ -35,11 +35,11 @@ class HTMLChunker(BaseChunker):
         chunks = []
         chunk_index = 0
         
-        # 找到所有标题
+        # Find all headings
         headings = list(self.heading_pattern.finditer(text))
         
         if not headings:
-            # 没有标题，使用递归分片
+            # No headings, use recursive chunking
             from .recursive import RecursiveChunker
             recursive_chunker = RecursiveChunker(
                 chunk_size=self.chunk_size,
@@ -48,19 +48,19 @@ class HTMLChunker(BaseChunker):
             )
             return recursive_chunker.chunk(document)
         
-        # 按标题层级分片
+        # Chunk by heading hierarchy
         for i, heading_match in enumerate(headings):
             heading_level = len(heading_match.group(1))
             heading_text = heading_match.group(2).strip()
             heading_start = heading_match.start()
             
-            # 找到下一个同级或更高级标题的位置
+            # Find next same-level or higher-level heading position
             if i + 1 < len(headings):
                 next_heading_start = headings[i + 1].start()
-                # 如果下一个标题级别更高，继续包含
+                # If next heading level is higher, continue including
                 next_level = len(headings[i + 1].group(1))
                 if next_level > heading_level:
-                    # 找到下一个同级或更高级标题
+                    # Find next same-level or higher-level heading
                     for j in range(i + 2, len(headings)):
                         j_level = len(headings[j].group(1))
                         if j_level <= heading_level:
@@ -72,10 +72,10 @@ class HTMLChunker(BaseChunker):
             
             section_text = text[heading_start:section_end].strip()
             
-            # 构建标题路径
+            # Build heading path
             heading_path = self._build_heading_path(headings, i)
             
-            # 如果section太大，进一步分片
+            # If section is too large, further chunk it
             if len(section_text) > self.chunk_size:
                 section_chunks = self._chunk_within_section(
                     section_text,
@@ -87,7 +87,7 @@ class HTMLChunker(BaseChunker):
                 chunks.extend(section_chunks)
                 chunk_index += len(section_chunks)
             else:
-                # 整个section作为一个chunk
+                # Entire section as one chunk
                 location = ChunkLocation(
                     start_char=heading_start,
                     end_char=section_end,
@@ -119,7 +119,7 @@ class HTMLChunker(BaseChunker):
         current_level = len(headings[current_idx].group(1))
         current_text = headings[current_idx].group(2).strip()
         
-        # 向上查找父级标题
+        # Search upward for parent headings
         for i in range(current_idx - 1, -1, -1):
             level = len(headings[i].group(1))
             if level < current_level:
@@ -148,7 +148,7 @@ class HTMLChunker(BaseChunker):
             end_pos = min(current_pos + self.chunk_size, len(section_text))
             chunk_text = section_text[current_pos:end_pos]
             
-            # 保护HTML标签
+            # Protect HTML tags
             if end_pos < len(section_text):
                 chunk_text = self._protect_html_tags(chunk_text, section_text, current_pos, end_pos)
                 end_pos = current_pos + len(chunk_text)
@@ -180,7 +180,7 @@ class HTMLChunker(BaseChunker):
             )
             chunks.append(chunk)
             
-            # 重叠
+            # Overlap
             overlap_amount = min(self.chunk_overlap, len(chunk_text))
             current_pos = max(current_pos + 1, end_pos - overlap_amount)
             chunk_index += 1
@@ -203,7 +203,7 @@ class HTMLChunker(BaseChunker):
                         chunk_text = full_text[start:proposed_end + closing_pos + len(closing_tag)]
                         break
         
-        # 检查自闭合标签（如<img />）
+        # Check for self-closing tags (e.g., <img />)
         if '<img' in chunk_text and '/>' not in chunk_text[-100:]:
             remaining = full_text[proposed_end:]
             img_end = remaining.find('/>')

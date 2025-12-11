@@ -97,17 +97,17 @@ async def process_file_with_progress(
     try:
         # Stage 1: Uploading (already done, but notify)
         logger.info(f"Starting file processing: {filename}")
-        yield send_progress("uploading", 10, "文件上传完成")
+        yield send_progress("uploading", 10, "File upload completed")
         await asyncio.sleep(0.1)
         
         # Stage 2: Parsing
         logger.info(f"Starting parsing stage for {filename}")
-        yield send_progress("parsing", 20, "正在解析文件...")
+        yield send_progress("parsing", 20, "Parsing file...")
         try:
             from processors.loaders import LoaderFactory
             from config.settings import get_settings
             settings = get_settings()
-            # 优先使用传入的 base_url，否则使用配置的 static_base_url
+            # Prefer the provided base_url, otherwise use configured static_base_url
             final_base_url = base_url or settings.static_base_url
             logger.info(f"Creating loader with static_dir={settings.static_dir}, base_url={final_base_url}")
             loader = LoaderFactory.create(
@@ -116,7 +116,7 @@ async def process_file_with_progress(
                 base_url=final_base_url
             )
             document = loader.load(file_path, metadata={"original_filename": filename})
-            # document.source contains the saved_source_path (e.g., "static/sources/7a0b3112_面试经验.pdf")
+            # document.source contains the saved_source_path (e.g., "static/sources/7a0b3112_interview_experience.pdf")
             # We'll use original filename as document_id for display, but store the actual path in metadata
             saved_source_path = document.source  # This is the actual saved file path
             # Set document_id to original filename for display
@@ -127,18 +127,18 @@ async def process_file_with_progress(
                 document.metadata['original_filename'] = filename
             char_count = len(document.content)
             logger.info(f"Parsed document: {char_count} characters")
-            yield send_progress("parsing", 80, f"解析中，已读取 {char_count} 个字符...", {
+            yield send_progress("parsing", 80, f"Parsing... {char_count} characters read", {
                 "char_count": char_count
             })
             await asyncio.sleep(0.05)
-            yield send_progress("parsing", 100, f"解析完成，共 {char_count} 个字符", {
+            yield send_progress("parsing", 100, f"Parsing completed, {char_count} characters total", {
                 "char_count": char_count
             })
             await asyncio.sleep(0.05)
             logger.info(f"Parsing stage completed for {filename}")
         except Exception as e:
             logger.error(f"Parsing error: {str(e)}", exc_info=True)
-            yield send_progress("error", 0, f"解析失败: {str(e)}", {
+            yield send_progress("error", 0, f"Parsing failed: {str(e)}", {
                 "retryable": True,
                 "error_type": type(e).__name__
             })
@@ -147,7 +147,7 @@ async def process_file_with_progress(
         # Validate document was loaded
         if document is None:
             logger.error("Document is None after parsing")
-            yield send_progress("error", 0, "解析失败: 文档为空", {
+            yield send_progress("error", 0, "Parsing failed: document is empty", {
                 "retryable": True,
                 "error_type": "DocumentError"
             })
@@ -155,7 +155,7 @@ async def process_file_with_progress(
         
         # Stage 3: Chunking
         logger.info(f"Starting chunking stage for {filename}")
-        yield send_progress("chunking", 10, "正在分块...")
+        yield send_progress("chunking", 10, "Chunking...")
         await asyncio.sleep(0.05)  # Give frontend time to update UI
         
         try:
@@ -186,32 +186,32 @@ async def process_file_with_progress(
             chunks = chunker.chunk(document)
             logger.info(f"Chunking completed: created {len(chunks)} chunks")
             
-            yield send_progress("chunking", 90, f"分块中，已创建 {len(chunks)} 个 chunks...", {
+            yield send_progress("chunking", 90, f"Chunking... {len(chunks)} chunks created", {
                 "chunks_count": len(chunks)
             })
             await asyncio.sleep(0.05)
-            yield send_progress("chunking", 100, f"分块完成，共创建 {len(chunks)} 个 chunks", {
+            yield send_progress("chunking", 100, f"Chunking completed, {len(chunks)} chunks created", {
                 "chunks_count": len(chunks)
             })
             await asyncio.sleep(0.05)
             logger.info(f"Chunking stage completed for {filename}")
         except Exception as e:
             logger.error(f"Chunking error: {str(e)}", exc_info=True)
-            yield send_progress("error", 0, f"分块失败: {str(e)}", {
+            yield send_progress("error", 0, f"Chunking failed: {str(e)}", {
                 "retryable": True,
                 "error_type": type(e).__name__
             })
             return
         
         if not chunks:
-            yield send_progress("error", 0, "未生成任何 chunks", {
+            yield send_progress("error", 0, "No chunks generated", {
                 "retryable": False
             })
             return
         
         # Stage 4: Embedding
         logger.info(f"Starting embedding stage for {filename} with {len(chunks)} chunks")
-        yield send_progress("embedding", 10, "生成嵌入向量中...")
+        yield send_progress("embedding", 10, "Generating embeddings...")
         await asyncio.sleep(0.05)
         
         try:
@@ -237,7 +237,7 @@ async def process_file_with_progress(
                 batch_embeddings = embedder.embed(batch)
                 embeddings.extend(batch_embeddings)
                 progress = 10 + int((len(embeddings) / len(texts)) * 80)
-                yield send_progress("embedding", progress, f"已生成 {len(embeddings)}/{len(texts)} 个嵌入向量", {
+                yield send_progress("embedding", progress, f"Generated {len(embeddings)}/{len(texts)} embeddings", {
                     "embeddings_generated": len(embeddings),
                     "embeddings_total": len(texts)
                 })
@@ -247,14 +247,14 @@ async def process_file_with_progress(
             for chunk, embedding in zip(chunks, embeddings):
                 chunk.embedding = embedding
             
-            yield send_progress("embedding", 100, f"嵌入向量生成完成，共 {len(embeddings)} 个", {
+            yield send_progress("embedding", 100, f"Embedding generation completed, {len(embeddings)} embeddings total", {
                 "embeddings_generated": len(embeddings),
                 "embeddings_total": len(texts)
             })
             await asyncio.sleep(0.05)
         except Exception as e:
             logger.error(f"Embedding error: {str(e)}", exc_info=True)
-            yield send_progress("error", 0, f"生成嵌入向量失败: {str(e)}", {
+            yield send_progress("error", 0, f"Embedding generation failed: {str(e)}", {
                 "retryable": True,
                 "error_type": type(e).__name__
             })
@@ -262,24 +262,24 @@ async def process_file_with_progress(
         
         # Stage 5: Indexing
         logger.info(f"Starting indexing stage for {filename} to collection {collection_name}")
-        yield send_progress("indexing", 10, "索引到 Milvus 中...")
+        yield send_progress("indexing", 10, "Indexing to Milvus...")
         await asyncio.sleep(0.05)
         
         try:
             logger.info(f"Indexing {len(chunks)} chunks to Milvus collection: {collection_name}")
             chunks_indexed = service.vector_store.index(chunks, collection_name)
             logger.info(f"Indexing completed: {chunks_indexed} chunks indexed")
-            yield send_progress("indexing", 90, f"索引中，已索引 {chunks_indexed} 个 chunks...", {
+            yield send_progress("indexing", 90, f"Indexing... {chunks_indexed} chunks indexed", {
                 "chunks_indexed": chunks_indexed
             })
             await asyncio.sleep(0.05)
-            yield send_progress("indexing", 100, f"索引完成，共索引 {chunks_indexed} 个 chunks", {
+            yield send_progress("indexing", 100, f"Indexing completed, {chunks_indexed} chunks indexed", {
                 "chunks_indexed": chunks_indexed
             })
             await asyncio.sleep(0.05)
         except Exception as e:
             logger.error(f"Indexing error: {str(e)}", exc_info=True)
-            yield send_progress("error", 0, f"索引失败: {str(e)}", {
+            yield send_progress("error", 0, f"Indexing failed: {str(e)}", {
                 "retryable": True,
                 "error_type": type(e).__name__
             })
@@ -295,18 +295,18 @@ async def process_file_with_progress(
         }
         if document and document.structure:
             completion_data["structure"] = document.structure.to_dict()
-        yield send_progress("completed", 100, f"成功索引 {chunks_indexed} 个 chunks 到 {collection_name}", completion_data)
+        yield send_progress("completed", 100, f"Successfully indexed {chunks_indexed} chunks to {collection_name}", completion_data)
         await asyncio.sleep(0.1)  # Give frontend time to process final update
         
     except IndexingError as e:
         logger.error(f"Indexing error: {str(e)}", exc_info=True)
-        yield send_progress("error", 0, f"索引失败: {str(e)}", {
+        yield send_progress("error", 0, f"Indexing failed: {str(e)}", {
             "retryable": True,
             "error_type": "IndexingError"
         })
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
-        yield send_progress("error", 0, f"处理失败: {str(e)}", {
+        yield send_progress("error", 0, f"Processing failed: {str(e)}", {
             "retryable": True,
             "error_type": type(e).__name__
         })
@@ -348,15 +348,15 @@ async def upload_and_index_stream(
         embedding_model = embedding_model if embedding_model and embedding_model.strip() else None
         bge_api_url = bge_api_url if bge_api_url and bge_api_url.strip() else None
         
-        # 从请求中获取 hostname 和端口，构建 base_url
-        # 如果配置中有 static_base_url，优先使用配置；否则从请求中获取
+        # Get hostname and port from request to build base_url
+        # If static_base_url is configured, use it; otherwise get from request
         base_url = settings.static_base_url
         if not base_url:
-            # 从请求中获取 hostname 和端口
-            # Host header 通常已经包含端口号（如果有非标准端口）
+            # Get hostname and port from request
+            # Host header usually contains port number (if non-standard port)
             host = request.headers.get("host")
             if not host:
-                # 如果 Host header 不存在，从 URL 中获取
+                # If Host header doesn't exist, get from URL
                 host = request.url.hostname
                 port = request.url.port
                 if port:
@@ -405,7 +405,7 @@ async def upload_and_index_stream(
     except Exception as e:
         logger.error(f"Upload stream error: {str(e)}", exc_info=True)
         async def error_stream():
-            yield send_progress("error", 0, f"上传失败: {str(e)}", {
+            yield send_progress("error", 0, f"Upload failed: {str(e)}", {
                 "retryable": True,
                 "error_type": type(e).__name__
             })
@@ -442,15 +442,15 @@ async def upload_and_index(
     temp_path = None
     
     try:
-        # 从请求中获取 hostname 和端口，构建 base_url
-        # 如果配置中有 static_base_url，优先使用配置；否则从请求中获取
+        # Get hostname and port from request to build base_url
+        # If static_base_url is configured, use it; otherwise get from request
         base_url = settings.static_base_url
         if not base_url:
-            # 从请求中获取 hostname 和端口
-            # Host header 通常已经包含端口号（如果有非标准端口）
+            # Get hostname and port from request
+            # Host header usually contains port number (if non-standard port)
             host = request.headers.get("host")
             if not host:
-                # 如果 Host header 不存在，从 URL 中获取
+                # If Host header doesn't exist, get from URL
                 host = request.url.hostname
                 port = request.url.port
                 if port:
@@ -541,11 +541,11 @@ async def upload_batch(
     """Upload and index multiple files."""
     settings = get_settings()
     
-    # 从请求中获取 hostname 和端口，构建 base_url
-    # 如果配置中有 static_base_url，优先使用配置；否则从请求中获取
+    # Get hostname and port from request to build base_url
+    # If static_base_url is configured, use it; otherwise get from request
     base_url = settings.static_base_url
     if not base_url:
-        # 从请求中获取 hostname 和端口
+        # Get hostname and port from request
         host = request.headers.get("host") or request.url.hostname
         scheme = request.url.scheme
         port = request.url.port

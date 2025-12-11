@@ -6,29 +6,29 @@ from typing import Dict, Any, Optional, List
 @dataclass
 class ChunkLocation:
     """Chunk location information in the source document."""
-    # 通用位置
+    # Common location
     start_char: int = 0
     end_char: int = 0
     
-    # PDF 特定
+    # PDF specific
     page_number: Optional[int] = None
     page_bbox: Optional[Dict[str, float]] = None  # {x0, y0, x1, y1}
     
-    # DOCX 特定
+    # DOCX specific
     paragraph_index: Optional[int] = None
     section_index: Optional[int] = None
     
-    # HTML/Markdown 特定
-    heading_path: Optional[List[str]] = None  # ["H1", "H2", "H3"] 标题路径
+    # HTML/Markdown specific
+    heading_path: Optional[List[str]] = None  # ["H1", "H2", "H3"] heading path
     code_block_index: Optional[int] = None
     
-    # 图片
+    # Images
     image_index: Optional[int] = None
     image_url: Optional[str] = None
     
-    # 表格
+    # Tables
     table_index: Optional[int] = None
-    table_cell: Optional[str] = None  # "A1", "B2" 等
+    table_cell: Optional[str] = None  # "A1", "B2", etc.
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -83,15 +83,15 @@ class Chunk:
     
     def get_citation(self) -> str:
         """Generate citation format for RAG."""
-        parts = [f"来源: {self.document_id}"]
+        parts = [f"Source: {self.document_id}"]
         
         if self.location:
             if self.location.page_number is not None:
-                parts.append(f"第 {self.location.page_number} 页")
+                parts.append(f"Page {self.location.page_number}")
             if self.location.heading_path:
-                parts.append(f"章节: {' > '.join(self.location.heading_path)}")
+                parts.append(f"Section: {' > '.join(self.location.heading_path)}")
             if self.location.paragraph_index is not None:
-                parts.append(f"段落 {self.location.paragraph_index + 1}")
+                parts.append(f"Paragraph {self.location.paragraph_index + 1}")
         
         return ", ".join(parts)
     
@@ -100,7 +100,7 @@ class Chunk:
         if not self.file_path:
             return ""
         
-        # 构建 URL，包含位置参数
+        # Build URL with location parameters
         url = f"{base_url}/api/v1/sources/{self.document_id}"
         params = []
         

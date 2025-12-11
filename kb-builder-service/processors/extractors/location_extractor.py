@@ -15,21 +15,21 @@ class LocationExtractor:
             end_char=chunk_end
         )
         
-        # 提取页面号
+        # Extract page number
         page_match = re.search(r'<page\s+page="(\d+)"', chunk_text, re.IGNORECASE)
         if page_match:
             location.page_number = int(page_match.group(1))
         
-        # 提取图片信息
+        # Extract image information
         img_match = re.search(r'<img[^>]+src="([^"]+)"', chunk_text, re.IGNORECASE)
         if img_match:
             location.image_url = img_match.group(1)
-            # 提取图片索引
+            # Extract image index
             img_idx_match = re.search(r'image_index="(\d+)"', chunk_text, re.IGNORECASE)
             if img_idx_match:
                 location.image_index = int(img_idx_match.group(1))
         
-        # 提取表格信息
+        # Extract table information
         table_match = re.search(r'<table[^>]+index="(\d+)"', chunk_text, re.IGNORECASE)
         if table_match:
             location.table_index = int(table_match.group(1))
@@ -44,12 +44,12 @@ class LocationExtractor:
             end_char=chunk_end
         )
         
-        # 提取段落索引
+        # Extract paragraph index
         para_match = re.search(r'<paragraph\s+index="(\d+)"', chunk_text, re.IGNORECASE)
         if para_match:
             location.paragraph_index = int(para_match.group(1))
         
-        # 提取图片信息
+        # Extract image information
         img_match = re.search(r'<img[^>]+src="([^"]+)"', chunk_text, re.IGNORECASE)
         if img_match:
             location.image_url = img_match.group(1)
@@ -64,7 +64,7 @@ class LocationExtractor:
             end_char=chunk_end
         )
         
-        # 提取标题路径（从Markdown格式的标题）
+        # Extract heading path (from Markdown format headings)
         headings = []
         heading_pattern = r'^(#{1,6})\s+(.+)$'
         for match in re.finditer(heading_pattern, chunk_text, re.MULTILINE):
@@ -75,7 +75,7 @@ class LocationExtractor:
         if headings:
             location.heading_path = headings
         
-        # 提取图片信息
+        # Extract image information
         img_match = re.search(r'<img[^>]+src="([^"]+)"', chunk_text, re.IGNORECASE)
         if img_match:
             location.image_url = img_match.group(1)
@@ -90,7 +90,7 @@ class LocationExtractor:
             end_char=chunk_end
         )
         
-        # 提取标题路径
+        # Extract heading path
         headings = []
         heading_pattern = r'^(#{1,6})\s+(.+)$'
         for match in re.finditer(heading_pattern, chunk_text, re.MULTILINE):
@@ -101,12 +101,12 @@ class LocationExtractor:
         if headings:
             location.heading_path = headings
         
-        # 提取代码块索引
+        # Extract code block index
         code_blocks = list(re.finditer(r'```(\w+)?\n(.*?)```', chunk_text, re.DOTALL))
         if code_blocks:
-            location.code_block_index = 0  # 第一个代码块
+            location.code_block_index = 0  # First code block
         
-        # 提取图片信息
+        # Extract image information
         img_match = re.search(r'!\[([^\]]*)\]\(([^)]+)\)', chunk_text)
         if img_match:
             location.image_url = img_match.group(2)
