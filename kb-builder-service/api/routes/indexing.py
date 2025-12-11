@@ -274,11 +274,15 @@ async def process_file_with_progress(
         
         # Stage 6: Completed
         logger.info(f"Processing completed for {filename}: {chunks_indexed} chunks indexed to {collection_name}")
-        yield send_progress("completed", 100, f"成功索引 {chunks_indexed} 个 chunks 到 {collection_name}", {
+        # Include document structure in completion message if available
+        completion_data = {
             "chunks_indexed": chunks_indexed,
             "collection_name": collection_name,
             "filename": filename
-        })
+        }
+        if document and document.structure:
+            completion_data["structure"] = document.structure.to_dict()
+        yield send_progress("completed", 100, f"成功索引 {chunks_indexed} 个 chunks 到 {collection_name}", completion_data)
         await asyncio.sleep(0.1)  # Give frontend time to process final update
         
     except IndexingError as e:
@@ -477,6 +481,7 @@ async def upload_and_index(
                         "document_id": result["document_id"],
                         "chunks_indexed": result["chunks_indexed"],
                         "collection_name": result["collection_name"],
+                        "structure": result.get("structure"),  # Include document structure
                         "message": result["message"]
                     }
                 )

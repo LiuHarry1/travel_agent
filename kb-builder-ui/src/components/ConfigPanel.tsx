@@ -189,7 +189,7 @@ const EmbeddingConfigForm: React.FC<{
             type="text"
             value={config.bgeEnApiUrl || backendConfig?.embedding?.bge_en_api_url || ''}
             onChange={(e) => onChange({ ...config, bgeEnApiUrl: e.target.value })}
-            placeholder={backendConfig?.embedding?.bge_en_api_url || "http://10.150.115.110:6000"}
+            placeholder={backendConfig?.embedding?.bge_en_api_url || "http://10.150.10.120:6000"}
           />
           <small>Base URL for English BGE embedding service - from backend config</small>
         </div>
@@ -202,7 +202,7 @@ const EmbeddingConfigForm: React.FC<{
             type="text"
             value={config.bgeZhApiUrl || backendConfig?.embedding?.bge_zh_api_url || ''}
             onChange={(e) => onChange({ ...config, bgeZhApiUrl: e.target.value })}
-            placeholder={backendConfig?.embedding?.bge_zh_api_url || "http://10.150.115.110:6001"}
+            placeholder={backendConfig?.embedding?.bge_zh_api_url || "http://10.150.10.120:6001"}
           />
           <small>Base URL for Chinese BGE embedding service - from backend config</small>
         </div>
@@ -215,7 +215,7 @@ const EmbeddingConfigForm: React.FC<{
             type="text"
             value={config.nemotronApiUrl || backendConfig?.embedding?.nemotron_api_url || ''}
             onChange={(e) => onChange({ ...config, nemotronApiUrl: e.target.value })}
-            placeholder={backendConfig?.embedding?.nemotron_api_url || "http://10.150.115.110:6002/embed"}
+            placeholder={backendConfig?.embedding?.nemotron_api_url || "http://10.150.10.120:6002/embed"}
           />
           <small>Full API endpoint URL for NVIDIA Nemotron embedding service - from backend config</small>
         </div>
@@ -228,7 +228,7 @@ const EmbeddingConfigForm: React.FC<{
             type="text"
             value={config.snowflakeApiUrl || backendConfig?.embedding?.snowflake_api_url || ''}
             onChange={(e) => onChange({ ...config, snowflakeApiUrl: e.target.value })}
-            placeholder={backendConfig?.embedding?.snowflake_api_url || "http://10.150.115.110:6003/embed"}
+            placeholder={backendConfig?.embedding?.snowflake_api_url || "http://10.150.10.120:6003/embed"}
           />
           <small>Full API endpoint URL for Snowflake Arctic embedding service - from backend config</small>
         </div>

@@ -22,6 +22,7 @@ class DocumentStructure:
     
     # PDF 特定
     pdf_metadata: Optional[Dict[str, Any]] = None  # 作者、标题等
+    pdf_headings: Optional[List[Dict]] = None  # [{level: 1, text: "标题", page: 1, start_char: 100, font_size: 16.0}]
     
     # DOCX 特定
     docx_styles: Optional[List[str]] = None  # 使用的样式
@@ -61,6 +62,8 @@ class DocumentStructure:
             result["md_code_blocks"] = self.md_code_blocks
         if self.tables is not None:
             result["tables"] = self.tables
+        if self.pdf_headings is not None:
+            result["pdf_headings"] = self.pdf_headings
         return result
 
 

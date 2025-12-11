@@ -211,6 +211,7 @@ class UnifiedLoader(BaseLoader):
         pages_info = []
         pdf_metadata = {}
         tables_info = []
+        pdf_headings = []
         
         try:
             with pdfplumber.open(path) as pdf:
@@ -225,8 +226,26 @@ class UnifiedLoader(BaseLoader):
                     logger.info(f"Extracted PDF metadata: {pdf_metadata}")
                     logger.info(f"Raw PDF metadata from pdfplumber: {pdf.metadata}")
                 
+                # 识别标题（需要在提取文本之前，因为需要字符级别信息）
+                try:
+                    pdf_headings = self._detect_pdf_headings(pdf)
+                except Exception as e:
+                    logger.warning(f"Failed to detect PDF headings: {e}", exc_info=True)
+                    pdf_headings = []
+                
+                # 创建标题位置映射，用于在Markdown中插入标题
+                heading_positions = {}
+                for heading in pdf_headings:
+                    pos = heading['start_char']
+                    if pos not in heading_positions:
+                        heading_positions[pos] = []
+                    heading_positions[pos].append(heading)
+                
+                # 按页面处理，同时跟踪字符位置
+                current_char_pos = 0
+                
                 for page_num, page in enumerate(pdf.pages, 1):
-                    page_start_char = len("\n".join(markdown_parts))
+                    page_start_char = current_char_pos
                     
                     # 提取文本
                     text = page.extract_text()
@@ -237,7 +256,9 @@ class UnifiedLoader(BaseLoader):
                         for table_idx, table in enumerate(tables):
                             # 将表格转换为Markdown格式
                             table_md = self._table_to_markdown(table)
-                            markdown_parts.append(f'\n<table index="{len(tables_info)}" page="{page_num}">\n{table_md}\n</table>\n\n')
+                            table_markdown = f'\n<table index="{len(tables_info)}" page="{page_num}">\n{table_md}\n</table>\n\n'
+                            markdown_parts.append(table_markdown)
+                            current_char_pos += len(table_markdown)
                             tables_info.append({
                                 "page": page_num,
                                 "index": len(tables_info),
@@ -247,10 +268,54 @@ class UnifiedLoader(BaseLoader):
                     
                     if text:
                         # 使用 <page> 标签包裹每页内容，记录位置信息
-                        markdown_parts.append(
-                            f'<page page="{page_num}" start_char="{page_start_char}">\n\n'
-                            f'## Page {page_num}\n\n{text}\n\n'
-                        )
+                        page_start_markdown = f'<page page="{page_num}" start_char="{page_start_char}">\n\n'
+                        markdown_parts.append(page_start_markdown)
+                        current_char_pos += len(page_start_markdown)
+                        
+                        # 检查并插入标题
+                        # 找到属于这一页的标题
+                        page_headings = [h for h in pdf_headings if h['page'] == page_num]
+                        page_headings.sort(key=lambda h: h['start_char'])
+                        
+                        # 将文本按标题分割，插入标题标记
+                        # 在提取的文本中查找标题文本并替换为Markdown格式
+                        text_with_headings = text
+                        
+                        # 从后往前替换，避免位置偏移问题
+                        for heading in reversed(page_headings):
+                            heading_text = heading['text']
+                            heading_level = heading['level']
+                            
+                            # 清理标题文本（移除可能的特殊字符）
+                            clean_heading_text = heading_text.strip()
+                            
+                            # 在文本中查找标题（使用更宽松的匹配）
+                            # 尝试精确匹配
+                            if clean_heading_text in text_with_headings:
+                                # 替换为Markdown标题格式
+                                md_heading = '#' * heading_level + ' ' + clean_heading_text + '\n\n'
+                                text_with_headings = text_with_headings.replace(
+                                    clean_heading_text,
+                                    md_heading,
+                                    1  # 只替换第一个匹配
+                                )
+                            else:
+                                # 如果精确匹配失败，尝试模糊匹配（忽略空格差异）
+                                heading_pattern = re.escape(clean_heading_text)
+                                heading_pattern = heading_pattern.replace(r'\ ', r'\s+')
+                                match = re.search(heading_pattern, text_with_headings, re.IGNORECASE)
+                                if match:
+                                    md_heading = '#' * heading_level + ' ' + clean_heading_text + '\n\n'
+                                    text_with_headings = (
+                                        text_with_headings[:match.start()] +
+                                        md_heading +
+                                        text_with_headings[match.end():]
+                                    )
+                        
+                        # 添加页面标题和文本内容
+                        page_content = f'## Page {page_num}\n\n{text_with_headings}\n\n'
+                        markdown_parts.append(page_content)
+                        current_char_pos += len(page_content)
                     
                     # 尝试提取图片（使用 PyMuPDF/fitz 如果可用）
                     try:
@@ -268,10 +333,12 @@ class UnifiedLoader(BaseLoader):
                                 
                                 image_counter += 1
                                 img_url = self._save_image(image_bytes, file_id, image_counter, image_ext)
-                                markdown_parts.append(
+                                img_markdown = (
                                     f'<img src="{img_url}" alt="Page {page_num} Image {img_idx + 1}" '
                                     f'page="{page_num}" image_index="{image_counter}" />\n\n'
                                 )
+                                markdown_parts.append(img_markdown)
+                                current_char_pos += len(img_markdown)
                             except Exception as e:
                                 logger.warning(f"Failed to extract image from PDF page {page_num}: {e}")
                                 continue
@@ -285,8 +352,10 @@ class UnifiedLoader(BaseLoader):
                     
                     # 关闭页面标签
                     if text:
-                        page_end_char = len("\n".join(markdown_parts))
-                        markdown_parts.append(f'</page>\n\n')
+                        page_end_markdown = f'</page>\n\n'
+                        markdown_parts.append(page_end_markdown)
+                        page_end_char = current_char_pos
+                        current_char_pos += len(page_end_markdown)
                         pages_info.append({
                             "page": page_num,
                             "start_char": page_start_char,
@@ -300,10 +369,180 @@ class UnifiedLoader(BaseLoader):
         structure = DocumentStructure(
             total_pages=len(pages_info),
             pdf_metadata=pdf_metadata if pdf_metadata else None,
-            tables=tables_info if tables_info else None
+            tables=tables_info if tables_info else None,
+            pdf_headings=pdf_headings if pdf_headings else None
         )
         
         return "\n".join(markdown_parts), structure
+    
+    def _detect_pdf_headings(self, pdf) -> List[Dict]:
+        """
+        检测PDF中的标题层级，基于字体分析（字体大小、加粗、位置）
+        
+        Returns:
+            List[Dict]: 标题列表，格式为 [{"level": 1, "text": "标题", "page": 1, "start_char": 100, "font_size": 16.0}]
+        """
+        headings = []
+        all_chars = []
+        char_offset = 0  # 字符在文档中的累计偏移
+        
+        # 收集所有页面的字符信息
+        for page_num, page in enumerate(pdf.pages, 1):
+            chars = page.chars
+            if not chars:
+                continue
+            
+            for char in chars:
+                all_chars.append({
+                    'text': char.get('text', ''),
+                    'size': char.get('size', 0),
+                    'fontname': char.get('fontname', ''),
+                    'x0': char.get('x0', 0),
+                    'y0': char.get('y0', 0),
+                    'x1': char.get('x1', 0),
+                    'y1': char.get('y1', 0),
+                    'page': page_num,
+                    'offset': char_offset
+                })
+                char_offset += len(char.get('text', ''))
+        
+        if not all_chars:
+            return []
+        
+        # 分析字体大小分布
+        font_sizes = [c['size'] for c in all_chars if c['size'] > 0]
+        if not font_sizes:
+            return []
+        
+        # 计算字体大小统计信息
+        font_sizes_sorted = sorted(set(font_sizes), reverse=True)
+        median_size = sorted(font_sizes)[len(font_sizes) // 2]
+        avg_size = sum(font_sizes) / len(font_sizes)
+        
+        # 识别标题字体：明显大于正文的字体（> 正文平均字体 * 1.2）
+        heading_threshold = max(avg_size * 1.2, median_size * 1.15)
+        
+        # 检测加粗字体
+        def is_bold(fontname: str) -> bool:
+            fontname_lower = fontname.lower()
+            return any(keyword in fontname_lower for keyword in ['bold', 'black', 'heavy', 'demibold'])
+        
+        # 将字体大小映射到6个层级
+        # 找到所有可能的标题字体大小
+        heading_font_sizes = [s for s in font_sizes_sorted if s >= heading_threshold]
+        
+        if not heading_font_sizes:
+            # 如果没有明显大于正文的字体，尝试使用加粗字体
+            heading_font_sizes = [s for s in font_sizes_sorted if any(is_bold(c['fontname']) for c in all_chars if c['size'] == s)]
+        
+        if not heading_font_sizes:
+            return []
+        
+        # 将标题字体大小分为6个层级
+        # 使用分位数方法：将标题字体大小范围分为6段
+        if len(heading_font_sizes) >= 6:
+            # 有足够的字体大小，直接分配
+            level_font_sizes = {}
+            for i, size in enumerate(heading_font_sizes[:6]):
+                level_font_sizes[i + 1] = size
+        else:
+            # 字体大小种类较少，使用分位数
+            level_font_sizes = {}
+            min_size = min(heading_font_sizes)
+            max_size = max(heading_font_sizes)
+            size_range = max_size - min_size
+            for level in range(1, 7):
+                # 从大到小分配
+                ratio = (7 - level) / 6
+                level_font_sizes[level] = max_size - size_range * (1 - ratio)
+        
+        # 识别标题行：同一行的字符
+        def get_line_key(char):
+            """根据y坐标确定行"""
+            # 使用y0作为行的标识，允许小的误差
+            return round(char['y0'] / 2) * 2
+        
+        # 按行分组字符
+        lines = {}
+        for char in all_chars:
+            line_key = get_line_key(char)
+            if line_key not in lines:
+                lines[line_key] = []
+            lines[line_key].append(char)
+        
+        # 对每行进行排序（按x坐标）
+        for line_key in lines:
+            lines[line_key].sort(key=lambda c: c['x0'])
+        
+        # 识别标题行
+        for line_key, line_chars in sorted(lines.items(), key=lambda x: -x[0]):  # 从上到下
+            if not line_chars:
+                continue
+            
+            # 检查这一行是否可能是标题
+            first_char = line_chars[0]
+            font_size = first_char['size']
+            fontname = first_char['fontname']
+            page_num = first_char['page']
+            
+            # 判断是否为标题：字体大小符合标题范围，且可能是加粗
+            is_heading = False
+            heading_level = None
+            
+            # 找到最接近的标题层级
+            for level in range(1, 7):
+                if level in level_font_sizes:
+                    target_size = level_font_sizes[level]
+                    # 允许10%的误差
+                    if abs(font_size - target_size) / max(target_size, 1) < 0.15:
+                        is_heading = True
+                        heading_level = level
+                        break
+            
+            # 如果字体大小不符合，但字体是加粗的，也可能是标题
+            if not is_heading and is_bold(fontname) and font_size >= heading_threshold * 0.9:
+                # 根据字体大小估算层级
+                if font_size >= max(heading_font_sizes) * 0.9:
+                    heading_level = 1
+                elif font_size >= max(heading_font_sizes) * 0.7:
+                    heading_level = 2
+                elif font_size >= max(heading_font_sizes) * 0.5:
+                    heading_level = 3
+                else:
+                    heading_level = 4
+                is_heading = True
+            
+            if is_heading and heading_level:
+                # 合并同一行的字符形成标题文本
+                heading_text = ''.join(c['text'] for c in line_chars).strip()
+                
+                # 过滤掉太短的文本（可能是页码、页眉等）
+                if len(heading_text) < 2:
+                    continue
+                
+                # 过滤掉纯数字或特殊字符（可能是页码）
+                if heading_text.replace('.', '').replace(' ', '').isdigit():
+                    continue
+                
+                # 计算标题在文档中的字符位置
+                start_char = line_chars[0]['offset']
+                
+                headings.append({
+                    "level": heading_level,
+                    "text": heading_text,
+                    "page": page_num,
+                    "start_char": start_char,
+                    "font_size": font_size
+                })
+        
+        # 按位置排序
+        headings.sort(key=lambda h: (h['page'], h['start_char']))
+        
+        logger.info(f"Detected {len(headings)} headings in PDF")
+        if headings:
+            logger.debug(f"Sample headings: {headings[:5]}")
+        
+        return headings
     
     def _table_to_markdown(self, table: list) -> str:
         """将表格转换为Markdown格式"""

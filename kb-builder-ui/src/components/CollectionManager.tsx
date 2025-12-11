@@ -294,7 +294,7 @@ export const CollectionManager: React.FC<CollectionManagerProps> = ({
                     ...embeddingConfig,
                     bgeApiUrl: e.target.value,
                   })}
-                  placeholder="http://10.150.115.110:6000"
+                  placeholder="http://10.150.10.120:6000"
                 />
                 <small>Base URL for BGE embedding service</small>
               </div>

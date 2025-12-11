@@ -41,23 +41,23 @@ def create_embedder(provider: str, model: Optional[str] = None) -> BaseEmbedder:
     elif provider_lower == "bge-en":
         # BAAI/bge-large-en-v1.5 with specific API URL
         model_name = model or "BAAI/bge-large-en-v1.5"
-        api_url = os.getenv("BGE_EN_API_URL", "http://10.150.115.110:6000")
+        api_url = os.getenv("BGE_EN_API_URL", "http://10.150.10.120:6000")
         return BGEEmbedder(model=model_name, api_url=api_url)
     elif provider_lower == "bge-zh":
         # BAAI/bge-large-zh-v1.5 with specific API URL
         model_name = model or "BAAI/bge-large-zh-v1.5"
-        api_url = os.getenv("BGE_ZH_API_URL", "http://10.150.115.110:6001")
+        api_url = os.getenv("BGE_ZH_API_URL", "http://10.150.10.120:6001")
         return BGEEmbedder(model=model_name, api_url=api_url)
     elif provider_lower == "nemotron" or provider_lower == "nvidia":
         # nvidia/llama-nemotron-embed-1b-v2
         model_name = model or "nvidia/llama-nemotron-embed-1b-v2"
-        api_url = os.getenv("NEMOTRON_API_URL", "http://10.150.115.110:6002/embed")
+        api_url = os.getenv("NEMOTRON_API_URL", "http://10.150.10.120:6002/embed")
         # Use "query" type by default for search queries
         return APIEmbedder(api_url=api_url, model=model_name, embedding_type="query")
     elif provider_lower == "snowflake":
         # Snowflake/snowflake-arctic-embed-l
         model_name = model or "Snowflake/snowflake-arctic-embed-l"
-        api_url = os.getenv("SNOWFLAKE_API_URL", "http://10.150.115.110:6003/embed")
+        api_url = os.getenv("SNOWFLAKE_API_URL", "http://10.150.10.120:6003/embed")
         # Use "query" type by default for search queries
         return APIEmbedder(api_url=api_url, model=model_name, embedding_type="query")
     elif provider_lower == "openai":

@@ -27,12 +27,12 @@ class Settings(BaseSettings):
     
     # BGE API URLs
     bge_api_url: str = ""  # General BGE embedding service API URL (e.g., http://localhost:8001)
-    bge_en_api_url: str = ""  # English BGE API URL (e.g., http://10.150.115.110:6000)
-    bge_zh_api_url: str = ""  # Chinese BGE API URL (e.g., http://10.150.115.110:6001)
+    bge_en_api_url: str = ""  # English BGE API URL (e.g., http://10.150.10.120:6000)
+    bge_zh_api_url: str = ""  # Chinese BGE API URL (e.g., http://10.150.10.120:6001)
     
     # Other embedding API URLs
-    nemotron_api_url: str = ""  # NVIDIA Nemotron API URL (e.g., http://10.150.115.110:6002/embed)
-    snowflake_api_url: str = ""  # Snowflake Arctic API URL (e.g., http://10.150.115.110:6003/embed)
+    nemotron_api_url: str = ""  # NVIDIA Nemotron API URL (e.g., http://10.150.10.120:6002/embed)
+    snowflake_api_url: str = ""  # Snowflake Arctic API URL (e.g., http://10.150.10.120:6003/embed)
     
     # Chunking
     default_chunk_size: int = 1000

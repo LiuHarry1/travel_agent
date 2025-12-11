@@ -39,12 +39,12 @@ class Settings(BaseSettings):
     
     # BGE API URLs (if using BGE via API)
     bge_api_url: str = "http://localhost:8001"
-    bge_en_api_url: str = "http://10.150.115.110:6000"
-    bge_zh_api_url: str = "http://10.150.115.110:6001"
+    bge_en_api_url: str = "http://10.150.10.120:6000"
+    bge_zh_api_url: str = "http://10.150.10.120:6001"
     
     # Other embedding model API URLs
-    nemotron_api_url: str = "http://10.150.115.110:6002/embed"
-    snowflake_api_url: str = "http://10.150.115.110:6003/embed"
+    nemotron_api_url: str = "http://10.150.10.120:6002/embed"
+    snowflake_api_url: str = "http://10.150.10.120:6003/embed"
     
     # Qwen LLM settings
     qwen_api_key: str = ""

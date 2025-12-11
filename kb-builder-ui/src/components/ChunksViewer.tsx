@@ -222,11 +222,22 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
                       </div>
                       {chunk.location && getLocationBadges(chunk.location).length > 0 && (
                         <div className="chunk-location-badges">
-                          {getLocationBadges(chunk.location).slice(0, 2).map((badge, idx) => (
-                            <span key={idx} className={`location-badge location-badge-${badge.type}`}>
-                              {badge.label}: {badge.value}
-                            </span>
-                          ))}
+                          {(() => {
+                            const badges = getLocationBadges(chunk.location);
+                            // Prioritize heading_path, then show page_number and others
+                            const sortedBadges = badges.sort((a, b) => {
+                              if (a.type === 'heading') return -1;
+                              if (b.type === 'heading') return 1;
+                              if (a.type === 'page') return -1;
+                              if (b.type === 'page') return 1;
+                              return 0;
+                            });
+                            return sortedBadges.slice(0, 3).map((badge, idx) => (
+                              <span key={idx} className={`location-badge location-badge-${badge.type}`}>
+                                {badge.label}: {badge.value}
+                              </span>
+                            ));
+                          })()}
                         </div>
                       )}
                       <div className="chunk-list-item-preview">

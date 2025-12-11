@@ -29,10 +29,10 @@ pipelines:
     #       collection: "memory_doc_db"
     # Available providers:
     #   - qwen: Qwen embedding models
-    #   - bge-en: BAAI/bge-large-en-v1.5 (English, API: http://10.150.115.110:6000)
-    #   - bge-zh: BAAI/bge-large-zh-v1.5 (Chinese, API: http://10.150.115.110:6001)
-    #   - nemotron: nvidia/llama-nemotron-embed-1b-v2 (API: http://10.150.115.110:6002)
-    #   - snowflake: Snowflake/snowflake-arctic-embed-l (API: http://10.150.115.110:6003)
+    #   - bge-en: BAAI/bge-large-en-v1.5 (English, API: http://10.150.10.120:6000)
+    #   - bge-zh: BAAI/bge-large-zh-v1.5 (Chinese, API: http://10.150.10.120:6001)
+    #   - nemotron: nvidia/llama-nemotron-embed-1b-v2 (API: http://10.150.10.120:6002)
+    #   - snowflake: Snowflake/snowflake-arctic-embed-l (API: http://10.150.10.120:6003)
     #   - bge: Generic BGE (uses default API URL)
     #   - openai: OpenAI embedding models
     embedding_models:
