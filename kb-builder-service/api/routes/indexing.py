@@ -386,12 +386,21 @@ async def upload_and_index_stream(
     chunk_overlap: Optional[int] = Form(None),
     multi_granularity_chunk_sizes: Optional[str] = Form(None),  # JSON string: "[200, 400, 800]"
     multi_granularity_chunk_overlap: Optional[int] = Form(None),
-    database: Optional[str] = Form(None),
-    service: IndexingService = Depends(get_indexing_service_with_database)
+    database: Optional[str] = Form(None)
 ):
     """
     Upload and index file with real-time progress updates via Server-Sent Events.
     """
+    # Get database name from form parameter or default
+    if database:
+        db_name = database
+    else:
+        settings = get_settings()
+        db_name = settings.milvus_database
+    
+    # Create indexing service with the correct database
+    service = get_indexing_service(db_name)
+    
     settings = get_settings()
     temp_path = None
     
@@ -511,14 +520,23 @@ async def upload_and_index(
     chunk_overlap: Optional[int] = Form(None),
     multi_granularity_chunk_sizes: Optional[str] = Form(None),  # JSON string: "[200, 400, 800]"
     multi_granularity_chunk_overlap: Optional[int] = Form(None),
-    database: Optional[str] = Form(None),
-    service: IndexingService = Depends(get_indexing_service_with_database)
+    database: Optional[str] = Form(None)
 ):
     """
     Upload a file and index it into knowledge base.
     
     Supports: .md, .pdf, .docx, .html, .txt
     """
+    # Get database name from form parameter or default
+    if database:
+        db_name = database
+    else:
+        settings = get_settings()
+        db_name = settings.milvus_database
+    
+    # Create indexing service with the correct database
+    service = get_indexing_service(db_name)
+    
     settings = get_settings()
     temp_path = None
     
@@ -633,10 +651,19 @@ async def upload_batch(
     embedding_provider: Optional[str] = Form("qwen"),
     embedding_model: Optional[str] = Form(None),
     bge_api_url: Optional[str] = Form(None),
-    database: Optional[str] = Form(None),
-    service: IndexingService = Depends(get_indexing_service_with_database)
+    database: Optional[str] = Form(None)
 ):
     """Upload and index multiple files."""
+    # Get database name from form parameter or default
+    if database:
+        db_name = database
+    else:
+        settings = get_settings()
+        db_name = settings.milvus_database
+    
+    # Create indexing service with the correct database
+    service = get_indexing_service(db_name)
+    
     settings = get_settings()
     
     # Get hostname and port from request to build base_url

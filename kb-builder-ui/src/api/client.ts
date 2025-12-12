@@ -410,6 +410,9 @@ export class ApiClient {
       if (options.multiGranularityOverlap !== undefined && options.multiGranularityOverlap !== null) {
         formData.append('multi_granularity_chunk_overlap', options.multiGranularityOverlap.toString());
       }
+      if (options.database) {
+        formData.append('database', options.database);
+      }
 
       // Use fetch with ReadableStream for SSE
       // Note: Don't set Content-Type header - browser will set it automatically with boundary

@@ -265,6 +265,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           chunkOverlap: config.chunking.useMultiGranularity ? undefined : config.chunking.chunkOverlap,
           multiGranularitySizes: config.chunking.useMultiGranularity ? config.chunking.multiGranularitySizes : undefined,
           multiGranularityOverlap: config.chunking.useMultiGranularity ? config.chunking.multiGranularityOverlap : undefined,
+          database: database,
         },
         (progress) => {
           const stageMap: Record<string, ProcessingStage> = {
