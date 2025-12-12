@@ -51,7 +51,8 @@ class BGEEmbedder(BaseEmbedder):
         model_name: str = "BAAI/bge-large-en-v1.5",
         device: Optional[str] = None,
         model_kwargs: Optional[dict] = None,
-        api_url: Optional[str] = None
+        api_url: Optional[str] = None,
+        timeout: Optional[int] = None
     ):
         """Initialize BGE embedder.
         
@@ -60,11 +61,13 @@ class BGEEmbedder(BaseEmbedder):
             device: Device to run model on (cpu/cuda)
             model_kwargs: Additional model arguments
             api_url: If provided, use API service instead of local model
+            timeout: Request timeout in seconds (default: 300)
         """
         self.model_name = model_name
         self.device = device or self._detect_device()
         self.model_kwargs = model_kwargs or {}
         self.api_url = api_url or os.getenv("BGE_API_URL", None)
+        self.timeout = timeout or 300  # Default 5 minutes
         self._model = None
         self._tokenizer = None
         self._use_api = self.api_url is not None
@@ -176,7 +179,7 @@ class BGEEmbedder(BaseEmbedder):
             response = requests.post(
                 endpoint,
                 json={"texts": texts},
-                timeout=300  # 5 minutes timeout for large batches
+                timeout=self.timeout
             )
             response.raise_for_status()
             result = response.json()
