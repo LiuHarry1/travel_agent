@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient, ChunksResponse } from '../api/client';
 import { getLocationBadges, filterEmptyMetadata, formatMetadata } from '../utils/metadata';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import './ChunksViewer.css';
 
 interface ChunksViewerProps {
@@ -22,6 +26,7 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedChunkId, setExpandedChunkId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<Record<number, string>>({});
+  const [textViewMode, setTextViewMode] = useState<Record<number, 'plain' | 'markdown'>>({});
   const [leftPanelWidth, setLeftPanelWidth] = useState(350);
   const [isResizing, setIsResizing] = useState(false);
 
@@ -167,35 +172,37 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
         <>
           <div className="chunks-toolbar">
             <div className="search-box">
-              <input
-                type="text"
-                placeholder="Search in chunks..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="search-input"
-              />
-              {searchQuery && (
-                <button 
-                  onClick={() => setSearchQuery('')} 
-                  className="search-clear"
-                  title="Clear search"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-            <div className="chunks-pagination-info">
-              {searchQuery ? (
-                <>
-                  Showing {filteredChunks.length} of {chunksData.total} chunks
-                  {filteredChunks.length > 0 && ` (Page ${chunksData.page})`}
-                </>
-              ) : (
-                <>
-                  Showing {((chunksData.page - 1) * 10) + 1}-
-                  {Math.min(chunksData.page * 10, chunksData.total)} of {chunksData.total} chunks
-                </>
-              )}
+              <div className="search-input-wrapper">
+                <input
+                  type="text"
+                  placeholder="Search in chunks..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="search-input"
+                />
+                {searchQuery && (
+                  <button 
+                    onClick={() => setSearchQuery('')} 
+                    className="search-clear"
+                    title="Clear search"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              <div className="chunks-pagination-info">
+                {searchQuery ? (
+                  <>
+                    Showing {filteredChunks.length} of {chunksData.total} chunks
+                    {filteredChunks.length > 0 && ` (Page ${chunksData.page})`}
+                  </>
+                ) : (
+                  <>
+                    Showing {((chunksData.page - 1) * 10) + 1}-
+                    {Math.min(chunksData.page * 10, chunksData.total)} of {chunksData.total} chunks
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -323,7 +330,57 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
                     <div className="chunk-tab-content">
                       {(activeTab[selectedChunk.index] || 'text') === 'text' && (
                         <div className="chunk-text-panel">
-                          <div className="chunk-text">{selectedChunk.text}</div>
+                          <div className="text-view-toggle">
+                            <button
+                              className={`toggle-btn ${(textViewMode[selectedChunk.index] || 'plain') === 'plain' ? 'active' : ''}`}
+                              onClick={() => setTextViewMode({ ...textViewMode, [selectedChunk.index]: 'plain' })}
+                            >
+                              Plain Text
+                            </button>
+                            <button
+                              className={`toggle-btn ${(textViewMode[selectedChunk.index] || 'plain') === 'markdown' ? 'active' : ''}`}
+                              onClick={() => setTextViewMode({ ...textViewMode, [selectedChunk.index]: 'markdown' })}
+                            >
+                              Markdown Preview
+                            </button>
+                          </div>
+                          {(textViewMode[selectedChunk.index] || 'plain') === 'plain' ? (
+                            <div className="chunk-text">{selectedChunk.text}</div>
+                          ) : (
+                            <div className="markdown-preview">
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                components={{
+                                  code({ node, inline, className, children, ...props }: any) {
+                                    const match = /language-(\w+)/.exec(className || '');
+                                    return !inline && match ? (
+                                      <SyntaxHighlighter
+                                        style={vscDarkPlus}
+                                        language={match[1]}
+                                        PreTag="div"
+                                        {...props}
+                                      >
+                                        {String(children).replace(/\n$/, '')}
+                                      </SyntaxHighlighter>
+                                    ) : (
+                                      <code className={className} {...props}>
+                                        {children}
+                                      </code>
+                                    );
+                                  },
+                                  table({ children }: any) {
+                                    return (
+                                      <div className="table-wrapper">
+                                        <table>{children}</table>
+                                      </div>
+                                    );
+                                  },
+                                }}
+                              >
+                                {selectedChunk.text}
+                              </ReactMarkdown>
+                            </div>
+                          )}
                         </div>
                       )}
                       
