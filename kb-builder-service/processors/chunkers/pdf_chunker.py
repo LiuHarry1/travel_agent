@@ -125,9 +125,14 @@ class PDFChunker(BaseChunker):
                                     # Mark next chunk to skip
                                     skip_next = True
                 else:
-                    # Last chunk, if too small, skip it
-                    if token_count < self.min_chunk_size * 0.5:  # Very small, skip
+                    # Last chunk: always include it even if small to avoid losing content
+                    # Only skip if it's completely empty (no actual content)
+                    if token_count == 0:
+                        logger.warning(f"Skipping empty last chunk at index {chunk_index}")
                         continue
+                    else:
+                        # Include small last chunk to preserve content
+                        logger.debug(f"Including small last chunk (tokens: {token_count}, min: {self.min_chunk_size})")
             
             # Find position in original text (before cleaning)
             start_pos = text.find(chunk_text, current_pos)

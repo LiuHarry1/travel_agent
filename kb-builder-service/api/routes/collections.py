@@ -129,10 +129,19 @@ async def list_collections(
 async def create_collection(
     name: str = Form(...),
     embedding_dim: int = Form(1536),
-    database: str = Form(None),
-    vector_store: MilvusVectorStore = Depends(get_vector_store_with_database)
+    database: str = Form(None)
 ):
     """Create a new collection."""
+    # Get database name from form parameter or default
+    if database:
+        db_name = database
+    else:
+        settings = get_settings()
+        db_name = settings.milvus_database
+    
+    # Create vector store with the correct database
+    vector_store = get_vector_store(db_name)
+    
     connection_alias = "default"
     try:
         from pymilvus import connections
