@@ -30,7 +30,7 @@ export interface AppConfig {
 
 export function getDefaultConfig(): AppConfig {
   // Get API URL from environment variable or use default
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8005';
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8006';
   
   return {
     apiUrl,

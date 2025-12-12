@@ -22,7 +22,7 @@ touch .env
 
 ```env
 # Backend API URL
-VITE_API_URL=http://localhost:8005
+VITE_API_URL=http://localhost:8006
 ```
 
 3. 重启开发服务器：
@@ -35,7 +35,7 @@ npm run dev
 
 **开发环境：**
 ```env
-VITE_API_URL=http://localhost:8005
+VITE_API_URL=http://localhost:8006
 ```
 
 **生产环境：**
@@ -45,7 +45,7 @@ VITE_API_URL=https://api.yourdomain.com
 
 **Docker 环境：**
 ```env
-VITE_API_URL=http://localhost:8005
+VITE_API_URL=http://localhost:8006
 ```
 
 ## 方式 2：UI 界面配置（运行时，推荐）
@@ -68,14 +68,14 @@ VITE_API_URL=http://localhost:8005
 
 ## 默认值
 
-如果没有配置，默认使用：`http://localhost:8005`
+如果没有配置，默认使用：`http://localhost:8006`
 
 ## 常见配置场景
 
 ### 场景 1：本地开发
 
 ```
-API URL: http://localhost:8005
+API URL: http://localhost:8006
 ```
 
 ### 场景 2：Docker 容器
@@ -83,7 +83,7 @@ API URL: http://localhost:8005
 如果后端运行在 Docker 容器中，且端口已映射：
 
 ```
-API URL: http://localhost:8005
+API URL: http://localhost:8006
 ```
 
 ### 场景 3：远程服务器
@@ -91,7 +91,7 @@ API URL: http://localhost:8005
 如果后端部署在远程服务器：
 
 ```
-API URL: http://your-server-ip:8005
+API URL: http://your-server-ip:8006
 或
 API URL: https://api.yourdomain.com
 ```
