@@ -323,6 +323,49 @@ export class ApiClient {
     }
   }
 
+  async getChunkContext(
+    collectionName: string,
+    documentId: string,
+    chunkId: string,
+    contextBefore: number = 5000,
+    contextAfter: number = 5000,
+    database?: string
+  ): Promise<{
+    success: boolean;
+    chunk: {
+      id: number;
+      chunk_id: string;
+      text: string;
+      document_id: string;
+      location: ChunkLocation;
+    };
+    context: {
+      content: string;
+      context_start: number;
+      context_end: number;
+      chunk_start: number;
+      chunk_end: number;
+      has_more_before: boolean;
+      has_more_after: boolean;
+      total_length: number;
+    };
+  }> {
+    const url = new URL(
+      `${this.baseUrl}/api/v1/collections/${encodeURIComponent(collectionName)}/sources/${encodeURIComponent(documentId)}/chunks/${encodeURIComponent(chunkId)}/context`
+    );
+    url.searchParams.append('context_before', contextBefore.toString());
+    url.searchParams.append('context_after', contextAfter.toString());
+    if (database) {
+      url.searchParams.append('database', database);
+    }
+    const response = await fetch(url.toString());
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get chunk context');
+    }
+    return response.json();
+  }
+
   async listDatabases(): Promise<{ databases: string[]; current: string }> {
     const response = await fetch(`${this.baseUrl}/api/v1/databases`);
     if (!response.ok) {

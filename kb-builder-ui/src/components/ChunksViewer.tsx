@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { apiClient, ChunksResponse } from '../api/client';
+import { apiClient, ChunksResponse, Chunk } from '../api/client';
 import { getLocationBadges, filterEmptyMetadata, formatMetadata } from '../utils/metadata';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { MarkdownHighlightViewer } from './MarkdownHighlightViewer';
+import { ChunksModal } from './ui/ChunksModal';
 import './ChunksViewer.css';
 
 interface ChunksViewerProps {
@@ -29,6 +31,12 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
   const [textViewMode, setTextViewMode] = useState<Record<number, 'plain' | 'markdown'>>({});
   const [leftPanelWidth, setLeftPanelWidth] = useState(350);
   const [isResizing, setIsResizing] = useState(false);
+  const [highlightContext, setHighlightContext] = useState<{
+    content: string;
+    chunkStart: number;
+    chunkEnd: number;
+  } | null>(null);
+  const [loadingHighlight, setLoadingHighlight] = useState(false);
 
   useEffect(() => {
     if (documentId) {
@@ -136,6 +144,66 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
       chunk.text.toLowerCase().includes(searchQuery.toLowerCase())
     )
     .sort((a, b) => a.index - b.index) || [];
+
+  const handleHighlightChunk = async (chunk: Chunk) => {
+    console.log('handleHighlightChunk called with chunk:', chunk);
+    console.log('chunk.chunk_id:', chunk.chunk_id);
+    console.log('chunk.location:', chunk.location);
+    console.log('chunk.metadata?.location:', chunk.metadata?.location);
+    console.log('chunk.metadata?.start_pos:', chunk.metadata?.start_pos);
+    console.log('chunk.metadata?.end_pos:', chunk.metadata?.end_pos);
+    
+    // Check location in both places
+    const location = chunk.location || chunk.metadata?.location;
+    const chunkId = chunk.chunk_id;
+    
+    // Check if we have position data (start_char/end_char or start_pos/end_pos)
+    const hasStartChar = location?.start_char !== undefined;
+    const hasEndChar = location?.end_char !== undefined;
+    const hasStartPos = chunk.metadata?.start_pos !== undefined;
+    const hasEndPos = chunk.metadata?.end_pos !== undefined;
+    const hasPositionData = hasStartChar || hasEndChar || hasStartPos || hasEndPos;
+    
+    if (!chunkId) {
+      console.warn('Chunk missing chunk_id', { chunk });
+      alert(`Chunk ID is not available. Cannot highlight chunk.`);
+      return;
+    }
+    
+    if (!hasPositionData) {
+      console.warn('Chunk missing position data', {
+        chunk_id: chunkId,
+        location: location,
+        metadata: chunk.metadata,
+        chunk: chunk
+      });
+      alert(`Chunk position information is not available.\nchunk_id: ✓\nposition data: ✗\n\nPlease check if the chunk has start_char/end_char or start_pos/end_pos in location or metadata.`);
+      return;
+    }
+
+    setLoadingHighlight(true);
+    try {
+      const data = await apiClient.getChunkContext(
+        collectionName,
+        documentId!,
+        chunkId,
+        5000, // context_before
+        5000, // context_after
+        database
+      );
+
+      setHighlightContext({
+        content: data.context.content,
+        chunkStart: data.context.chunk_start,
+        chunkEnd: data.context.chunk_end,
+      });
+    } catch (error) {
+      console.error('Failed to load chunk context:', error);
+      alert('Failed to load chunk context. Please try again.');
+    } finally {
+      setLoadingHighlight(false);
+    }
+  };
 
   if (!documentId) {
     return (
@@ -286,6 +354,33 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
                 // Extract location from metadata if not directly available
                 const chunkLocation = selectedChunk.location || (selectedChunk.metadata?.location);
                 console.log('Extracted chunkLocation:', chunkLocation);
+                console.log('selectedChunk.chunk_id:', selectedChunk.chunk_id);
+                console.log('selectedChunk.location:', selectedChunk.location);
+                console.log('selectedChunk.metadata?.location:', selectedChunk.metadata?.location);
+                
+                // Unified approach: use chunk_id if available, otherwise use id
+                // Backend always returns chunk_id (using id as fallback), so we can rely on it
+                const chunkId = selectedChunk.chunk_id || selectedChunk.id?.toString();
+                const hasChunkId = !!chunkId;
+                const location = selectedChunk.location || selectedChunk.metadata?.location;
+                const hasLocation = !!location;
+                const hasLocationData = hasLocation && (
+                  location.start_char !== undefined || 
+                  location.end_char !== undefined ||
+                  selectedChunk.metadata?.start_pos !== undefined ||
+                  selectedChunk.metadata?.end_pos !== undefined
+                );
+                const canHighlight = hasChunkId && hasLocationData;
+                
+                // Debug logging
+                console.log('=== Highlight Button Debug ===');
+                console.log('selectedChunk.chunk_id:', selectedChunk.chunk_id);
+                console.log('selectedChunk.id:', selectedChunk.id);
+                console.log('chunkId (resolved, unified):', chunkId);
+                console.log('hasChunkId:', hasChunkId);
+                console.log('hasLocation:', hasLocation);
+                console.log('hasLocationData:', hasLocationData);
+                console.log('canHighlight:', canHighlight);
                 
                 return (
                   <div className="chunk-detail-content">
@@ -343,6 +438,42 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
                             >
                               Markdown Preview
                             </button>
+                            <button
+                              className="highlight-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // Unified approach: use chunk_id (which is id if chunk_id doesn't exist)
+                                if (chunkId) {
+                                  // Ensure chunk_id is set for the handler
+                                  const chunkWithId = { ...selectedChunk, chunk_id: chunkId };
+                                  handleHighlightChunk(chunkWithId);
+                                } else {
+                                  alert('Chunk ID is not available. Cannot highlight chunk.');
+                                }
+                              }}
+                              disabled={loadingHighlight || !canHighlight}
+                              title={
+                                !canHighlight
+                                  ? `Chunk information not available. chunk_id: ${hasChunkId ? '✓' : '✗'}, location: ${hasLocation ? '✓' : '✗'}, locationData: ${hasLocationData ? '✓' : '✗'}`
+                                  : selectedChunk.metadata?.markdown_file_path
+                                    ? "Highlight this chunk in the Markdown file"
+                                    : "Highlight this chunk in the document (Markdown format)"
+                              }
+                            >
+                              {loadingHighlight ? 'Loading...' : '📍 Highlight in Markdown'}
+                            </button>
+                            {selectedChunk.metadata?.markdown_file_path && (
+                              <a
+                                href={`${import.meta.env.VITE_API_URL || 'http://localhost:8006'}/static/${selectedChunk.metadata.markdown_file_path}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="markdown-link-btn"
+                                title="Open markdown file in new tab"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                📄 View Markdown
+                              </a>
+                            )}
                           </div>
                           {(textViewMode[selectedChunk.index] || 'plain') === 'plain' ? (
                             <div className="chunk-text">{selectedChunk.text}</div>
@@ -624,6 +755,21 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
                                     <span className="metadata-value">{selectedChunk.metadata.file_size} bytes</span>
                                   </div>
                                 )}
+                                {selectedChunk.metadata.markdown_file_path && (
+                                  <div className="metadata-row">
+                                    <span className="metadata-label">Markdown File:</span>
+                                    <span className="metadata-value">
+                                      <a 
+                                        href={`${import.meta.env.VITE_API_URL || 'http://localhost:8006'}/static/${selectedChunk.metadata.markdown_file_path}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        title="Open markdown file in new tab"
+                                      >
+                                        {selectedChunk.metadata.markdown_file_path}
+                                      </a>
+                                    </span>
+                                  </div>
+                                )}
                                 {selectedChunk.metadata.saved_source_path && (
                                   <div className="metadata-row">
                                     <span className="metadata-label">Saved Source Path:</span>
@@ -761,6 +907,19 @@ export const ChunksViewer: React.FC<ChunksViewerProps> = ({
         <div className="loading">Loading chunks...</div>
       )}
     </div>
+    <ChunksModal
+      isOpen={highlightContext !== null}
+      onClose={() => setHighlightContext(null)}
+    >
+      {highlightContext && (
+        <MarkdownHighlightViewer
+          content={highlightContext.content}
+          highlightStart={highlightContext.chunkStart}
+          highlightEnd={highlightContext.chunkEnd}
+          onClose={() => setHighlightContext(null)}
+        />
+      )}
+    </ChunksModal>
     </>
   );
 };

@@ -1,37 +1,46 @@
 """DOCX document loader."""
 from pathlib import Path
-import zipfile
-import io
+import time
+
+try:
+    from docx import Document as DocxDocument
+except ImportError:
+    DocxDocument = None
 
 from ..base import BaseLoader
 from models.document import Document, DocumentType
+from models.structure import DOCXStructure
 from ..utils.structure_builder import StructureBuilder
 from utils.exceptions import LoaderError
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Optional imports
-try:
-    from docx import Document as DocxDocument
-    HAS_DOCX = True
-except ImportError:
-    HAS_DOCX = False
-
-try:
-    from PIL import Image
-    HAS_PIL = True
-except ImportError:
-    HAS_PIL = False
-
 
 class DOCXLoader(BaseLoader):
     """Loader for DOCX files."""
     
+    def __init__(self, static_dir: str = "static", base_url: str = ""):
+        """
+        Args:
+            static_dir: Static files root directory
+            base_url: Base URL for static files
+        """
+        super().__init__(static_dir, base_url)
+        
+        if DocxDocument is None:
+            logger.warning(
+                "python-docx not installed. DOCX loading will not work. "
+                "Install with: pip install python-docx"
+            )
+    
     def load(self, source: str, **kwargs) -> Document:
         """Load DOCX file and convert to Markdown."""
-        if not HAS_DOCX:
-            raise LoaderError("python-docx is required for DOCX files. Install with: pip install python-docx")
+        if DocxDocument is None:
+            raise ImportError(
+                "python-docx is required for DOCX files. "
+                "Install with: pip install python-docx"
+            )
         
         path = Path(source)
         if not path.exists():
@@ -44,57 +53,17 @@ class DOCXLoader(BaseLoader):
         
         logger.info(f"Loading DOCX file: {original_filename} (file_id: {file_id})")
         
+        start_time = time.time()
+        
         try:
-            doc = DocxDocument(path)
-            markdown_parts = []
-            image_counter = 0
+            # Extract content and convert to Markdown
+            content, structure = self._extract_docx(path)
             
-            # Process paragraphs
-            for para in doc.paragraphs:
-                if para.text.strip():
-                    markdown_parts.append(para.text)
-            
-            # Extract images
-            try:
-                with zipfile.ZipFile(path, 'r') as docx_zip:
-                    image_files = [f for f in docx_zip.namelist() 
-                                  if f.startswith('word/media/')]
-                    
-                    for img_file in image_files:
-                        try:
-                            image_counter += 1
-                            img_data = docx_zip.read(img_file)
-                            
-                            # Determine image extension
-                            img_ext = Path(img_file).suffix
-                            if not img_ext:
-                                if HAS_PIL:
-                                    try:
-                                        img = Image.open(io.BytesIO(img_data))
-                                        img_ext = f".{img.format.lower()}" if img.format else ".png"
-                                    except:
-                                        img_ext = ".png"
-                                else:
-                                    img_ext = ".png"
-                            
-                            # Save image
-                            img_url = self.image_handler.save_image(
-                                img_data, file_id, image_counter, img_ext
-                            )
-                            
-                            # Add image to markdown
-                            markdown_parts.append(f'\n<img src="{img_url}" alt="Image {image_counter}" />\n\n')
-                        except Exception as e:
-                            logger.warning(f"Failed to extract image {img_file} from DOCX: {e}")
-                            continue
-            except Exception as e:
-                logger.warning(f"Failed to extract images from DOCX: {e}")
-            
-            content = "\n\n".join(markdown_parts)
-            
-            # Build structure
-            structure = StructureBuilder.build_docx_structure(
-                total_sections=len([p for p in markdown_parts if p.strip()])
+            # Log processing stats
+            processing_time = time.time() - start_time
+            logger.info(
+                f"Successfully processed DOCX: {original_filename} "
+                f"({processing_time:.2f}s)"
             )
             
             # Build document
@@ -107,10 +76,66 @@ class DOCXLoader(BaseLoader):
                 file_id=file_id,
                 **kwargs
             )
+        except FileNotFoundError as e:
+            logger.error(f"DOCX file not found: {source}")
+            raise
         except Exception as e:
-            logger.error(f"Failed to load DOCX file: {str(e)}", exc_info=True)
+            logger.error(
+                f"Failed to load DOCX file {source}: {str(e)}",
+                exc_info=True
+            )
             raise LoaderError(f"Failed to load DOCX file: {str(e)}") from e
+    
+    def _extract_docx(self, path: Path) -> tuple[str, DOCXStructure]:
+        """
+        Extract content from DOCX and convert to Markdown.
+        
+        Args:
+            path: Path to DOCX file
+        
+        Returns:
+            Tuple of (markdown_content, DOCXStructure)
+        """
+        try:
+            doc = DocxDocument(str(path))
+            
+            # Convert paragraphs to Markdown
+            markdown_parts = []
+            for paragraph in doc.paragraphs:
+                text = paragraph.text.strip()
+                if not text:
+                    continue
+                
+                # Check if it's a heading
+                if paragraph.style.name.startswith('Heading'):
+                    level = int(paragraph.style.name.split()[-1]) if paragraph.style.name.split()[-1].isdigit() else 1
+                    level = min(level, 6)  # Max heading level is 6
+                    markdown_parts.append(f"{'#' * level} {text}\n\n")
+                else:
+                    markdown_parts.append(f"{text}\n\n")
+            
+            # Convert tables to Markdown
+            for table in doc.tables:
+                markdown_parts.append("\n")
+                for row in table.rows:
+                    cells = [cell.text.strip() for cell in row.cells]
+                    markdown_parts.append("| " + " | ".join(cells) + " |\n")
+                markdown_parts.append("\n")
+            
+            full_markdown = "".join(markdown_parts)
+            
+            # Build DOCXStructure
+            structure = StructureBuilder.build_docx_structure()
+            
+            logger.info(f"Successfully extracted DOCX content")
+            
+            return full_markdown, structure
+                
+        except Exception as e:
+            logger.error(f"Failed to extract DOCX content: {str(e)}", exc_info=True)
+            raise LoaderError(f"Failed to process DOCX: {str(e)}") from e
     
     def supports(self, doc_type: DocumentType) -> bool:
         """Check if supports DOCX."""
         return doc_type == DocumentType.DOCX
+

@@ -55,3 +55,39 @@ class FileManager:
         logger.debug(f"Saved source file to: {saved_path}")
         
         return saved_path
+    
+    def save_markdown_file(
+        self,
+        markdown_content: str,
+        file_id: str,
+        original_filename: Optional[str] = None
+    ) -> Path:
+        """
+        Save markdown content to markdowns directory.
+        
+        Args:
+            markdown_content: Markdown content to save
+            file_id: File ID (should match the source file's file_id)
+            original_filename: Optional original filename for naming
+        
+        Returns:
+            Path to saved markdown file
+        """
+        # Create markdowns directory if it doesn't exist
+        markdowns_dir = self.static_dir / "markdowns"
+        markdowns_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate markdown filename
+        if original_filename:
+            # Use original filename stem with .md extension
+            md_filename = f"{Path(original_filename).stem}.md"
+        else:
+            md_filename = f"{file_id}.md"
+        
+        saved_path = markdowns_dir / md_filename
+        
+        # Write markdown content
+        saved_path.write_text(markdown_content, encoding='utf-8')
+        logger.debug(f"Saved markdown file to: {saved_path}")
+        
+        return saved_path

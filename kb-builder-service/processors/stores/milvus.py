@@ -408,7 +408,10 @@ class MilvusVectorStore(BaseVectorStore):
             output_fields = ["id", "text", "document_id"]
             schema = collection.schema
             has_metadata = any(field.name == "metadata" for field in schema.fields)
-            logger.info(f"Schema fields: {[f.name for f in schema.fields]}, has_metadata: {has_metadata}")
+            has_chunk_id = any(field.name == "chunk_id" for field in schema.fields)
+            logger.info(f"Schema fields: {[f.name for f in schema.fields]}, has_metadata: {has_metadata}, has_chunk_id: {has_chunk_id}")
+            if has_chunk_id:
+                output_fields.append("chunk_id")
             if has_metadata:
                 output_fields.append("metadata")
             
@@ -428,8 +431,33 @@ class MilvusVectorStore(BaseVectorStore):
             import json
             chunks = []
             for idx, result in enumerate(paginated_results):
+                chunk_id_value = None
+                
+                # Try to get chunk_id from field first
+                if has_chunk_id and "chunk_id" in result:
+                    chunk_id_value = result.get("chunk_id")
+                
+                # If not found, try from metadata
+                if not chunk_id_value and has_metadata:
+                    try:
+                        metadata_str = result.get("metadata", "{}")
+                        if metadata_str:
+                            if isinstance(metadata_str, str):
+                                metadata_dict = json.loads(metadata_str)
+                            else:
+                                metadata_dict = metadata_str
+                            if "chunk_id" in metadata_dict:
+                                chunk_id_value = metadata_dict["chunk_id"]
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                
+                # If still no chunk_id, use id as fallback (unified approach)
+                if not chunk_id_value:
+                    chunk_id_value = str(result.get("id"))
+                
                 chunk_data = {
                     "id": result.get("id"),
+                    "chunk_id": chunk_id_value,  # Always include chunk_id, using id as fallback
                     "text": result.get("text", ""),
                     "document_id": result.get("document_id", ""),
                     "index": idx + offset

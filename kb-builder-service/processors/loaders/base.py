@@ -76,16 +76,19 @@ class BaseLoader(ABC):
             **kwargs.get("metadata", {})
         }
         
+        # Add markdown file path if provided (for PDF and other converted files)
+        if "markdown_file_path" in kwargs:
+            metadata["markdown_file_path"] = kwargs["markdown_file_path"]
+        
         # Add structure information
         if structure:
-            if structure.total_pages:
-                metadata["pages_info"] = structure.total_pages
-            
-            # Add PDF metadata
-            if structure.pdf_metadata:
-                for key, value in structure.pdf_metadata.items():
-                    if value:
-                        metadata[f"pdf_{key}"] = value
+            from models.structure import PDFStructure
+            if isinstance(structure, PDFStructure):
+                # Add PDF metadata (no page-level info needed)
+                if structure.pdf_metadata:
+                    for key, value in structure.pdf_metadata.items():
+                        if value:
+                            metadata[f"pdf_{key}"] = value
         
         return metadata
     
